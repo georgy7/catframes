@@ -23,7 +23,7 @@ fi
 
 # Lexicographical (default) order is the best for surveillance data.
 for f in *.jpg; do echo "file '$f'" >> list.txt; done
-ffmpeg -f concat -r 1 -i list.txt -r 1 output.webm
+ffmpeg -f concat -r 1 -i list.txt -r 1 -c:v libx264 -preset ultrafast -tune fastdecode -crf 22 output.mkv
 
 FFMPEG_ERROR_CODE=$?
 

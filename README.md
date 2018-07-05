@@ -16,4 +16,4 @@ the greatest extent permissible under applicable law.*
 ## Usage
 
 1. `extent_override.py` ensures, that all images in the current directory have the same resolution.
-2. `to_webm.sh [--delete-jpegs]` compresses them all to a single video file with 1 frames per second.
+2. `to_h264.sh [--delete-jpegs]` compresses them all to a single video file with 1 frames per second.
