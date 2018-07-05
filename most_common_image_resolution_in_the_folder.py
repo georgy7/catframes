@@ -1,8 +1,11 @@
 #!/usr/bin/env python3 
 
 import os
+import sys
+import operator
+import time
 
-def most_common_image_resolution_in_the_folder():
+def most_common_image_resolution_in_the_folder(statistics = False):
     accepted_extensions = ["jpg", "jpeg", "png"]
     filenames = [fn for fn in os.listdir() if fn.split(".")[-1] in accepted_extensions]
 
@@ -15,9 +18,30 @@ def most_common_image_resolution_in_the_folder():
         else:
             frequences_of_resolutions[out] = 1
 
-    result = max(frequences_of_resolutions, key=lambda key: frequences_of_resolutions[key])
-    return result
+    if statistics:
+        return frequences_of_resolutions
+    else:
+        result = max(frequences_of_resolutions, key=lambda key: frequences_of_resolutions[key])
+        return result
 
 
 if __name__ == "__main__":
-    print(most_common_image_resolution_in_the_folder(), end='')
+    usage = '\n    most_common_image_resolution_in_the_folder.py [--statistics|-s]\n'
+
+    if (len(sys.argv) > 1) and ((sys.argv[1] == '--help') or (sys.argv[1] == '-h')):
+        print(usage)
+
+    elif (len(sys.argv) > 1) and ((sys.argv[1] == '--statistics') or (sys.argv[1] == '-s')):
+        start_time = time.time()
+        stat = most_common_image_resolution_in_the_folder(statistics = True)
+        print()
+        for k, v in sorted(stat.items(), key=operator.itemgetter(1), reverse=True):
+            print("{} => {}".format(k, v))
+        print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
+
+    elif len(sys.argv) > 1:
+        print('Bad argument.')
+        print(usage)
+
+    else:
+        print(most_common_image_resolution_in_the_folder(), end='')
