@@ -3,6 +3,7 @@
 import sys
 import os
 import subprocess
+import time
 
 expected_parameter = '--yes-rewrite-images'
 
@@ -13,7 +14,7 @@ warning = """
 !!!!!!!!!!!!!!!!!!!!!!
 The canvas size of all images in the current directory
 may be changed (without resizing their actual content).
-They may also be renamed and be converted to jpeg format.
+They may also be renamed and be converted to another format.
 Be sure, that you have a copy of the folder before
 running this command.
 
@@ -49,13 +50,47 @@ def list_of_files():
 def process():
     start_time = time.time()
     print('Resolving the most common resolution in the folder...')
-    resolution = most_common_image_resolution_in_the_folder()
-    print("Got it.", resolution)
+
+    target_resolution_string = most_common_image_resolution_in_the_folder()
+    target_size = target_resolution_string.split('x')
+
+    print("Got it.", target_resolution_string)
     print('Stage 1 completed in {} seconds.\n'.format(time.time() - start_time))
+
+    if len(target_size) < 2:
+        print('Bad resolution.')
+        sys.exit(1);
+
+    start_stage_2_time = time.time()
     print('Mogrifying the images...')
-    comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
+
+    i = 0
     for f in list_of_files():
-        subprocess.check_call(comand.format(resolution, f), shell = True)
+
+        i = i + 1
+        if i % 100 == 0:
+            sys.stdout.flush()
+
+        image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
+        if not image_resolution_string:
+            print('\nCould not resolve size of \"{}\"'.format(f))
+            continue
+        image_resolution = image_resolution_string.split('x')
+        if len(image_resolution) < 2:
+            print('\nCould not resolve size of \"{}\"'.format(f))
+            continue
+
+        if (float(image_resolution[0]) < (float(target_size[0]) * 1.2)) and \
+                (float(image_resolution[1]) < (float(target_size[1]) * 1.2)):
+            comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
+            subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
+            print('.', end='')
+        else:
+            print('\n\"{}\" is a really big image ({}). Resizing.'.format(f, image_resolution_string))
+            comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
+            subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
+
+    print('\nStage 2 completed in {} seconds.\n'.format(time.time() - start_stage_2_time))
     print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
 
 

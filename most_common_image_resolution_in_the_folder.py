@@ -12,7 +12,14 @@ def most_common_image_resolution_in_the_folder(statistics = False):
     frequences_of_resolutions = {}
 
     for f in filenames:
+        if os.path.isdir(f):
+            continue
+
         out = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
+        if not out:
+            os.rename(f, f + '_corrupted')
+            continue
+
         if out in frequences_of_resolutions:
             frequences_of_resolutions[out] = frequences_of_resolutions[out] + 1
         else:
