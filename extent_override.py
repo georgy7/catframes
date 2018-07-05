@@ -13,14 +13,16 @@ warning = """
 
 !!!!!!!!!!!!!!!!!!!!!!
 The canvas size of all images in the current directory
-may be changed (without resizing their actual content).
+may be changed, their content may be resized.
 They may also be renamed and be converted to another format.
 Be sure, that you have a copy of the folder before
 running this command.
 
 Expected behaviour:
-The larger images will be cropped (to the left-top corner).
-The smaller images will be expanded (from the left-top).
+The slightly larger images will be cropped (to the left-top
+corner). The images, that are much larger, will be resized down.
+And the smaller images will be expanded with a green color (from
+the left-top).
 
 The result image resolution are resolved automatically
 as the most common resolution in the folder.
@@ -34,7 +36,7 @@ THE PRESENT OR ABSENCE OF ERRORS, WHETHER OR NOT DISCOVERABLE, ALL TO
 THE GREATEST EXTENT PERMISSIBLE UNDER APPLICABLE LAW.
 
 If you are agree, run this command
-with the flag "--yes-rewrite-images".
+with the flag "{}".
 !!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -98,4 +100,4 @@ if __name__ == "__main__":
     if (len(sys.argv)==2) and (sys.argv[1]==expected_parameter):
         process()
     else:
-        print(warning)
+        print(warning.format(expected_parameter))

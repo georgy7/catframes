@@ -12,11 +12,11 @@ if [ $# -ne 0 ]; then
        [ "$1" == "--usage" ] || \
        [ "$1" == "-u" ]; then
         echo
-        echo "    to_webm.sh [--delete-jpegs]"
+        echo "    jpegs_to_h264.sh [--delete-jpegs]"
         echo
         exit 0
     elif [ "$1" != "--delete-jpegs" ]; then
-        echo "Unknown parameter \"$1\". Use to_webm.sh --help."
+        echo "Unknown parameter \"$1\". Use jpegs_to_h264.sh --help."
         exit 1
     fi
 fi
