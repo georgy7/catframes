@@ -30,7 +30,7 @@ FFMPEG_ERROR_CODE=$?
 if [ $FFMPEG_ERROR_CODE == 0 ]; then
     if [ $# -ne 0 ]; then
         if [ "$1" == "--delete-jpegs" ]; then
-            find . -name "*.jpg" -type f -delete
+            for f in *.jpg; do rm "$f"; done
         fi
     fi
 else
