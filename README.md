@@ -1,3 +1,11 @@
+*These scripts are experimental, and I make no representations or
+warranties of any kind concerning the software, express, implied,
+statutory or otherwise, including without limitation warranties of
+title, merchantability, fitness for a particular purpose, non
+infringement, or the absence of latent or other defects, accuracy, or
+the present or absence of errors, whether or not discoverable, all to
+the greatest extent permissible under applicable law.*
+
 ## Requirements
 
 1. Bash
@@ -9,11 +17,3 @@
 
 1. `extent_override.py` ensures, that all images in the current directory have the same resolution.
 2. `to_webm.sh [--delete-jpegs]` compresses them all to a single video file with 1 frames per second.
-
-*These scripts are experimental, and I make no representations or
-warranties of any kind concerning the software, express, implied,
-statutory or otherwise, including without limitation warranties of
-title, merchantability, fitness for a particular purpose, non
-infringement, or the absence of latent or other defects, accuracy, or
-the present or absence of errors, whether or not discoverable, all to
-the greatest extent permissible under applicable law.*
