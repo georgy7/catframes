@@ -11,7 +11,7 @@ the greatest extent permissible under applicable law.*
 1. Bash
 2. Python 3
 3. ImageMagick
-4. FFMPEG
+4. FFmpeg
 
 ## Usage
 
