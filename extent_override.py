@@ -70,7 +70,7 @@ def process():
     for f in list_of_files():
 
         i = i + 1
-        if i % 100 == 0:
+        if i % 250 == 0:
             sys.stdout.flush()
 
         image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
@@ -82,7 +82,11 @@ def process():
             print('\nCould not resolve size of \"{}\"'.format(f))
             continue
 
-        if (float(image_resolution[0]) < (float(target_size[0]) * 1.2)) and \
+        if (image_resolution[0] == target_size[0]) and (image_resolution[1] == target_size[1]):
+            # Skipping.
+            print(',', end='')
+
+        elif (float(image_resolution[0]) < (float(target_size[0]) * 1.2)) and \
                 (float(image_resolution[1]) < (float(target_size[1]) * 1.2)):
             comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
             subprocess.check_call(comand.format(target_resolution_string, f), shell = True)

@@ -12,11 +12,11 @@ if [ $# -ne 0 ]; then
        [ "$1" == "--usage" ] || \
        [ "$1" == "-u" ]; then
         echo
-        echo "    jpegs_to_h264.sh [--delete-jpegs]"
+        echo "    images_to_h264.sh [--delete-images]"
         echo
         exit 0
-    elif [ "$1" != "--delete-jpegs" ]; then
-        echo "Unknown parameter \"$1\". Use jpegs_to_h264.sh --help."
+    elif [ "$1" != "--delete-images" ]; then
+        echo "Unknown parameter \"$1\". Use images_to_h264.sh --help."
         exit 1
     fi
 fi
@@ -32,7 +32,7 @@ FFMPEG_ERROR_CODE=$?
 
 if [ $FFMPEG_ERROR_CODE == 0 ]; then
     if [ $# -ne 0 ]; then
-        if [ "$1" == "--delete-jpegs" ]; then
+        if [ "$1" == "--delete-images" ]; then
             for f in *.{jpg,jpeg,png,JPG,JPEG,PNG}; do rm "$f"; done
         fi
     fi
