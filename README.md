@@ -21,5 +21,5 @@ the greatest extent permissible under applicable law.*
     2. Converts all the pictures to this resolution.
         1. If a frame much bigger that the target resolution (more than 10% at width or height), it will be resized without preserving its aspect ratio. Because no one wants to lose a large portion of a frame on cctv.
         2. If a frame slightly larger, it will be cropped to the left-top (that looks nicer, this avoids jitter).
-        3. If a frame smaller, it will be extended (aligned to the left-top) with a green background color.
+        3. If a frame smaller, it will be extended with a green background color. The image will aligned to the left-top corner.
 2. `images_to_h264.sh [--delete-images]` compresses them all to a single video file with 1 frame per second.
