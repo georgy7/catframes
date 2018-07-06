@@ -21,6 +21,8 @@ if [ $# -ne 0 ]; then
     fi
 fi
 
+shopt -s nullglob
+
 rm list.txt
 # Lexicographical (default) order is the best for surveillance data.
 for f in *.{jpg,jpeg,png,JPG,JPEG,PNG}; do echo "file '$f'" >> list.txt; echo "duration 1" >> list.txt; done
