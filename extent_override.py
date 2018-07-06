@@ -86,8 +86,8 @@ def process():
             # Skipping.
             print(',', end='')
 
-        elif (float(image_resolution[0]) < (float(target_size[0]) * 1.2)) and \
-                (float(image_resolution[1]) < (float(target_size[1]) * 1.2)):
+        elif (float(image_resolution[0]) < (float(target_size[0]) * 1.1)) and \
+                (float(image_resolution[1]) < (float(target_size[1]) * 1.1)):
             comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
             subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
             print('.', end='')
