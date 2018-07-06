@@ -24,7 +24,7 @@ fi
 rm list.txt
 # Lexicographical (default) order is the best for surveillance data.
 for f in *.jpg; do echo "file '$f'" >> list.txt; echo "duration 1" >> list.txt; done
-ffmpeg -f concat -safe 0 -i list.txt -c:v libx264 -preset fast -tune fastdecode -crf 40 -r 1 output.mkv
+ffmpeg -f concat -safe 0 -i list.txt -c:v libx264 -preset fast -tune fastdecode -crf 37 -r 1 output.mkv
 
 FFMPEG_ERROR_CODE=$?
 
