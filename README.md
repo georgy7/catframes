@@ -22,15 +22,17 @@ it's still better to use cropping/extending on video, than scaling, to prevent q
 The script `images_fix_resolution.py` aligns frames on the left-top corner
 at this operations.
 
-## 2. Fixing a case, when an administrator changes a camera settings during a day
+## 2. Fixing the case, one changes a camera settings during a day
 
 A video have a static resolution, but a camera resolution may be changed by a human.
+If the change is small, this case will be indistinguishable from the previous one.
+But if the change is significant, there is an opportunity to process it differently.
 
-### With approximately the same aspect ratio
+### A change to approximately the same aspect ratio
 
 ...
 
-### With a very different aspect ratio
+### A change to a very different aspect ratio
 
 ...
 
