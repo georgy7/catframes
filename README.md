@@ -12,22 +12,29 @@ the greatest extent permissible under applicable law.*
 
 Some software by some reason may save a part of frames with negligible cropping (about 8 pixels).
 
-![Feature 1, cropping](/ReadMe images/case1_1.png)
+![Feature 1, cropping](/ReadMe%20images/case1_1.png)
 
-![Feature 1, extending](/ReadMe images/case1_2.png)
+![Feature 1, extending](/ReadMe%20images/case1_2.png)
 
-Even if this is not your case, if a resolution was changed to very close one,
-it's still better to use cropping on video, than scaling, to prevent quality lose.
+Even if this is not your case (it scales the image, for instance),
+if a resolution was changed to very close one,
+it's still better to use cropping/extending on video, than scaling, to prevent further quality lose.
 
-## 2. Fixing a case, when an administrator changes a camera settings during a day
+The script `images_fix_resolution.py` aligns the frames to the left-top corner.
+
+## 2. Fixing the case, one changes a camera settings during a day
 
 A video have a static resolution, but a camera resolution may be changed by a human.
+If the change is small, this case will be indistinguishable from the previous one.
+But if the change is significant, there is an opportunity to process it differently.
 
-### With approximately the same aspect ratio
+### A change to approximately the same aspect ratio
+
+We can solve this, resizing the frames without preserving their aspect ratio.
 
 ...
 
-### With a very different aspect ratio
+### A change to a very different aspect ratio
 
 ...
 
