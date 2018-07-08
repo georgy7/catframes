@@ -19,8 +19,8 @@ Some software by some reason may save a part of frames with negligible cropping 
 Even if this is not your case, and a resolution was changed to very close one,
 it's still better to use cropping/extending on video, than scaling, to prevent quality lose.
 
-The script `images_fix_resolution.py` aligns frames on left-top corner
-at this operation.
+The script `images_fix_resolution.py` aligns frames on the left-top corner
+at this operations.
 
 ## 2. Fixing a case, when an administrator changes a camera settings during a day
 
