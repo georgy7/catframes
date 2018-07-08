@@ -6,6 +6,33 @@ infringement, or the absence of latent or other defects, accuracy, or
 the present or absence of errors, whether or not discoverable, all to
 the greatest extent permissible under applicable law.*
 
+# Features
+
+## 1. Fixing unstable frame size
+
+Some software by some reason may save a part of frames with negligible cropping (about 8 pixels).
+
+![Feature 1, cropping](/ReadMe images/case1_1.png)
+
+![Feature 1, extending](/ReadMe images/case1_2.png)
+
+Even if this is not your case, if a resolution was changed to very close one,
+it's still better to use cropping on video, than scaling, to prevent quality lose.
+
+## 2. Fixing a case, when an administrator changes a camera settings during a day
+
+A video have a static resolution, but a camera resolution may be changed by a human.
+
+### With approximately the same aspect ratio
+
+...
+
+### With a very different aspect ratio
+
+...
+
+# Installation
+
 ## Requirements
 
 1. Bash
@@ -15,7 +42,7 @@ the greatest extent permissible under applicable law.*
 
 ## Usage
 
-1. `extent_override.py` ensures, that all images in the current directory have the same resolution.
+1. `images_fix_resolution.py` ensures, that all images in the current directory have the same resolution.
     1. Finds out, what resolution is most common in this directory.
         1. Renames corrupted images to `{original_filename}_corrupted`.
     2. Converts all the pictures to this resolution.
