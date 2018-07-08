@@ -16,8 +16,9 @@ Some software by some reason may save a part of frames with negligible cropping 
 
 ![Feature 1, extending](/ReadMe%20images/case1_2.png)
 
-Even if this is not your case, and a resolution was changed to very close one,
-it's still better to use cropping/extending on video, than scaling, to prevent quality lose.
+Even if this is not your case (it scales the image, for instance),
+if a resolution was changed to very close one,
+it's still better to use cropping/extending on video, than scaling, to prevent further quality lose.
 
 The script `images_fix_resolution.py` aligns the frames to the left-top corner.
 
@@ -28,6 +29,8 @@ If the change is small, this case will be indistinguishable from the previous on
 But if the change is significant, there is an opportunity to process it differently.
 
 ### A change to approximately the same aspect ratio
+
+We can solve this, resizing the frames without preserving their aspect ratio.
 
 ...
 
