@@ -32,7 +32,7 @@ But if the change is significant, there is an opportunity to process it differen
 
 We can solve this, resizing the frames without preserving their aspect ratio.
 
-...
+![Feature 2.1](/ReadMe%20images/case2_1.png)
 
 ### A change to a very different aspect ratio
 
