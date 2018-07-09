@@ -55,7 +55,9 @@ Please, use `images_to_h264.sh [h|help|-h|-help|--help]` for more information.
 
 # Also
 
-You can use the script separately. It scans all JPEG and PNG files in a folder (based on the file name extensions, not [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
+You can use the script separately.
+
+It scans all JPEG and PNG files in a folder (based on the file name extensions, not [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
 
 ```
 $ most_common_image_resolution_in_the_folder.py [--statistics|-s]
