@@ -36,22 +36,17 @@ But if the change is significant, there is an opportunity to process it differen
 
 ![Feature 2.2](/ReadMe%20images/case2_2.png)
 
-# Installation
-
-## Requirements
+# Requirements
 
 1. Bash
 2. Python 3
 3. ImageMagick
 4. FFmpeg
 
-## Usage
+# Usage
 
 1. `images_fix_resolution.py` ensures, that all images in the current directory have the same resolution.
     1. Finds out, what resolution is most common in this directory.
         1. Renames corrupted images to `{original_filename}_corrupted`.
     2. Converts all the pictures to this resolution.
-        1. If a frame much bigger that the target resolution (more than 10% at width or height), it will be resized without preserving its aspect ratio. Because no one wants to lose a large portion of a frame on cctv.
-        2. If a frame slightly larger, it will be cropped to the left-top (that looks nicer, this avoids jitter).
-        3. If a frame smaller, it will be extended with a green background color. The image will aligned to the left-top corner.
 2. `images_to_h264.sh [--delete-images]` compresses them all to a single video file with 1 frame per second.

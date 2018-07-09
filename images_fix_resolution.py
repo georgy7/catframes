@@ -63,6 +63,8 @@ def process():
         print('Bad resolution.')
         sys.exit(1);
 
+    target_aspect_ratio = float(target_size[0]) / float(target_size[1])
+
     start_stage_2_time = time.time()
     print('Mogrifying the images...')
 
@@ -86,15 +88,21 @@ def process():
             # Skipping.
             print(',', end='')
 
-        elif (float(image_resolution[0]) < (float(target_size[0]) * 1.1)) and \
-                (float(image_resolution[1]) < (float(target_size[1]) * 1.1)):
+        elif (abs(int(image_resolution[0]) - int(target_size[0])) < 16) and \
+                (abs(int(image_resolution[1]) - int(target_size[1])) < 16):
             comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
             subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
             print('.', end='')
         else:
-            print('\n\"{}\" is a really big image ({}). Resizing.'.format(f, image_resolution_string))
-            comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
-            subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
+            image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
+            if abs(image_aspect_ratio - target_aspect_ratio) < 0.45:
+                print('s', end='')
+                comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
+                subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
+            else:
+                print('c', end='')
+                comand = 'mogrify -background "#00d2ff" -resize {} -extent {} -gravity Center -quality 98 "{}"'
+                subprocess.check_call(comand.format(target_resolution_string, target_resolution_string, f), shell = True)
 
     print('\nStage 2 completed in {} seconds.\n'.format(time.time() - start_stage_2_time))
     print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
