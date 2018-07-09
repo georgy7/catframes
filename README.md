@@ -24,7 +24,7 @@ The script `images_fix_resolution.py` aligns the frames to the left-top corner.
 
 ## 2. Fixing the case, one changes a camera settings during a day
 
-A video have a static resolution, but a camera resolution may be changed by a human.
+A video have a static resolution, but a camera resolution may be changed.
 If the change is small, this case will be indistinguishable from the previous one.
 But if the change is significant, there is an opportunity to process it differently.
 
