@@ -66,7 +66,7 @@ $ echo $var1
 1280x720
 ```
 
-----------------------------
+# Disclaimer
 
 *I make no representations or
 warranties of any kind concerning the software, express, implied,
