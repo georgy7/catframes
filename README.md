@@ -1,11 +1,3 @@
-*These scripts are experimental, and I make no representations or
-warranties of any kind concerning the software, express, implied,
-statutory or otherwise, including without limitation warranties of
-title, merchantability, fitness for a particular purpose, non
-infringement, or the absence of latent or other defects, accuracy, or
-the present or absence of errors, whether or not discoverable, all to
-the greatest extent permissible under applicable law.*
-
 # Features
 
 ## 1. Fixing unstable frame size
@@ -73,3 +65,13 @@ $ var1=`most_common_image_resolution_in_the_folder.py`
 $ echo $var1
 1280x720
 ```
+
+----------------------------
+
+*I make no representations or
+warranties of any kind concerning the software, express, implied,
+statutory or otherwise, including without limitation warranties of
+title, merchantability, fitness for a particular purpose, non
+infringement, or the absence of latent or other defects, accuracy, or
+the present or absence of errors, whether or not discoverable, all to
+the greatest extent permissible under applicable law.*
