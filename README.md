@@ -55,7 +55,7 @@ Please, use `images_to_h264.sh [h|help|-h|-help|--help]` for more information.
 
 # Also
 
-You can use the script separately. It scans all jpeg and png files in a folder.
+You can use the script separately. It scans all JPEG and PNG files in a folder.
 
 ```
 $ most_common_image_resolution_in_the_folder.py [--statistics|-s]
