@@ -101,7 +101,7 @@ def process():
                 subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
             else:
                 print('c', end='')
-                comand = 'mogrify -background "#00d2ff" -resize {} -extent {} -gravity Center -quality 98 "{}"'
+                comand = 'mogrify -background "#0590b0" -resize {} -extent {} -gravity Center -quality 98 "{}"'
                 subprocess.check_call(comand.format(target_resolution_string, target_resolution_string, f), shell = True)
 
     print('\nStage 2 completed in {} seconds.\n'.format(time.time() - start_stage_2_time))
