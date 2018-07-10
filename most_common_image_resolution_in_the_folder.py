@@ -4,6 +4,16 @@ import os
 import sys
 import operator
 import time
+from multiprocessing import Pool, cpu_count
+
+def get_resolution(f):
+    if os.path.isdir(f):
+        return None
+    out = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
+    if not out:
+        os.rename(f, f + '_corrupted')
+        return None
+    return out
 
 def most_common_image_resolution_in_the_folder(statistics = False):
     accepted_extensions = ["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
@@ -11,19 +21,12 @@ def most_common_image_resolution_in_the_folder(statistics = False):
 
     frequences_of_resolutions = {}
 
-    for f in filenames:
-        if os.path.isdir(f):
-            continue
-
-        out = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
-        if not out:
-            os.rename(f, f + '_corrupted')
-            continue
-
-        if out in frequences_of_resolutions:
-            frequences_of_resolutions[out] = frequences_of_resolutions[out] + 1
-        else:
-            frequences_of_resolutions[out] = 1
+    with Pool(processes = cpu_count()) as pool:
+        for out in pool.imap_unordered(get_resolution, filenames):
+            if out in frequences_of_resolutions:
+                frequences_of_resolutions[out] = frequences_of_resolutions[out] + 1
+            else:
+                frequences_of_resolutions[out] = 1
 
     if statistics:
         return frequences_of_resolutions
