@@ -72,7 +72,7 @@ def process():
         for r in pool.imap_unordered(FixImage(target_size), list_of_files()):
             print(r, end='')
             i = i + 1
-            if i % 30 == 0:
+            if i % 50 == 0:
                 sys.stdout.flush()
 
     print('\nStage 2 completed in {} seconds.\n'.format(time.time() - start_stage_2_time))
