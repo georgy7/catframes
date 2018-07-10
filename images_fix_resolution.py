@@ -4,6 +4,7 @@ import sys
 import os
 import subprocess
 import time
+from multiprocessing import Pool
 
 expected_parameter = '--yes-rewrite-images'
 
@@ -63,50 +64,54 @@ def process():
         print('Bad resolution.')
         sys.exit(1);
 
-    target_aspect_ratio = float(target_size[0]) / float(target_size[1])
-
     start_stage_2_time = time.time()
     print('Mogrifying the images...')
 
     i = 0
-    for f in list_of_files():
-
-        i = i + 1
-        if i % 250 == 0:
-            sys.stdout.flush()
-
-        image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
-        if not image_resolution_string:
-            print('\nCould not resolve size of \"{}\"'.format(f))
-            continue
-        image_resolution = image_resolution_string.split('x')
-        if len(image_resolution) < 2:
-            print('\nCould not resolve size of \"{}\"'.format(f))
-            continue
-
-        if (image_resolution[0] == target_size[0]) and (image_resolution[1] == target_size[1]):
-            # Skipping.
-            print(',', end='')
-
-        elif (abs(int(image_resolution[0]) - int(target_size[0])) < 16) and \
-                (abs(int(image_resolution[1]) - int(target_size[1])) < 16):
-            comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
-            subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
-            print('.', end='')
-        else:
-            image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
-            if abs(image_aspect_ratio - target_aspect_ratio) < 0.45:
-                print('s', end='')
-                comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
-                subprocess.check_call(comand.format(target_resolution_string, f), shell = True)
-            else:
-                print('c', end='')
-                comand = 'mogrify -background "#0590b0" -resize {} -extent {} -gravity Center -quality 98 "{}"'
-                subprocess.check_call(comand.format(target_resolution_string, target_resolution_string, f), shell = True)
+    with Pool(processes=4) as pool:
+        for r in pool.imap_unordered(FixImage(target_size), list_of_files()):
+            print(r, end='')
+            i = i + 1
+            if i % 250 == 0:
+                sys.stdout.flush()
 
     print('\nStage 2 completed in {} seconds.\n'.format(time.time() - start_stage_2_time))
     print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
 
+class FixImage(object):
+    def __init__(self, target_size):
+        self.target_size = target_size
+        self.target_aspect_ratio = float(target_size[0]) / float(target_size[1])
+        self.target_resolution_string = target_size[0] + 'x' + target_size[1]
+
+    def __call__(self, f):
+        image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
+        if not image_resolution_string:
+            return '\nCould not resolve size of \"{}\"\n'.format(f)
+
+        image_resolution = image_resolution_string.split('x')
+        if len(image_resolution) < 2:
+            return '\nCould not resolve size of \"{}\"\n'.format(f)
+
+        if (image_resolution[0] == self.target_size[0]) and (image_resolution[1] == self.target_size[1]):
+            # Skipping.
+            return ','
+
+        elif (abs(int(image_resolution[0]) - int(self.target_size[0])) < 16) and \
+                (abs(int(image_resolution[1]) - int(self.target_size[1])) < 16):
+            comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
+            subprocess.check_call(comand.format(self.target_resolution_string, f), shell = True)
+            return '.'
+        else:
+            image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
+            if abs(image_aspect_ratio - self.target_aspect_ratio) < 0.45:
+                comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
+                subprocess.check_call(comand.format(self.target_resolution_string, f), shell = True)
+                return 's'
+            else:
+                comand = 'mogrify -background "#0590b0" -resize {} -extent {} -gravity Center -quality 98 "{}"'
+                subprocess.check_call(comand.format(self.target_resolution_string, self.target_resolution_string, f), shell = True)
+                return 'c'
 
 if __name__ == "__main__":
     if (len(sys.argv)==2) and (sys.argv[1]==expected_parameter):
