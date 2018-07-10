@@ -16,9 +16,9 @@ The script `images_fix_resolution.py` aligns the frames to the left-top corner.
 
 ## 2. Fixing the case, one changes a camera settings during a day
 
-A video have a static resolution, but a camera resolution may be changed.
+A video file has a static resolution, but a camera resolution may be changed.
 If the change is small, this case will be indistinguishable from the previous one.
-But if the change is significant, there is an opportunity to process it differently.
+But if the change is significant, there is a way to process it differently.
 
 ### A change to approximately the same aspect ratio
 
