@@ -1,11 +1,3 @@
-*These scripts are experimental, and I make no representations or
-warranties of any kind concerning the software, express, implied,
-statutory or otherwise, including without limitation warranties of
-title, merchantability, fitness for a particular purpose, non
-infringement, or the absence of latent or other defects, accuracy, or
-the present or absence of errors, whether or not discoverable, all to
-the greatest extent permissible under applicable law.*
-
 # Features
 
 ## 1. Fixing unstable frame size
@@ -49,4 +41,37 @@ But if the change is significant, there is an opportunity to process it differen
     1. Finds out, what resolution is most common in this directory.
         1. Renames corrupted images to `{original_filename}_corrupted`.
     2. Converts all the pictures **in place** to this resolution.
-2. `images_to_h264.sh [--delete-images] [-o pathToFile.mkv]` compresses them all to a single video file with 1 frame per second.
+2. `images_to_h264.sh [--delete-images] [-o pathToFile.mkv]` compresses them all
+to a single video file with 1 frame per second.
+Please, use `images_to_h264.sh [h|help|-h|-help|--help]` for more information.
+
+# Also
+
+You can use the script separately.
+
+It scans all JPEG and PNG files in a folder (based on the file name extensions, not [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
+
+```
+$ most_common_image_resolution_in_the_folder.py [--statistics|-s]
+
+1280x720 => 3
+800x800 => 2
+-------------
+Completed in 0.023589134216308594 seconds.
+```
+
+```
+$ var1=`most_common_image_resolution_in_the_folder.py`
+$ echo $var1
+1280x720
+```
+
+# Disclaimer
+
+*I make no representations or
+warranties of any kind concerning the software, express, implied,
+statutory or otherwise, including without limitation warranties of
+title, merchantability, fitness for a particular purpose, non
+infringement, or the absence of latent or other defects, accuracy, or
+the present or absence of errors, whether or not discoverable, all to
+the greatest extent permissible under applicable law.*
