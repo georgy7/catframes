@@ -2,7 +2,7 @@
 
 ## 1. Fixing unstable frame size
 
-Some software by some reason may save a part of frames with negligible cropping (about 8 pixels).
+Some software for some reason may save a part of frames with negligible cropping (about 8 pixels).
 
 ![Feature 1, cropping](/ReadMe%20images/case1_1.png)
 
@@ -10,11 +10,11 @@ Some software by some reason may save a part of frames with negligible cropping 
 
 Even if this is not your case (it scales the image, for instance),
 if a resolution was changed to very close one,
-it's still better to use cropping/extending on video, than scaling, to prevent further quality lose.
+it's still better to use cropping/extending on video, than scaling, to prevent further quality loss.
 
 The script `images_fix_resolution.py` aligns the frames to the left-top corner.
 
-## 2. Fixing the case, one changes a camera settings during a day
+## 2. Fixing the case, one changes camera settings during a day
 
 A video file has a static resolution, but a camera resolution may be changed.
 If the change is small, this case will be indistinguishable from the previous one.
