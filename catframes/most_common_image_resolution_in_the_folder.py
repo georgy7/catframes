@@ -34,8 +34,7 @@ def most_common_image_resolution_in_the_folder(statistics = False):
         result = max(frequences_of_resolutions, key=lambda key: frequences_of_resolutions[key])
         return result
 
-
-if __name__ == "__main__":
+def run():
     usage = '\n    most_common_image_resolution_in_the_folder.py [--statistics|-s]\n'
 
     if (len(sys.argv) > 1) and ((sys.argv[1] == '--help') or (sys.argv[1] == '-h')):
@@ -55,3 +54,8 @@ if __name__ == "__main__":
 
     else:
         print(most_common_image_resolution_in_the_folder(), end='')
+
+
+if __name__ == "__main__":
+    run()
+
