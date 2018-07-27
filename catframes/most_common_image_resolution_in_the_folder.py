@@ -35,7 +35,7 @@ def most_common_image_resolution_in_the_folder(statistics = False):
         return result
 
 def run():
-    usage = '\n    most_common_image_resolution_in_the_folder.py [--statistics|-s]\n'
+    usage = '\n    catframes_most_common_image_resolution_in_the_folder [--statistics|-s]\n'
 
     if (len(sys.argv) > 1) and ((sys.argv[1] == '--help') or (sys.argv[1] == '-h')):
         print(usage)

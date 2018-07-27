@@ -12,7 +12,7 @@ Even if this is not your case (it scales the image, for instance),
 if a resolution was changed to very close one,
 it's still better to use cropping/extending on video, than scaling, to prevent further quality loss.
 
-The script `images_fix_resolution.py` aligns the frames to the left-top corner.
+The script `catframes_fix_resolution` aligns the frames to the left-top corner.
 
 ## 2. Fixing the case, one changes camera settings during a day
 
@@ -37,7 +37,7 @@ But the considerable changes can be processed another way.
 
 # Usage
 
-1. `images_fix_resolution.py` ensures, that all images in the current directory have the same resolution.
+1. `catframes_fix_resolution` ensures, that all images in the current directory have the same resolution.
     1. Finds out, what resolution is most common in this directory.
         1. Renames corrupted images to `{original_filename}_corrupted`.
     2. Converts all the pictures **in place** to this resolution.
@@ -60,7 +60,7 @@ You can use the script separately.
 It scans all JPEG and PNG files in a folder (based on the file name extensions, not [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
 
 ```
-$ most_common_image_resolution_in_the_folder.py [--statistics|-s]
+$ catframes_most_common_image_resolution_in_the_folder [--statistics|-s]
 
 1280x720 => 3
 800x800 => 2
