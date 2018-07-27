@@ -54,8 +54,3 @@ def run():
 
     else:
         print(most_common_image_resolution_in_the_folder(), end='')
-
-
-if __name__ == "__main__":
-    run()
-

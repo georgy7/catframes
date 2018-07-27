@@ -5,6 +5,7 @@ import os
 import subprocess
 import time
 from multiprocessing import Pool
+from catframes.most_common_image_resolution_in_the_folder import most_common_image_resolution_in_the_folder
 
 expected_parameter = '--yes-rewrite-images'
 
@@ -43,7 +44,6 @@ with the flag "{}".
 
 """
 
-from most_common_image_resolution_in_the_folder import most_common_image_resolution_in_the_folder
 
 def list_of_files():
     accepted_extensions = ["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
@@ -113,7 +113,7 @@ class FixImage(object):
                 subprocess.check_call(comand.format(self.target_resolution_string, self.target_resolution_string, f), shell = True)
                 return 'c'
 
-if __name__ == "__main__":
+def run():
     if (len(sys.argv)==2) and (sys.argv[1]==expected_parameter):
         process()
     else:
