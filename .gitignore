@@ -1,2 +1,5 @@
 .directory
 __pycache__
+build/
+catframes.egg-info/
+dist/

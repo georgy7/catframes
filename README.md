@@ -47,30 +47,10 @@ Please, use `images_to_h264.sh [h|help|-h|-help|--help]` for more information.
 
 # Installation
 
-Just copy `images_fix_resolution.py`, `images_to_h264.sh` and `most_common_image_resolution_in_the_folder.py` to `/usr/local/bin/` or other directory in your system PATH. Ensure, these files have correct permissions. Correct the permissions if needed.
-
-On Linux:
+On Unix-like systems:
 
 ```
-cd the_directory_where_you_copied_the_files_to
-sudo chown root:root images_fix_resolution.py
-sudo chown root:root images_to_h264.sh
-sudo chown root:root most_common_image_resolution_in_the_folder.py
-sudo chmod 555 images_fix_resolution.py
-sudo chmod 555 images_to_h264.sh
-sudo chmod 555 most_common_image_resolution_in_the_folder.py
-```
-
-On FreeBSD (if you have `sudo` set up):
-
-```
-cd the_directory_where_you_copied_the_files_to
-sudo chown root:wheel images_fix_resolution.py
-sudo chown root:wheel images_to_h264.sh
-sudo chown root:wheel most_common_image_resolution_in_the_folder.py
-sudo chmod 555 images_fix_resolution.py
-sudo chmod 555 images_to_h264.sh
-sudo chmod 555 most_common_image_resolution_in_the_folder.py
+sudo python3 -m pip install --force-reinstall catframes
 ```
 
 # Also
