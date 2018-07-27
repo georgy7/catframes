@@ -69,7 +69,7 @@ Completed in 0.023589134216308594 seconds.
 ```
 
 ```
-$ var1=`most_common_image_resolution_in_the_folder.py`
+$ var1=`catframes_most_common_image_resolution_in_the_folder`
 $ echo $var1
 1280x720
 ```
