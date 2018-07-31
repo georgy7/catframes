@@ -6,6 +6,7 @@ import operator
 import time
 from multiprocessing import Pool, cpu_count
 
+
 def get_resolution(f):
     if os.path.isdir(f):
         return None
@@ -15,13 +16,14 @@ def get_resolution(f):
         return None
     return out
 
-def most_common_image_resolution_in_the_folder(statistics = False):
+
+def most_common_image_resolution_in_the_folder(statistics=False):
     accepted_extensions = ["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
     filenames = [fn for fn in os.listdir() if fn.split(".")[-1] in accepted_extensions]
 
     frequences_of_resolutions = {}
 
-    with Pool(processes = cpu_count()) as pool:
+    with Pool(processes=cpu_count()) as pool:
         for out in pool.imap_unordered(get_resolution, filenames):
             if out in frequences_of_resolutions:
                 frequences_of_resolutions[out] = frequences_of_resolutions[out] + 1
@@ -34,6 +36,7 @@ def most_common_image_resolution_in_the_folder(statistics = False):
         result = max(frequences_of_resolutions, key=lambda key: frequences_of_resolutions[key])
         return result
 
+
 def run():
     usage = '\n    catframes_most_common_image_resolution_in_the_folder [--statistics|-s]\n'
 
@@ -42,7 +45,7 @@ def run():
 
     elif (len(sys.argv) > 1) and ((sys.argv[1] == '--statistics') or (sys.argv[1] == '-s')):
         start_time = time.time()
-        stat = most_common_image_resolution_in_the_folder(statistics = True)
+        stat = most_common_image_resolution_in_the_folder(statistics=True)
         print()
         for k, v in sorted(stat.items(), key=operator.itemgetter(1), reverse=True):
             print("{} => {}".format(k, v))

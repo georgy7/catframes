@@ -50,6 +50,7 @@ def list_of_files():
     filenames = [fn for fn in os.listdir() if fn.split(".")[-1] in accepted_extensions]
     return filenames
 
+
 def process():
     start_time = time.time()
     print('Resolving the most common resolution in the folder...')
@@ -78,6 +79,7 @@ def process():
     print('\nStage 2 completed in {} seconds.\n'.format(time.time() - start_stage_2_time))
     print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
 
+
 class FixImage(object):
     def __init__(self, target_size):
         self.target_size = target_size
@@ -100,21 +102,23 @@ class FixImage(object):
         elif (abs(int(image_resolution[0]) - int(self.target_size[0])) < 16) and \
                 (abs(int(image_resolution[1]) - int(self.target_size[1])) < 16):
             comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
-            subprocess.check_call(comand.format(self.target_resolution_string, f), shell = True)
+            subprocess.check_call(comand.format(self.target_resolution_string, f), shell=True)
             return '.'
         else:
             image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
             if abs(image_aspect_ratio - self.target_aspect_ratio) < 0.45:
                 comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
-                subprocess.check_call(comand.format(self.target_resolution_string, f), shell = True)
+                subprocess.check_call(comand.format(self.target_resolution_string, f), shell=True)
                 return 's'
             else:
                 comand = 'mogrify -background "#0590b0" -resize {} -extent {} -gravity Center -quality 98 "{}"'
-                subprocess.check_call(comand.format(self.target_resolution_string, self.target_resolution_string, f), shell = True)
+                subprocess.check_call(comand.format(self.target_resolution_string, self.target_resolution_string, f),
+                                      shell=True)
                 return 'c'
 
+
 def run():
-    if (len(sys.argv)==2) and (sys.argv[1]==expected_parameter):
+    if (len(sys.argv) == 2) and (sys.argv[1] == expected_parameter):
         process()
     else:
         print(warning.format(expected_parameter))
