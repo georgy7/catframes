@@ -1,6 +1,10 @@
-# Features
+# catframes
 
-## 1. Fixing unstable frame size
+[![License: CC0-1.0](https://licensebuttons.net/l/zero/1.0/80x15.png)](http://creativecommons.org/publicdomain/zero/1.0/)
+
+## Features
+
+### 1. Fixing unstable frame size
 
 Some software for some reason may save a part of frames with negligible cropping (about 8 pixels).
 
@@ -14,28 +18,28 @@ it's still better to use cropping/extending on video, than scaling, to prevent f
 
 The script `catframes_fix_resolution` aligns the frames to the left-top corner.
 
-## 2. Fixing the case, one changes camera settings during a day
+### 2. Fixing the case, one changes camera settings during a day
 
 A video file has a static resolution, but a camera resolution may be changed.
 If the change is small, this case will be indistinguishable from the previous one.
 But the considerable changes can be processed another way.
 
-### A change to approximately the same aspect ratio
+#### A change to approximately the same aspect ratio
 
 ![Feature 2.1](/ReadMe%20images/case2_1.png)
 
-### A change to a very different aspect ratio
+#### A change to a very different aspect ratio
 
 ![Feature 2.2](/ReadMe%20images/case2_2.png)
 
-# Requirements
+## Requirements
 
 1. Bash
 2. Python 3
 3. ImageMagick
 4. FFmpeg
 
-# Usage
+## Usage
 
 1. `catframes_fix_resolution` ensures, that all images in the current directory have the same resolution.
     1. Finds out, what resolution is most common in this directory.
@@ -45,7 +49,7 @@ But the considerable changes can be processed another way.
 to a single video file with 1 frame per second.
 Please, use `images_to_h264.sh [h|help|-h|-help|--help]` for more information.
 
-# Installation
+## Installation
 
 On Unix-like systems:
 
@@ -53,7 +57,7 @@ On Unix-like systems:
 sudo python3 -m pip install --force-reinstall catframes
 ```
 
-# Also
+## Also
 
 You can use the script separately.
 
@@ -74,7 +78,7 @@ $ echo $var1
 1280x720
 ```
 
-# Disclaimer
+## Disclaimer
 
 *I make no representations or
 warranties of any kind concerning the software, express, implied,
