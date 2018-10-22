@@ -62,7 +62,7 @@ sudo python3 -m pip install --prefix /usr/local --force-reinstall catframes
 
 You can use the script separately.
 
-It scans all JPEG and PNG files in a folder (based on the file name extensions, not [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
+It scans all JPEG and PNG files in a folder (based on the file name extensions, *not* [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
 
 ```
 $ catframes_most_common_image_resolution_in_the_folder [--statistics|-s]
