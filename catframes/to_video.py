@@ -124,6 +124,3 @@ class ToVideoConverter:
 def run():
     converter = ToVideoConverter()
     converter.parse_arguments()
-
-
-run()
