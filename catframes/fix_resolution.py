@@ -80,7 +80,7 @@ def process():
     print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
 
 
-class FixImage(object):
+class FixImage:
     def __init__(self, target_size):
         self.target_size = target_size
         self.target_aspect_ratio = float(target_size[0]) / float(target_size[1])

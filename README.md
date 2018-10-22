@@ -45,9 +45,9 @@ But the considerable changes can be processed another way.
     1. Finds out, what resolution is most common in this directory.
         1. Renames corrupted images to `{original_filename}_corrupted`.
     2. Converts all the pictures **in place** to this resolution.
-2. `images_to_h264.sh [--delete-images] [-o pathToFile.mkv]` compresses them all
+2. `catframes_to_video [--delete-images] [-o pathToFile.mp4]` compresses them all
 to a single video file with 1 frame per second.
-Please, use `images_to_h264.sh [h|help|-h|-help|--help]` for more information.
+Please, use `catframes_to_video [--help]` for more information.
 
 ## Installation
 

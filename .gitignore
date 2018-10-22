@@ -1,6 +1,14 @@
 .directory
 __pycache__
+*.pyc
 build/
 catframes.egg-info/
 dist/
 .idea/
+
+*.kate-swp
+*~
+
+list.txt
+*.mkv
+*.mp4
