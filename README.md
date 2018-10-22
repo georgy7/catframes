@@ -2,6 +2,7 @@
 
 [![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/georgy7/catframes.svg)](#)
 [![License: CC0-1.0](https://img.shields.io/badge/License-CC0%201.0-lightgrey.svg)](http://creativecommons.org/publicdomain/zero/1.0/)
+[![Python versions: 3.3 and above](https://img.shields.io/pypi/pyversions/catframes.svg?style=flat)](#)
 [![PyPI](https://img.shields.io/pypi/v/catframes.svg)](https://pypi.org/project/catframes/)
 
 ## Features
