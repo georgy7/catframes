@@ -36,10 +36,9 @@ But the considerable changes can be processed another way.
 
 ## Requirements
 
-1. Bash
-2. Python 3
-3. ImageMagick
-4. FFmpeg
+1. Python 3
+2. ImageMagick
+3. FFmpeg
 
 ## Usage
 
