@@ -54,7 +54,7 @@ Please, use `catframes_to_video [--help]` for more information.
 On Unix-like systems:
 
 ```
-sudo python3 -m pip install --force-reinstall catframes
+sudo python3 -m pip install --prefix /usr/local --force-reinstall catframes
 ```
 
 ## Also
