@@ -51,7 +51,7 @@ sudo python3 -m pip install --prefix /usr/local --force-reinstall catframes
 
 ## Usage
 
-All these scripts scan JPEG and PNG files in a folder based on the file name extensions, *not* [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures).
+All these scripts scan JPEG and PNG files in a folder based on the file name extensions, *not* [their signatures](https://en.wikipedia.org/wiki/List_of_file_signatures).
 
 1. `catframes_fix_resolution` ensures, that all images in the current directory have the same resolution.
     1. Finds out, what resolution is most common in this directory.
