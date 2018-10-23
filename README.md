@@ -61,7 +61,7 @@ All these scripts scan JPEG and PNG files in a folder based on the file name ext
 to a single video file with 1 frame per second.
 Please, use `catframes_to_video [--help]` for more information.
 
-You can also use this to detect common resolution in a folder.
+You can also use Catframes to detect common resolution in a folder.
 
 ```
 $ catframes_most_common_image_resolution_in_the_folder [--statistics|-s]
