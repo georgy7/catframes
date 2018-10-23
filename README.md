@@ -78,6 +78,8 @@ $ echo $var1
 1280x720
 ```
 
+But this script renames corrupted images as well.
+
 ## Disclaimer
 
 *I make no representations or
