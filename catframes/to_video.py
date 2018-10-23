@@ -105,10 +105,12 @@ class ToVideoConverter:
             print(USAGE)
             sys.exit(2)
 
+    def process(self):
         if os.path.exists(LIST_FILE_NAME):
             os.remove(LIST_FILE_NAME)
 
         # Lexicographical (default) order is the best for surveillance data.
+        # There is no choice yet.
         self.make_file_list_lexicographical_order()
 
         comand = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r 1 {}'
@@ -124,3 +126,4 @@ class ToVideoConverter:
 def run():
     converter = ToVideoConverter()
     converter.parse_arguments()
+    converter.process()
