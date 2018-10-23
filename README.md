@@ -41,7 +41,17 @@ But the considerable changes can be processed another way.
 2. ImageMagick
 3. FFmpeg
 
+## Installation
+
+On Unix-like systems:
+
+```
+sudo python3 -m pip install --prefix /usr/local --force-reinstall catframes
+```
+
 ## Usage
+
+All these scripts scan JPEG and PNG files in a folder (based on the file name extensions, *not* [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
 
 1. `catframes_fix_resolution` ensures, that all images in the current directory have the same resolution.
     1. Finds out, what resolution is most common in this directory.
@@ -51,19 +61,7 @@ But the considerable changes can be processed another way.
 to a single video file with 1 frame per second.
 Please, use `catframes_to_video [--help]` for more information.
 
-## Installation
-
-On Unix-like systems:
-
-```
-sudo python3 -m pip install --prefix /usr/local --force-reinstall catframes
-```
-
-## Also
-
-You can use the script separately.
-
-It scans all JPEG and PNG files in a folder (based on the file name extensions, *not* [their headers](https://en.wikipedia.org/wiki/List_of_file_signatures)).
+You can also use this to detect common resolution in a folder.
 
 ```
 $ catframes_most_common_image_resolution_in_the_folder [--statistics|-s]
