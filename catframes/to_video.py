@@ -110,14 +110,15 @@ class ToVideoConverter:
         self.make_file_list_lexicographical_order()
 
         command = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r 1 {}'
-        r = execute(command, LIST_FILE_NAME, self.output)
+        return_code = execute(command, LIST_FILE_NAME, self.output)
 
-        if r == 0:
+        if return_code == 0:
             if self.delete_images:
                 for image in list_of_files():
                     os.remove(image)
         else:
-            print_error("ffmpeg error %s" % r)
+            print_error("FFmpeg error %s" % return_code)
+            sys.exit(return_code)
 
 
 def run():
