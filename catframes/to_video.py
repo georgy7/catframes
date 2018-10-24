@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import sys
-import os
 import subprocess
+from catframes.utils import *
 
 HELP_ARGUMENTS = ["help", "h", "-help", "--help", "-h", "usage", "u", "-usage", "--usage", "-u"]
 DEFAULT_ARGUMENTS = ["default", "-default", "--default"]
@@ -36,6 +36,7 @@ USAGE = ("\n"
 
 LIST_FILE_NAME = "list.txt"
 
+
 def print_error(msg):
     print("\n===============")
     print(msg)
@@ -47,11 +48,6 @@ class ToVideoConverter:
         self.output = "output.mp4"
         self.delete_images = False
 
-    def file_list(self):
-        accepted_extensions = ["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
-        filenames = [fn for fn in os.listdir() if fn.split(".")[-1] in accepted_extensions]
-        return filenames
-
     def save_list(self, list):
         with open(LIST_FILE_NAME, 'w') as file:
             for name in list:
@@ -59,7 +55,7 @@ class ToVideoConverter:
                 file.write("duration 1\n")
 
     def make_file_list_lexicographical_order(self):
-        list = sorted(self.file_list())
+        list = sorted(list_of_files())
         self.save_list(list)
 
     def parse_output_argument(self, value_position):
@@ -118,10 +114,11 @@ class ToVideoConverter:
 
         if r == 0:
             if self.delete_images:
-                for image in self.file_list():
+                for image in list_of_files():
                     os.remove(image)
         else:
             print_error("ffmpeg error %s" % r)
+
 
 def run():
     converter = ToVideoConverter()

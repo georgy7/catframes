@@ -6,6 +6,7 @@ import subprocess
 import time
 from multiprocessing import Pool
 from catframes.most_common_image_resolution_in_the_folder import most_common_image_resolution_in_the_folder
+from catframes.utils import *
 
 expected_parameter = '--yes-rewrite-images'
 
@@ -43,12 +44,6 @@ with the flag "{}".
 
 
 """
-
-
-def list_of_files():
-    accepted_extensions = ["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
-    filenames = [fn for fn in os.listdir() if fn.split(".")[-1] in accepted_extensions]
-    return filenames
 
 
 def process():

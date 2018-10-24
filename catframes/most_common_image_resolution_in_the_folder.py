@@ -5,6 +5,7 @@ import sys
 import operator
 import time
 from multiprocessing import Pool, cpu_count
+from catframes.utils import *
 
 
 def get_resolution(f):
@@ -18,9 +19,7 @@ def get_resolution(f):
 
 
 def most_common_image_resolution_in_the_folder(statistics=False):
-    accepted_extensions = ["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
-    filenames = [fn for fn in os.listdir() if fn.split(".")[-1] in accepted_extensions]
-
+    filenames = list_of_files()
     frequences_of_resolutions = {}
 
     with Pool(processes=cpu_count()) as pool:
