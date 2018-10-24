@@ -47,18 +47,19 @@ class ToVideoConverter:
         self.output = "output.mp4"
         self.delete_images = False
 
-    def save_list(self, list):
+    @staticmethod
+    def save_list(filenames):
         with open(LIST_FILE_NAME, 'w') as file:
-            for name in list:
+            for name in filenames:
                 file.write("file '%s'\n" % name)
                 file.write("duration 1\n")
 
     def make_file_list_lexicographical_order(self):
-        list = sorted(list_of_files())
-        self.save_list(list)
+        filenames = sorted(list_of_files())
+        self.save_list(filenames)
 
     def parse_output_argument(self, value_position):
-        if (len(sys.argv) > value_position):
+        if len(sys.argv) > value_position:
             self.output = sys.argv[value_position]
         else:
             print_error("There is must be a path after the \"-o\" parameter.")
@@ -108,8 +109,8 @@ class ToVideoConverter:
         # There is no choice yet.
         self.make_file_list_lexicographical_order()
 
-        comand = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r 1 {}'
-        r = execute(comand, LIST_FILE_NAME, self.output)
+        command = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r 1 {}'
+        r = execute(command, LIST_FILE_NAME, self.output)
 
         if r == 0:
             if self.delete_images:

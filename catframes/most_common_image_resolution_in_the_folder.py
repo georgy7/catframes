@@ -1,6 +1,5 @@
 #!/usr/bin/env python3 
 
-import os
 import sys
 import operator
 import time
@@ -20,19 +19,19 @@ def get_resolution(f):
 
 def most_common_image_resolution_in_the_folder(statistics=False):
     filenames = list_of_files()
-    frequences_of_resolutions = {}
+    frequencies_of_resolutions = {}
 
     with Pool(processes=cpu_count()) as pool:
         for out in pool.imap_unordered(get_resolution, filenames):
-            if out in frequences_of_resolutions:
-                frequences_of_resolutions[out] = frequences_of_resolutions[out] + 1
+            if out in frequencies_of_resolutions:
+                frequencies_of_resolutions[out] = frequencies_of_resolutions[out] + 1
             else:
-                frequences_of_resolutions[out] = 1
+                frequencies_of_resolutions[out] = 1
 
     if statistics:
-        return frequences_of_resolutions
+        return frequencies_of_resolutions
     else:
-        result = max(frequences_of_resolutions, key=lambda key: frequences_of_resolutions[key])
+        result = max(frequencies_of_resolutions, key=lambda key: frequencies_of_resolutions[key])
         return result
 
 

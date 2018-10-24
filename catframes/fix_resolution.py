@@ -56,7 +56,7 @@ def process():
 
     if len(target_size) < 2:
         print('Bad resolution.')
-        sys.exit(1);
+        sys.exit(1)
 
     start_stage_2_time = time.time()
     print('Mogrifying the images...')
@@ -94,18 +94,18 @@ class FixImage:
 
         elif (abs(int(image_resolution[0]) - int(self.target_size[0])) < 16) and \
                 (abs(int(image_resolution[1]) - int(self.target_size[1])) < 16):
-            comand = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
-            execute(comand, self.target_resolution_string, f)
+            command = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
+            execute(command, self.target_resolution_string, f)
             return '.'
         else:
             image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
             if abs(image_aspect_ratio - self.target_aspect_ratio) < 0.45:
-                comand = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
-                execute(comand, self.target_resolution_string, f)
+                command = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
+                execute(command, self.target_resolution_string, f)
                 return 's'
             else:
-                comand = 'mogrify -background "#0590b0" -resize {} -extent {} -gravity Center -quality 98 "{}"'
-                execute(comand, self.target_resolution_string, self.target_resolution_string, f)
+                command = 'mogrify -background "#0590b0" -resize {} -extent {} -gravity Center -quality 98 "{}"'
+                execute(command, self.target_resolution_string, self.target_resolution_string, f)
                 return 'c'
 
 
