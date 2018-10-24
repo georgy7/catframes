@@ -17,33 +17,33 @@ def get_resolution(f):
     return out
 
 
-def most_common_image_resolution_in_the_folder(statistics=False):
+def scan_resolutions(statistics=False):
     filenames = list_of_files()
-    frequencies_of_resolutions = {}
+    frequencies = {}
 
     with Pool(processes=cpu_count()) as pool:
-        for out in pool.imap_unordered(get_resolution, filenames):
-            if out in frequencies_of_resolutions:
-                frequencies_of_resolutions[out] = frequencies_of_resolutions[out] + 1
+        for resolution in pool.imap_unordered(get_resolution, filenames):
+            if resolution in frequencies:
+                frequencies[resolution] = frequencies[resolution] + 1
             else:
-                frequencies_of_resolutions[out] = 1
+                frequencies[resolution] = 1
 
     if statistics:
-        return frequencies_of_resolutions
+        return frequencies
     else:
-        result = max(frequencies_of_resolutions, key=lambda key: frequencies_of_resolutions[key])
+        result = max(frequencies, key=lambda key: frequencies[key])
         return result
 
 
 def run():
     usage = '\n    catframes_most_common_image_resolution_in_the_folder [--statistics|-s]\n'
 
-    if (len(sys.argv) > 1) and ((sys.argv[1] == '--help') or (sys.argv[1] == '-h')):
+    if (len(sys.argv) > 1) and (sys.argv[1] in ['--help', '-h']):
         print(usage)
 
-    elif (len(sys.argv) > 1) and ((sys.argv[1] == '--statistics') or (sys.argv[1] == '-s')):
+    elif (len(sys.argv) > 1) and (sys.argv[1] in ['--statistics', '-s']):
         start_time = time.time()
-        stat = most_common_image_resolution_in_the_folder(statistics=True)
+        stat = scan_resolutions(statistics=True)
         print()
         for k, v in sorted(stat.items(), key=operator.itemgetter(1), reverse=True):
             print("{} => {}".format(k, v))
@@ -54,4 +54,4 @@ def run():
         print(usage)
 
     else:
-        print(most_common_image_resolution_in_the_folder(), end='')
+        print(scan_resolutions(), end='')

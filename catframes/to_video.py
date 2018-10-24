@@ -42,6 +42,11 @@ def print_error(msg):
     print("===============")
 
 
+def usage_exit(code):
+    print(USAGE)
+    sys.exit(code)
+
+
 class ToVideoConverter:
     def __init__(self):
         self.output = "output.mp4"
@@ -63,14 +68,12 @@ class ToVideoConverter:
             self.output = sys.argv[value_position]
         else:
             print_error("There is must be a path after the \"-o\" parameter.")
-            print(USAGE)
-            sys.exit(1)
+            usage_exit(1)
 
     def parse_arguments(self):
         if len(sys.argv) < 2:
             print()
-            print(USAGE)
-            sys.exit(0)
+            usage_exit(0)
 
         if (len(sys.argv) == 2) and (sys.argv[1] in DEFAULT_ARGUMENTS):
             print("\nUsing the default settings...")
@@ -85,21 +88,18 @@ class ToVideoConverter:
                     i = i + 1
                 elif sys.argv[i] in HELP_ARGUMENTS:
                     print()
-                    print(USAGE)
-                    sys.exit(0)
+                    usage_exit(0)
                 else:
                     if sys.argv[i] in DEFAULT_ARGUMENTS:
                         print_error("'%s' is only allowed as a single parameter." % (sys.argv[i]))
                     else:
                         print_error("Unknown parameter '%s'." % (sys.argv[i]))
-                    print(USAGE)
-                    sys.exit(1)
+                    usage_exit(1)
 
         if self.output.startswith('-'):
             print_error(
                 "The output file name '%s' starts with a hyphen. What are you trying to do exactly?" % self.output)
-            print(USAGE)
-            sys.exit(2)
+            usage_exit(2)
 
     def process(self):
         if os.path.exists(LIST_FILE_NAME):

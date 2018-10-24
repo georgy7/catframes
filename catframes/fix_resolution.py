@@ -3,7 +3,7 @@
 import sys
 import time
 from multiprocessing import Pool
-from catframes.most_common_image_resolution_in_the_folder import most_common_image_resolution_in_the_folder
+from catframes.most_common_image_resolution_in_the_folder import scan_resolutions
 from catframes.utils import *
 
 expected_parameter = '--yes-rewrite-images'
@@ -48,7 +48,7 @@ def process():
     start_time = time.time()
     print('Resolving the most common resolution in the folder...')
 
-    target_resolution_string = most_common_image_resolution_in_the_folder()
+    target_resolution_string = scan_resolutions()
     target_size = target_resolution_string.split('x')
 
     print("Got it.", target_resolution_string)
