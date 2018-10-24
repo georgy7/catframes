@@ -13,12 +13,12 @@ Features
 Some software for some reason may save a part of frames with negligible
 cropping (about 8 pixels).
 
-.. figure:: /ReadMe%20images/case1_1.png
+.. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case1_1.png
    :alt: Feature 1, cropping
 
    Feature 1, cropping
 
-.. figure:: /ReadMe%20images/case1_2.png
+.. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case1_2.png
    :alt: Feature 1, extending
 
    Feature 1, extending
@@ -42,7 +42,7 @@ another way.
 A change to approximately the same aspect ratio
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. figure:: /ReadMe%20images/case2_1.png
+.. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_1.png
    :alt: Feature 2.1
 
    Feature 2.1
@@ -50,7 +50,7 @@ A change to approximately the same aspect ratio
 A change to a very different aspect ratio
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. figure:: /ReadMe%20images/case2_2.png
+.. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_2.png
    :alt: Feature 2.2
 
    Feature 2.2
