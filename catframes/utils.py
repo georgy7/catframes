@@ -9,4 +9,9 @@ def list_of_files():
 
 
 def execute(command: str, *args):
-    return subprocess.check_call(command.format(*args), shell=True)
+    try:
+        subprocess.check_call(command.format(*args), shell=True)
+        return 0
+    except subprocess.CalledProcessError as e:
+        print(e)
+        return e.returncode
