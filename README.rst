@@ -4,6 +4,8 @@ Catframes
 |GitHub code size in bytes| |License: CC0-1.0| |Python versions: 3.3 and
 above| |PyPI|
 
+|Code quality| |Code alerts|
+
 Features
 --------
 
@@ -125,3 +127,7 @@ law.*
    :target: #
 .. |PyPI| image:: https://img.shields.io/pypi/v/catframes.svg
    :target: https://pypi.org/project/catframes/
+.. |Code quality| image:: https://img.shields.io/lgtm/grade/python/g/georgy7/catframes.svg?logo=lgtm&logoWidth=18
+   :target: https://lgtm.com/projects/g/georgy7/catframes/context:python
+.. |Code alerts| image:: https://img.shields.io/lgtm/alerts/g/georgy7/catframes.svg?logo=lgtm&logoWidth=18
+   :target: https://lgtm.com/projects/g/georgy7/catframes/alerts
