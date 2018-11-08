@@ -1,8 +1,8 @@
 Catframes
 =========
 
- |  |License: CC0-1.0| |Python versions: 3.3 and above| |PyPI|
- |  |GitHub code size in bytes| |Code quality| |Code alerts|
+ | |Python versions: 3.3 and above| |PyPI| |License: CC0-1.0|
+ | |GitHub code size in bytes| |Code quality| |Code alerts|
 
 Features
 --------
