@@ -61,28 +61,17 @@ Requirements
 Installation
 ------------
 
-On Unix-like systems:
+On Ubuntu 18.10 and most of Linux distributions:
 
 ::
 
-    sudo python3 -m pip install --prefix /usr/local --force-reinstall catframes
+    sudo python3 -m pip install --prefix /usr/local catframes
 
-On Windows/ReactOS it's something like:
+On Windows/ReactOS:
 
 ::
 
-    C:\Documents and Settings\Administrator>
-    C:\Documents and Settings\Administrator>python --version
-    Python 3.4.4
-
-    C:\Documents and Settings\Administrator>pip --version
-    pip 7.1.2 from c:\python34\lib\site-packages (python 3.4)
-
-    C:\Documents and Settings\Administrator>pip install catframes
-    Collecting catframes
-      Downloading https://files.pythonhosted.org/packages/68/07/...
-    Installing collected packages: catframes
-    Successfully installed catframes-0.3.1
+    pip install catframes
 
 Usage
 -----
