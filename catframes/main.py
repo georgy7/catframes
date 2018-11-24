@@ -3,6 +3,7 @@ import os.path
 
 from catframes.fix_resolution import process
 from catframes.to_video import ToVideoConverter
+from catframes.version import version
 
 usage = """
 Catframes can resize all images in the current directory
@@ -64,7 +65,9 @@ def rewrite_concatenate_and_remove_images():
 
 def run():
     if len(sys.argv) >= 2:
-        if sys.argv[1] == '--rewrite-images':
+        if sys.argv[1] in ['--version', '-version', '-v']:
+            print(version())
+        elif sys.argv[1] == '--rewrite-images':
             just_rewrite_and_concatenate()
         elif sys.argv[1] in ['--rewrite-and-then-remove-images', '--rewrite-and-then-delete-images']:
             rewrite_concatenate_and_remove_images()
