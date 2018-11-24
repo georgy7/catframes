@@ -28,7 +28,7 @@ resolution was changed to very close one, it's still better to use
 cropping/extending on video, than scaling, to prevent further quality
 loss.
 
-The script ``catframes_fix_resolution`` aligns the frames to the
+The script aligns the frames to the
 left-top corner.
 
 2. Fixing the case, one changes camera settings during a day
