@@ -99,6 +99,7 @@ You can also run the internal subtasks separately:
 
 You can also use Catframes to detect common resolution in a folder.
 This is a subtask of ``catframes_fix_resolution``.
+
 But this script renames corrupted images as well.
 So, be careful.
 
