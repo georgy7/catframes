@@ -76,10 +76,7 @@ On Windows/ReactOS:
 Usage
 -----
 
-.. raw:: html
-
-    <video controls src="https://github.com/georgy7/catframes/raw/master/ReadMe%20images/usage.webm" width="100%"/>
-
+|Usage video|
 
 All these scripts scan JPEG and PNG files in a folder based on the file
 name extensions, *not* `their
@@ -140,3 +137,6 @@ law.*
    :target: https://lgtm.com/projects/g/georgy7/catframes/context:python
 .. |Code alerts| image:: https://img.shields.io/lgtm/alerts/g/georgy7/catframes.svg?logo=lgtm&logoWidth=18
    :target: https://lgtm.com/projects/g/georgy7/catframes/alerts
+
+.. |Usage video| image:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/usage_webm_thumbnail.png
+   :target: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/usage.webm
