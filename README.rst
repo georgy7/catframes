@@ -78,9 +78,11 @@ Usage
 
 |Usage video|
 
-All these scripts scan JPEG and PNG files in a folder based on the file
+This script scans JPEG and PNG files in a folder based on the file
 name extensions, *not* `their
 signatures <https://en.wikipedia.org/wiki/List_of_file_signatures>`__.
+
+You can also run the internal subtasks separately:
 
 1. ``catframes_fix_resolution`` ensures, that all images in the current
    directory have the same resolution.
@@ -96,6 +98,9 @@ signatures <https://en.wikipedia.org/wiki/List_of_file_signatures>`__.
    Please, use ``catframes_to_video [--help]`` for more information.
 
 You can also use Catframes to detect common resolution in a folder.
+This is a subtask of ``catframes_fix_resolution``.
+But this script renames corrupted images as well.
+So, be careful.
 
 ::
 
@@ -111,8 +116,6 @@ You can also use Catframes to detect common resolution in a folder.
     $ var1=`catframes_most_common_image_resolution_in_the_folder`
     $ echo $var1
     1280x720
-
-But this script renames corrupted images as well.
 
 Disclaimer
 ----------
