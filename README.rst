@@ -76,6 +76,11 @@ On Windows/ReactOS:
 Usage
 -----
 
+.. raw:: html
+
+    <video controls src="https://github.com/georgy7/catframes/raw/master/ReadMe%20images/usage.webm" width="100%"/>
+
+
 All these scripts scan JPEG and PNG files in a folder based on the file
 name extensions, *not* `their
 signatures <https://en.wikipedia.org/wiki/List_of_file_signatures>`__.
