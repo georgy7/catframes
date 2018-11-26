@@ -55,8 +55,9 @@ Requirements
 ------------
 
 1. Python 3
-2. ImageMagick
-3. FFmpeg
+2. pip
+3. ImageMagick
+4. FFmpeg
 
 Installation
 ------------
