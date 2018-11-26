@@ -65,7 +65,7 @@ On Ubuntu 18.10 and most of Linux distributions:
 
 ::
 
-    sudo python3 -m pip install --prefix /usr/local catframes
+    sudo python3 -m pip install --prefix /usr/local --upgrade catframes
 
 On Windows/ReactOS:
 
