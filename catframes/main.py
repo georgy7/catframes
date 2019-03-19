@@ -4,6 +4,8 @@ import os.path
 from catframes.fix_resolution import process
 from catframes.to_video import ToVideoConverter
 from catframes.version import version
+from multiprocessing import Pool
+from catframes.utils import *
 
 usage = """
 Catframes can resize all images in the current directory
@@ -19,11 +21,11 @@ NO WARRANTY! USE IT AT YOUR OWN RISK!
 You have two options.
 The first one:
 
-    catframes --rewrite-images [-o pathToFile.mp4] [-r|--fps N]
+    catframes --rewrite-images [-o pathToFile.mp4] [-r|--fps N] [--draw-file-names]
 
 And the second:
 
-    catframes --rewrite-and-then-remove-images [-o pathToFile.mp4] [-r|--fps N]
+    catframes --rewrite-and-then-remove-images [-o pathToFile.mp4] [-r|--fps N] [--draw-file-names]
 
 """
 
@@ -42,19 +44,37 @@ def set_output(converter, file_name):
 def fps_parameter(s):
     return (s == '-r') or (s == '--fps')
 
-def parse_output(converter):
+def parse_arguments(converter):
+    annotate = False
+
     if len(sys.argv) >= 3:
         if (len(sys.argv) == 4) and (sys.argv[2] == '-o'):
             set_output(converter, sys.argv[3])
 
+        elif (len(sys.argv) == 5) and (sys.argv[2] == '-o') and (sys.argv[4] == '--draw-file-names'):
+            set_output(converter, sys.argv[3])
+            annotate = True
+
+        elif (len(sys.argv) == 5) and (sys.argv[3] == '-o') and (sys.argv[2] == '--draw-file-names'):
+            set_output(converter, sys.argv[4])
+            annotate = True
+
         elif (len(sys.argv) == 4) and fps_parameter(sys.argv[2]):
             converter.fps = int(sys.argv[3])
 
-        elif (len(sys.argv) == 6) and fps_parameter(sys.argv[2]) and (sys.argv[4] == '-o'):
+        elif (len(sys.argv) == 5) and fps_parameter(sys.argv[2]) and (sys.argv[4] == '--draw-file-names'):
+            converter.fps = int(sys.argv[3])
+            annotate = True
+
+        elif (len(sys.argv) == 5) and fps_parameter(sys.argv[3]) and (sys.argv[2] == '--draw-file-names'):
+            converter.fps = int(sys.argv[4])
+            annotate = True
+
+        elif (len(sys.argv) >= 6) and fps_parameter(sys.argv[2]) and (sys.argv[4] == '-o'):
             converter.fps = int(sys.argv[3])
             set_output(converter, sys.argv[5])
 
-        elif (len(sys.argv) == 6) and fps_parameter(sys.argv[4]) and (sys.argv[2] == '-o'):
+        elif (len(sys.argv) >= 6) and fps_parameter(sys.argv[4]) and (sys.argv[2] == '-o'):
             set_output(converter, sys.argv[3])
             converter.fps = int(sys.argv[5])
 
@@ -62,18 +82,48 @@ def parse_output(converter):
             print(usage)
             exit(1)
 
+        # Too many permutations. Last parameter check is enough at the moment.
+        if len(sys.argv) >= 7:
+            if sys.argv[6] == '--draw-file-names':
+                annotate = True
+            else:
+                print(usage)
+                exit(1)
+
+        return annotate
+
+
+def draw_file_name(f):
+    command = 'mogrify -gravity South -fill white  -undercolor \'#00000080\' -annotate +0+5 \' {} \' -quality 98 "{}"'
+    execute(command, f, f)
+
+def draw_file_names():
+    print('Drawing the file names...')
+    with Pool(processes=4) as pool:
+        for _ in pool.imap_unordered(draw_file_name, list_of_files()):
+            print('.', end='')
+    print()
+    print()
 
 def just_rewrite_and_concatenate():
     converter = ToVideoConverter()
-    parse_output(converter)
+    annotate_frames = parse_arguments(converter)
     process()
+
+    if annotate_frames:
+        draw_file_names()
+
     converter.process()
 
 
 def rewrite_concatenate_and_remove_images():
     converter = ToVideoConverter()
-    parse_output(converter)
+    annotate_frames = parse_arguments(converter)
     process()
+
+    if annotate_frames:
+        draw_file_names()
+
     converter.delete_images = True
     converter.process()
 
