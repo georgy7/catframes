@@ -94,7 +94,7 @@ class FixImage:
 
         elif (abs(int(image_resolution[0]) - int(self.target_size[0])) < 16) and \
                 (abs(int(image_resolution[1]) - int(self.target_size[1])) < 16):
-            command = 'mogrify -background "#00ff0d" -extent {} -gravity NorthWest -quality 98 "{}"'
+            command = 'mogrify -background "#41c148" -extent {} -gravity NorthWest -quality 98 "{}"'
             execute(command, self.target_resolution_string, f)
             return '.'
         else:
