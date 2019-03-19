@@ -19,30 +19,45 @@ NO WARRANTY! USE IT AT YOUR OWN RISK!
 You have two options.
 The first one:
 
-    catframes --rewrite-images [-o pathToFile.mp4]
+    catframes --rewrite-images [-o pathToFile.mp4] [-r|--fps N]
 
 And the second:
 
-    catframes --rewrite-and-then-remove-images [-o pathToFile.mp4]
+    catframes --rewrite-and-then-remove-images [-o pathToFile.mp4] [-r|--fps N]
 
 """
 
+def set_output(converter, file_name):
+
+    if (not file_name.endswith('.mp4')) or (len(file_name) <= 4):
+        print('I do not recommend other formats than mp4 for slideshow-like things. So, I blocked this.')
+        exit(1)
+
+    if os.path.exists(file_name):
+        print('File already exists: ' + file_name)
+        exit(1)
+
+    converter.output = file_name
+
+def fps_parameter(s):
+    return (s == '-r') or (s == '--fps')
 
 def parse_output(converter):
     if len(sys.argv) >= 3:
         if (len(sys.argv) == 4) and (sys.argv[2] == '-o'):
+            set_output(converter, sys.argv[3])
 
-            file_name = sys.argv[3]
+        elif (len(sys.argv) == 4) and fps_parameter(sys.argv[2]):
+            converter.fps = int(sys.argv[3])
 
-            if (not file_name.endswith('.mp4')) or (len(file_name) <= 4):
-                print('I do not recommend other formats than mp4 for slideshow-like things. So, I blocked this.')
-                exit(1)
+        elif (len(sys.argv) == 6) and fps_parameter(sys.argv[2]) and (sys.argv[4] == '-o'):
+            converter.fps = int(sys.argv[3])
+            set_output(converter, sys.argv[5])
 
-            if os.path.exists(file_name):
-                print('File already exists: ' + file_name)
-                exit(1)
+        elif (len(sys.argv) == 6) and fps_parameter(sys.argv[4]) and (sys.argv[2] == '-o'):
+            set_output(converter, sys.argv[3])
+            converter.fps = int(sys.argv[5])
 
-            converter.output = file_name
         else:
             print(usage)
             exit(1)

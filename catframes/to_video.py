@@ -9,7 +9,7 @@ DEFAULT_ARGUMENTS = ["default", "-default", "--default"]
 USAGE = ("\n"
          "    catframes_to_video [--help]\n"
          "    catframes_to_video --default\n"
-         "    catframes_to_video [--delete-images] [-o pathToFile.mp4]\n"
+         "    catframes_to_video [--delete-images] [-o pathToFile.mp4] [-r|--fps N]\n"
          "\n"
          "      * Default output file is \"output.mp4\" in the current folder.\n"
          "      * It does not remove any frames by default.\n"
@@ -51,17 +51,19 @@ class ToVideoConverter:
     def __init__(self):
         self.output = "output.mp4"
         self.delete_images = False
+        self.fps = 1
 
     @staticmethod
-    def save_list(filenames):
+    def save_list(filenames, fps):
+        duration = 1 / fps
         with open(LIST_FILE_NAME, 'w') as file:
             for name in filenames:
                 file.write("file '%s'\n" % name)
-                file.write("duration 1\n")
+                file.write("duration %.10f\n" % duration)
 
     def make_file_list_lexicographical_order(self):
         filenames = sorted(list_of_files())
-        self.save_list(filenames)
+        self.save_list(filenames, self.fps)
 
     def parse_output_argument(self, value_position):
         if len(sys.argv) > value_position:
@@ -82,6 +84,9 @@ class ToVideoConverter:
             while len(sys.argv) > i:
                 if sys.argv[i] == "-o":
                     self.parse_output_argument(i + 1)
+                    i = i + 2
+                elif (sys.argv[i] == "-r") or (sys.argv[i] == "--fps"):
+                    self.fps = int(sys.argv[i + 1])
                     i = i + 2
                 elif sys.argv[i] == "--delete-images":
                     self.delete_images = True
@@ -109,8 +114,8 @@ class ToVideoConverter:
         # There is no choice yet.
         self.make_file_list_lexicographical_order()
 
-        command = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r 1 {}'
-        return_code = execute(command, LIST_FILE_NAME, self.output)
+        command = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r {} {}'
+        return_code = execute(command, LIST_FILE_NAME, self.fps, self.output)
 
         if return_code == 0:
             if self.delete_images:
