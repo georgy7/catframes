@@ -94,7 +94,7 @@ def parse_arguments(converter):
 
 
 def draw_file_name(f):
-    command = 'mogrify -gravity North -fill white  -undercolor \'#00000080\' -annotate +0+5 \' {} \' -quality 98 "{}"'
+    command = 'mogrify -gravity North -fill white -font DejaVu-Sans -verbose -undercolor \'#00000080\' -annotate +0+5 "{}" -quality 98 "{}"'
     execute(command, f, f)
 
 def draw_file_names():
