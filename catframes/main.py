@@ -103,33 +103,27 @@ def select_font():
     if default in fonts:
         return default
 
-    candidates = list(filter(lambda s: ('DejaVu' in s) and not ('Bold' in s) and not ('Italic' in s), fonts))
-    candidates_mono = list(filter(lambda s: ('Mono' in s), candidates))
+    families = [
+        'DejaVu',
+        'Helvetica',
+        'Ubuntu',
+        'Arial',
+        'Liberation',
+        'Nimbus'
+    ]
 
-    if len(candidates_mono) > 0:
-        return candidates_mono[0]
+    for family in families:
+        candidates = list(filter(lambda s: (family in s) and not ('Bold' in s) and not ('Italic' in s), fonts))
+        candidates_mono = list(filter(lambda s: ('Mono' in s), candidates))
 
-    if len(candidates) > 0:
-        return candidates[0]
+        if len(candidates_mono) > 0:
+            return candidates_mono[0]
+        elif len(candidates) > 0:
+            return candidates[0]
 
-    candidates = list(filter(lambda s: ('DejaVu' in s) and not ('Italic' in s), fonts))
-
-    if len(candidates) > 0:
-        return candidates[0]
-
-    candidates = list(filter(lambda s: ('Nimbus' in s) and not ('Bold' in s) and not ('Italic' in s), fonts))
-    candidates_mono = list(filter(lambda s: ('Mono' in s), candidates))
-
-    if len(candidates_mono) > 0:
-        return candidates_mono[0]
-
-    if len(candidates) > 0:
-        return candidates[0]
-
-    candidates = list(filter(lambda s: ('Nimbus' in s) and not ('Italic' in s), fonts))
-
-    if len(candidates) > 0:
-        return candidates[0]
+        candidates = list(filter(lambda s: (family in s) and not ('Italic' in s), fonts))
+        if len(candidates) > 0:
+            return candidates[0]
 
     if len(fonts) > 0:
         return fonts[0]
