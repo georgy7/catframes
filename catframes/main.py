@@ -93,14 +93,62 @@ def parse_arguments(converter):
         return annotate
 
 
-def draw_file_name(f):
-    command = 'mogrify -gravity North -fill white -font DejaVu-Sans -verbose -undercolor \'#00000080\' -annotate +0+5 "{}" -quality 98 "{}"'
-    execute(command, f, f)
+def select_font():
+    prefix = 'Font: '
+    prlen = len(prefix)
+    out = os.popen("convert -list font").read()
+    fonts = [ str.strip(line)[prlen:] for line in str.splitlines(out) if prefix in line]
 
-def draw_file_names():
+    default = 'DejaVu-Sans'
+    if default in fonts:
+        return default
+
+    candidates = list(filter(lambda s: ('DejaVu' in s) and not ('Bold' in s) and not ('Italic' in s), fonts))
+    candidates_mono = list(filter(lambda s: ('Mono' in s), candidates))
+
+    if len(candidates_mono) > 0:
+        return candidates_mono[0]
+
+    if len(candidates) > 0:
+        return candidates[0]
+
+    candidates = list(filter(lambda s: ('DejaVu' in s) and not ('Italic' in s), fonts))
+
+    if len(candidates) > 0:
+        return candidates[0]
+
+    candidates = list(filter(lambda s: ('Nimbus' in s) and not ('Bold' in s) and not ('Italic' in s), fonts))
+    candidates_mono = list(filter(lambda s: ('Mono' in s), candidates))
+
+    if len(candidates_mono) > 0:
+        return candidates_mono[0]
+
+    if len(candidates) > 0:
+        return candidates[0]
+
+    candidates = list(filter(lambda s: ('Nimbus' in s) and not ('Italic' in s), fonts))
+
+    if len(candidates) > 0:
+        return candidates[0]
+
+    if len(fonts) > 0:
+        return fonts[0]
+
+    print('Could not select font.')
+    exit(1)
+
+def draw_file_name(font, filename):
+    command = 'mogrify -gravity North -fill white -font {} -verbose -undercolor \'#00000080\' -annotate +0+5 "{}" -quality 98 "{}"'
+    execute(command, font, filename, filename)
+
+def draw_file_names(font):
     print('Drawing the file names...')
+
+    def draw_file_name_closure(f):
+        return draw_file_name(font, f)
+
     with Pool(processes=4) as pool:
-        for _ in pool.imap_unordered(draw_file_name, list_of_files()):
+        for _ in pool.imap_unordered(draw_file_name_closure, list_of_files()):
             print('.', end='')
     print()
     print()
@@ -108,10 +156,15 @@ def draw_file_names():
 def just_rewrite_and_concatenate():
     converter = ToVideoConverter()
     annotate_frames = parse_arguments(converter)
+
+    if annotate_frames:
+        font = select_font()
+        print('Font: ' + font)
+
     process()
 
     if annotate_frames:
-        draw_file_names()
+        draw_file_names(font)
 
     converter.process()
 
