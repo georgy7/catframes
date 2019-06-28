@@ -137,18 +137,19 @@ def select_font():
     print('Could not select font.')
     exit(1)
 
-def draw_file_name(font, filename):
+def font_file_names(font, file_names):
+    return list(map(lambda x: (font, x), file_names))
+
+def draw_file_name(a):
+    font = a[0]
+    filename = a[1]
     command = 'mogrify -gravity North -fill white -font {} -verbose -undercolor \'#00000080\' -annotate +0+5 "{}" -quality 98 "{}"'
     execute(command, font, filename, filename)
 
 def draw_file_names(font):
     print('Drawing the file names...')
-
-    def draw_file_name_closure(f):
-        return draw_file_name(font, f)
-
     with Pool(processes=4) as pool:
-        for _ in pool.imap_unordered(draw_file_name_closure, list_of_files()):
+        for _ in pool.imap_unordered(draw_file_name, font_file_names(font, list_of_files())):
             print('.', end='')
     print()
     print()
