@@ -167,10 +167,15 @@ def just_rewrite_and_concatenate():
 def rewrite_concatenate_and_remove_images():
     converter = ToVideoConverter()
     annotate_frames = parse_arguments(converter)
+
+    if annotate_frames:
+        font = select_font()
+        print('Font: ' + font)
+
     process()
 
     if annotate_frames:
-        draw_file_names()
+        draw_file_names(font)
 
     converter.delete_images = True
     converter.process()
