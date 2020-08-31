@@ -1,10 +1,14 @@
 #!/usr/bin/env python3 
 
-import sys
+import argparse
 import operator
+import os
+import sys
 import time
 from multiprocessing import Pool, cpu_count
+
 from catframes.utils import *
+from catframes.version import version
 
 
 def check_dependencies():
@@ -42,22 +46,23 @@ def scan_resolutions(statistics=False):
 
 
 def run():
-    usage = '\n    catframes_most_common_image_resolution_in_the_folder [--statistics|-s]\n'
+    parser = argparse.ArgumentParser(
+        description='Part of catframes v{}.'.format(version()),
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
 
-    if (len(sys.argv) > 1) and (sys.argv[1] in ['--help', '-h']):
-        print(usage)
+    parser.add_argument('-s', '--statistics', action='store_true',
+                        help='Print all resolutions with file count in a table.')
 
-    elif (len(sys.argv) > 1) and (sys.argv[1] in ['--statistics', '-s']):
+    namespace = parser.parse_args(sys.argv[1:])
+
+    if namespace.statistics:
         start_time = time.time()
         stat = scan_resolutions(statistics=True)
         print()
         for k, v in sorted(stat.items(), key=operator.itemgetter(1), reverse=True):
             print("{} => {}".format(k, v))
         print('-------------\nCompleted in {} seconds.\n'.format(time.time() - start_time))
-
-    elif len(sys.argv) > 1:
-        print('Bad argument.')
-        print(usage)
 
     else:
         print(scan_resolutions(), end='')

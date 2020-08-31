@@ -1,6 +1,18 @@
-import shutil
+import argparse
 import os
+import platform
+import re
+import shutil
 import subprocess
+
+__all__ = [
+    'check_dependency',
+    'list_of_files',
+    'execute',
+    'python_supports_allow_abbrev',
+    'color_argument',
+    'fps_argument'
+]
 
 
 def check_dependency(command: str, supposed_dependency):
@@ -23,3 +35,35 @@ def execute(command: str, *args):
     except subprocess.CalledProcessError as e:
         print(e)
         return e.returncode
+
+
+def python_supports_allow_abbrev():
+    v = platform.python_version_tuple()
+    v0, v1 = int(v[0]), int(v[1])
+    return (v0 > 3) or (v0 == 3 and v1 >= 5)
+
+
+def color_argument(color: str):
+    ERROR = "Color must have format #123 or #123456."
+    pattern = re.compile('^#[0-9a-fA-F]{3}$|^#[0-9a-fA-F]{6}$')
+    if not pattern.match(color):
+        raise argparse.ArgumentTypeError(ERROR)
+    elif 4 == len(color):
+        r = color[0] + color[1] * 2 + color[2] * 2 + color[3] * 2
+    else:
+        r = color
+    return r
+
+
+def fps_argument(arg):
+    try:
+        i = int(arg)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+    if i < 1:
+        raise argparse.ArgumentTypeError("Frames per second must be greater than or equal 1.")
+    elif i > 120:
+        raise argparse.ArgumentTypeError("Frames per second must be less than or equal 120.")
+
+    return i

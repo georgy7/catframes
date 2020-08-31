@@ -1,37 +1,38 @@
 #!/usr/bin/env python3
-
+import argparse
+import os
 import sys
+
 from catframes.utils import *
+from catframes.version import version
 
-HELP_ARGUMENTS = ["help", "h", "-help", "--help", "-h", "usage", "u", "-usage", "--usage", "-u"]
-DEFAULT_ARGUMENTS = ["default", "-default", "--default"]
+USAGE = """
+--------------------------
 
-USAGE = ("\n"
-         "    catframes_to_video [--help]\n"
-         "    catframes_to_video --default\n"
-         "    catframes_to_video [--delete-images] [-o pathToFile.mp4] [-r|--fps N]\n"
-         "\n"
-         "      * Default output file is \"output.mp4\" in the current folder.\n"
-         "      * It does not remove any frames by default.\n"
-         "      * It is the lexicographical order by default:\n"
-         "            aa\n"
-         "            ab\n"
-         "            abc\n"
-         "            ac\n"
-         "            bbb\n"
-         "            z11\n"
-         "            z12\n"
-         "            z2\n"
-         "\n"
-         "    A sample usage:\n"
-         "\n"
-         "        cd today_directory\n"
-         "        catframes_fix_resolution\n"
-         "        catframes_to_video -o \"/backups/today.mp4\"\n"
-         "\n"
-         "    THE FILE `list.txt` WILL BE OVERWRITTEN!\n"
-         "\n"
-         )
+catframes_to_video [--help]
+catframes_to_video --default
+catframes_to_video [--delete-images] [-o pathToFile.mp4] [-r N]
+
+It does not remove any frames by default.
+
+It is in the lexicographical order by default:
+        aa
+        ab
+        abc
+        ac
+        bbb
+        z11
+        z12
+        z2
+
+A sample usage:
+
+    cd today_directory
+    catframes_fix_resolution
+    catframes_to_video -o "/backups/today.mp4"
+
+THE FILE `list.txt` WILL BE OVERWRITTEN!
+"""
 
 LIST_FILE_NAME = "list.txt"
 
@@ -42,21 +43,21 @@ def print_error(msg):
     print("===============")
 
 
-def usage_exit(code):
-    print(USAGE)
-    sys.exit(code)
-
-
 def check_dependencies():
     check_dependency('ffmpeg', 'FFmpeg')
+
+
+DEFAULT_FPS = 1
+DEFAULT_OUTPUT = 'output.mp4'
 
 
 class ToVideoConverter:
     def __init__(self):
         check_dependencies()
-        self.output = "output.mp4"
+        self.output = DEFAULT_OUTPUT
         self.delete_images = False
-        self.fps = 1
+        self.fps = DEFAULT_FPS
+        self.ready = False
 
     @staticmethod
     def save_list(filenames, fps):
@@ -70,46 +71,44 @@ class ToVideoConverter:
         filenames = sorted(list_of_files())
         self.save_list(filenames, self.fps)
 
-    def parse_output_argument(self, value_position):
-        if len(sys.argv) > value_position:
-            self.output = sys.argv[value_position]
-        else:
-            print_error("There is must be a path after the \"-o\" parameter.")
-            usage_exit(1)
-
     def parse_arguments(self):
+
+        parser = argparse.ArgumentParser(
+            description='Part of catframes v{}.'.format(version()),
+            epilog=USAGE,
+            formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+
+        parser.add_argument('-d', '-default', '--default', action='store_true',
+                            help='Run with the default settings.')
+
+        parser.add_argument('-o', '--output', default=DEFAULT_OUTPUT,
+                            help='Output filename. Default: {}.'.format(DEFAULT_OUTPUT))
+
+        parser.add_argument('--delete-images', action='store_true',
+                            help='Delete images after making video.')
+
+        parser.add_argument('-r', '--fps', type=fps_argument, default=DEFAULT_FPS,
+                            help='Frames per second (1-120). Default: {}.'.format(DEFAULT_FPS))
+
+        namespace = parser.parse_args(sys.argv[1:])
+
         if len(sys.argv) < 2:
-            print()
-            usage_exit(0)
+            parser.print_help()
+            sys.exit(0)
 
-        if (len(sys.argv) == 2) and (sys.argv[1] in DEFAULT_ARGUMENTS):
-            print("\nUsing the default settings...")
+        if namespace.default:
+            if len(sys.argv) > 2:
+                print("\n`--default` is only allowed as a single parameter.\n")
+                sys.exit(1)
+            else:
+                print("\nUsing the default settings...\n")
+                self.ready = True
         else:
-            i = 1
-            while len(sys.argv) > i:
-                if sys.argv[i] == "-o":
-                    self.parse_output_argument(i + 1)
-                    i = i + 2
-                elif (sys.argv[i] == "-r") or (sys.argv[i] == "--fps"):
-                    self.fps = int(sys.argv[i + 1])
-                    i = i + 2
-                elif sys.argv[i] == "--delete-images":
-                    self.delete_images = True
-                    i = i + 1
-                elif sys.argv[i] in HELP_ARGUMENTS:
-                    print()
-                    usage_exit(0)
-                else:
-                    if sys.argv[i] in DEFAULT_ARGUMENTS:
-                        print_error("'%s' is only allowed as a single parameter." % (sys.argv[i]))
-                    else:
-                        print_error("Unknown parameter '%s'." % (sys.argv[i]))
-                    usage_exit(1)
-
-        if self.output.startswith('-'):
-            print_error(
-                "The output file name '%s' starts with a hyphen. What are you trying to do exactly?" % self.output)
-            usage_exit(2)
+            self.output = namespace.output
+            self.delete_images = namespace.delete_images
+            self.fps = namespace.fps
+            self.ready = True
 
     def process(self):
         if os.path.exists(LIST_FILE_NAME):
@@ -134,4 +133,5 @@ class ToVideoConverter:
 def run():
     converter = ToVideoConverter()
     converter.parse_arguments()
-    converter.process()
+    if converter.ready:
+        converter.process()
