@@ -44,7 +44,14 @@ with the flag "{}".
 """
 
 
+def check_dependencies():
+    check_dependency('identify', 'ImageMagick')
+    check_dependency('mogrify', 'ImageMagick')
+
+
 def process():
+    check_dependencies()
+
     start_time = time.time()
     print('Resolving the most common resolution in the folder...')
 

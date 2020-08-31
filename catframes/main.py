@@ -93,6 +93,11 @@ def parse_arguments(converter):
         return annotate
 
 
+def check_annotate_frames_dependencies():
+    check_dependency('convert', 'ImageMagick')
+    check_dependency('mogrify', 'ImageMagick')
+
+
 def select_font():
     prefix = 'Font: '
     prlen = len(prefix)
@@ -153,6 +158,7 @@ def just_rewrite_and_concatenate():
     annotate_frames = parse_arguments(converter)
 
     if annotate_frames:
+        check_annotate_frames_dependencies()
         font = select_font()
         print('Font: ' + font)
 
@@ -169,6 +175,7 @@ def rewrite_concatenate_and_remove_images():
     annotate_frames = parse_arguments(converter)
 
     if annotate_frames:
+        check_annotate_frames_dependencies()
         font = select_font()
         print('Font: ' + font)
 

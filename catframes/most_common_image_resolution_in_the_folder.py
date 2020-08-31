@@ -7,6 +7,10 @@ from multiprocessing import Pool, cpu_count
 from catframes.utils import *
 
 
+def check_dependencies():
+    check_dependency('identify', 'ImageMagick')
+
+
 def get_resolution(f):
     if os.path.isdir(f):
         return None
@@ -18,6 +22,8 @@ def get_resolution(f):
 
 
 def scan_resolutions(statistics=False):
+    check_dependencies()
+
     filenames = list_of_files()
     frequencies = {}
 

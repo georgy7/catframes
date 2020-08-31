@@ -1,5 +1,13 @@
+import shutil
 import os
 import subprocess
+
+
+def check_dependency(command: str, supposed_dependency):
+    if shutil.which(command) is None:
+        print('Command `{}` not found. '
+              'Probably, you need to install {}.'.format(command, supposed_dependency))
+        exit(3)
 
 
 def list_of_files():

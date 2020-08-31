@@ -47,8 +47,13 @@ def usage_exit(code):
     sys.exit(code)
 
 
+def check_dependencies():
+    check_dependency('ffmpeg', 'FFmpeg')
+
+
 class ToVideoConverter:
     def __init__(self):
+        check_dependencies()
         self.output = "output.mp4"
         self.delete_images = False
         self.fps = 1
