@@ -119,7 +119,7 @@ class ToVideoConverter:
         # There is no choice yet.
         self.make_file_list_lexicographical_order()
 
-        command = 'ffmpeg -f concat -safe 0 -i {} -c:v libx264 -preset slow -tune fastdecode -crf 35 -r {} {}'
+        command = 'ffmpeg -f concat -safe 0 -i {} -pix_fmt yuv420p -c:v libx264 -preset slow -tune fastdecode -crf 35 -r {} {}'
         return_code = execute(command, LIST_FILE_NAME, self.fps, self.output)
 
         if return_code == 0:
