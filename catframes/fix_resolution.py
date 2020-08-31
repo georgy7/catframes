@@ -3,7 +3,10 @@
 import sys
 import time
 from multiprocessing import Pool
-from catframes.most_common_image_resolution_in_the_folder import scan_resolutions
+
+from catframes.most_common_image_resolution_in_the_folder import scan_resolutions, \
+    check_dependencies as most_common_image_resolution_check_dependencies
+
 from catframes.utils import *
 
 expected_parameter = '--yes-rewrite-images'
@@ -47,6 +50,7 @@ with the flag "{}".
 def check_dependencies():
     check_dependency('identify', 'ImageMagick')
     check_dependency('mogrify', 'ImageMagick')
+    most_common_image_resolution_check_dependencies()
 
 
 def process():

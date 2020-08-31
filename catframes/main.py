@@ -1,8 +1,8 @@
 import sys
 import os.path
 
-from catframes.fix_resolution import process
-from catframes.to_video import ToVideoConverter
+from catframes.fix_resolution import process, check_dependencies as fix_resolution_check_dependencies
+from catframes.to_video import ToVideoConverter, check_dependencies as to_video_check_dependencies
 from catframes.version import version
 from multiprocessing import Pool
 from catframes.utils import *
@@ -93,6 +93,11 @@ def parse_arguments(converter):
         return annotate
 
 
+def check_common_dependencies():
+    fix_resolution_check_dependencies()
+    to_video_check_dependencies()
+
+
 def check_annotate_frames_dependencies():
     check_dependency('convert', 'ImageMagick')
     check_dependency('mogrify', 'ImageMagick')
@@ -154,6 +159,7 @@ def draw_file_names(font):
     print()
 
 def just_rewrite_and_concatenate():
+    check_common_dependencies()
     converter = ToVideoConverter()
     annotate_frames = parse_arguments(converter)
 
@@ -171,6 +177,7 @@ def just_rewrite_and_concatenate():
 
 
 def rewrite_concatenate_and_remove_images():
+    check_common_dependencies()
     converter = ToVideoConverter()
     annotate_frames = parse_arguments(converter)
 
