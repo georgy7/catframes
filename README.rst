@@ -1,8 +1,7 @@
 Catframes
 =========
 
- | |Python versions: 3.3 and above| |PyPI| |License: CC0-1.0|
- | |GitHub code size in bytes| |Code quality| |Code alerts|
+ | |Python versions: 3.3 and above| |PyPI| |License: CC0-1.0| |GitHub code size in bytes|
 
 Features
 --------
@@ -138,10 +137,6 @@ law.*
    :target: #
 .. |PyPI| image:: https://img.shields.io/pypi/v/catframes.svg
    :target: https://pypi.org/project/catframes/
-.. |Code quality| image:: https://img.shields.io/lgtm/grade/python/g/georgy7/catframes.svg?logo=lgtm&logoWidth=18
-   :target: https://lgtm.com/projects/g/georgy7/catframes/context:python
-.. |Code alerts| image:: https://img.shields.io/lgtm/alerts/g/georgy7/catframes.svg?logo=lgtm&logoWidth=18
-   :target: https://lgtm.com/projects/g/georgy7/catframes/alerts
 
 .. |Usage video| image:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/usage_webm_thumbnail.png
    :target: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/usage.webm
