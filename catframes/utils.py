@@ -9,6 +9,7 @@ __all__ = [
     'check_dependency',
     'list_of_files',
     'execute',
+    'execute_quiet',
     'python_supports_allow_abbrev',
     'color_argument',
     'fps_argument'
@@ -33,6 +34,18 @@ def execute(command: str, *args):
         subprocess.check_call(command.format(*args), shell=True)
         return 0
     except subprocess.CalledProcessError as e:
+        print(e)
+        return e.returncode
+
+
+def execute_quiet(command: str, *args):
+    try:
+        subprocess.check_call(command.format(*args),
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              shell=True)
+        return 0
+    except subprocess.CalledProcessError as e:
+        print(command)
         print(e)
         return e.returncode
 

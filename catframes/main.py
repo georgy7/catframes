@@ -1,4 +1,5 @@
 import argparse
+import itertools
 import os.path
 import sys
 from multiprocessing import Pool
@@ -110,23 +111,29 @@ def select_font():
     exit(1)
 
 
-def font_file_names(font, file_names):
-    return list(map(lambda x: (font, x), file_names))
+def font_file_names_total(font, filenames):
+    return list(map(lambda x: (font, x, len(filenames)), filenames))
 
 
 def draw_file_name(a):
     font = a[0]
     filename = a[1]
+    total = a[2]
     command = 'mogrify -gravity North -fill white -font {} -verbose -undercolor \'#00000080\' -annotate +0+5 "{}" -quality 98 "{}"'
-    execute(command, font, filename, filename)
+    execute_quiet(command, font, filename, filename)
+    return total
 
 
 def draw_file_names(font):
     print('Drawing the file names...')
     with Pool(processes=4) as pool:
-        for _ in pool.imap_unordered(draw_file_name, font_file_names(font, list_of_files())):
-            print('.', end='')
+        c = itertools.count()
+        for total in pool.imap_unordered(draw_file_name, font_file_names_total(font, list_of_files())):
+            done = next(c)
+            ready_per_cent = int(done / total * 100)
+            print('Done: {}% ({}/{}).'.format(ready_per_cent, done, total), end="\r")
     print()
+    print('Finished.')
     print()
 
 
