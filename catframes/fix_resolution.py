@@ -66,7 +66,7 @@ def check_dependencies():
     most_common_image_resolution_check_dependencies()
 
 
-def process(color1, color2):
+def process(color1, color2, never_change_aspect_ratio):
     check_dependencies()
 
     start_time = time.time()
@@ -87,7 +87,8 @@ def process(color1, color2):
 
     i = 0
     with Pool(processes=4) as pool:
-        for r in pool.imap_unordered(FixImage(target_size, color1, color2), list_of_files()):
+        for r in pool.imap_unordered(FixImage(target_size, color1, color2,
+                                              never_change_aspect_ratio), list_of_files()):
             print(r, end='')
             i = i + 1
             if i % 50 == 0:
@@ -98,12 +99,13 @@ def process(color1, color2):
 
 
 class FixImage:
-    def __init__(self, target_size, color1, color2):
+    def __init__(self, target_size, color1, color2, never_change_aspect_ratio):
         self.target_size = target_size
         self.target_aspect_ratio = float(target_size[0]) / float(target_size[1])
         self.target_resolution_string = target_size[0] + 'x' + target_size[1]
         self.color1 = color1
         self.color2 = color2
+        self.never_change_aspect_ratio = never_change_aspect_ratio
 
     def __call__(self, f):
         image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
@@ -125,7 +127,8 @@ class FixImage:
             return '.'
         else:
             image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
-            if abs(image_aspect_ratio - self.target_aspect_ratio) < 0.45:
+            if (abs(image_aspect_ratio - self.target_aspect_ratio) < 0.45) \
+                    and not self.never_change_aspect_ratio:
                 command = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
                 execute(command, self.target_resolution_string, f)
                 return 's'
@@ -133,18 +136,6 @@ class FixImage:
                 command = 'mogrify -background "{}" -resize {} -extent {} -gravity Center -quality 98 "{}"'
                 execute(command, self.color2, self.target_resolution_string, self.target_resolution_string, f)
                 return 'c'
-
-
-def add_yes_argument_old(parser):
-    parser.add_argument(YES_REWRITE_IMAGES_PARAMETER, action='store_true',
-                        help='You accept the risk.')
-    parser.add_argument(YES_REWRITE_IMAGES_FAKE_PARAMETER, action='store_true',
-                        help='Do nothing. Hack for python 3.4.')
-
-
-def add_yes_argument_new(parser):
-    parser.add_argument(YES_REWRITE_IMAGES_PARAMETER, action='store_true',
-                        help='You accept the risk.')
 
 
 def run():
@@ -175,9 +166,14 @@ def run():
     parser.add_argument('--color2', type=color_argument, default='#0590b0',
                         help='Default, turquoise (#0590b0).')
 
+    parser.add_argument('--never-change-aspect-ratio', action='store_true',
+                        help='Margins are used if necessary.')
+
     namespace = parser.parse_args(sys.argv[1:])
 
     if namespace.yes_rewrite_images:
-        process(namespace.color1, namespace.color2)
+        process(namespace.color1,
+                namespace.color2,
+                namespace.never_change_aspect_ratio)
     else:
         parser.print_help()

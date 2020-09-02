@@ -147,7 +147,9 @@ def just_rewrite_and_concatenate(namespace):
         font = select_font()
         print('Font: ' + font)
 
-    process_fix_resolution(namespace.color1, namespace.color2)
+    process_fix_resolution(namespace.color1,
+                           namespace.color2,
+                           namespace.never_change_aspect_ratio)
 
     if annotate_frames:
         draw_file_names(font)
@@ -166,7 +168,9 @@ def rewrite_concatenate_and_remove_images(namespace):
         font = select_font()
         print('Font: ' + font)
 
-    process_fix_resolution(namespace.color1, namespace.color2)
+    process_fix_resolution(namespace.color1,
+                           namespace.color2,
+                           namespace.never_change_aspect_ratio)
 
     if annotate_frames:
         draw_file_names(font)
@@ -217,6 +221,9 @@ def run():
 
     parser.add_argument('--color2', type=color_argument, default='#0590b0',
                         help='Default, turquoise (#0590b0).')
+
+    parser.add_argument('--never-change-aspect-ratio', action='store_true',
+                        help='Margins are used if necessary.')
 
     namespace = parser.parse_args(sys.argv[1:])
 

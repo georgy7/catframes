@@ -29,6 +29,7 @@ loss.
 
 The script aligns the frames to the
 left-top corner.
+You can use ``--color1`` argument to adjust the background color.
 
 2. Fixing the case, one changes camera settings during a day
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,14 +39,21 @@ changed. If the change is small, this case will be indistinguishable
 from the previous one. But the considerable changes can be processed
 another way.
 
-A change to approximately the same aspect ratio
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aspect ratio difference < 0.45
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In this case, the program will ignore aspect ratio and distort the frames.
+To disable this, please use ``--never-change-aspect-ratio`` argument.
+You can combine this argument with the ``--color2`` argument.
 
 .. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_1.png
    :alt: Feature 2.1
 
-A change to a very different aspect ratio
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aspect ratio difference >= 0.45
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In this case, the program will add margins.
+You can use ``--color2`` argument to adjust the color of the margins.
 
 .. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_2.png
    :alt: Feature 2.2
