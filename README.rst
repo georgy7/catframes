@@ -43,8 +43,9 @@ Aspect ratio difference < 0.45
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In this case, the program will ignore aspect ratio and distort the frames.
+
 To disable this, please use ``--never-change-aspect-ratio`` argument.
-You can combine this argument with the ``--color2`` argument.
+You can combine this with ``--color2`` argument.
 
 .. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_1.png
    :alt: Feature 2.1
@@ -53,7 +54,7 @@ Aspect ratio difference >= 0.45
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In this case, the program will add margins.
-You can use ``--color2`` argument to adjust the color of the margins.
+You can use ``--color2`` argument to adjust their color.
 
 .. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_2.png
    :alt: Feature 2.2
