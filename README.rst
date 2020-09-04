@@ -109,9 +109,6 @@ You can also run the internal subtasks separately:
 You can also use Catframes to detect common resolution in a folder.
 This is a subtask of ``catframes_fix_resolution``.
 
-But this script renames corrupted images as well.
-So, be careful.
-
 ::
 
     $ catframes_most_common_image_resolution_in_the_folder [--statistics|-s]
@@ -119,7 +116,12 @@ So, be careful.
     1280x720 => 3
     800x800 => 2
     -------------
-    Completed in 0.023589134216308594 seconds.
+    Completed in 0.11370372772216797 seconds.
+
+                       Method | Result
+     ------------------------ | ---------------
+                           mf | 1280x720
+                        gtewa | 1280x800
 
 ::
 

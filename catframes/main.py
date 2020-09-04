@@ -4,9 +4,15 @@ import os.path
 import sys
 from multiprocessing import Pool
 
-from catframes.fix_resolution import process as process_fix_resolution, \
+from catframes.fix_resolution import \
+    process as process_fix_resolution, \
     check_dependencies as fix_resolution_check_dependencies
-from catframes.to_video import ToVideoConverter, check_dependencies as to_video_check_dependencies
+from catframes.most_common_image_resolution_in_the_folder import \
+    DEFAULT_METHOD, \
+    list_all_methods_and_exit
+from catframes.to_video import \
+    ToVideoConverter, \
+    check_dependencies as to_video_check_dependencies
 from catframes.utils import *
 from catframes.version import version
 
@@ -48,7 +54,8 @@ DEFAULT_OUTPUT = 'output.mp4'
 
 def output_argument(arg):
     if (not arg.endswith('.mp4')) or (len(arg) <= 4):
-        raise argparse.ArgumentTypeError('I do not recommend other formats than mp4 for slideshow-like things. So, I blocked this.')
+        raise argparse.ArgumentTypeError(
+            'I do not recommend other formats than mp4 for slideshow-like things. So, I blocked this.')
 
     if os.path.exists(arg):
         raise argparse.ArgumentTypeError('File already exists: ' + arg)
@@ -149,7 +156,8 @@ def just_rewrite_and_concatenate(namespace):
 
     process_fix_resolution(namespace.color1,
                            namespace.color2,
-                           namespace.never_change_aspect_ratio)
+                           namespace.never_change_aspect_ratio,
+                           namespace.method)
 
     if annotate_frames:
         draw_file_names(font)
@@ -170,7 +178,8 @@ def rewrite_concatenate_and_remove_images(namespace):
 
     process_fix_resolution(namespace.color1,
                            namespace.color2,
-                           namespace.never_change_aspect_ratio)
+                           namespace.never_change_aspect_ratio,
+                           namespace.method)
 
     if annotate_frames:
         draw_file_names(font)
@@ -225,6 +234,12 @@ def run():
     parser.add_argument('--never-change-aspect-ratio', action='store_true',
                         help='Margins are used if necessary.')
 
+    parser.add_argument('--methods', action='store_true',
+                        help='List all methods.')
+
+    parser.add_argument('-m', '--method', default=DEFAULT_METHOD.code,
+                        help='Set resolution selection method.')
+
     namespace = parser.parse_args(sys.argv[1:])
 
     if len(sys.argv) < 2:
@@ -234,7 +249,10 @@ def run():
     if namespace.version:
         print(version())
         sys.exit(0)
-    elif namespace.rewrite_and_then_remove_images or namespace.rewrite_and_then_delete_images:
+    elif namespace.methods:
+        list_all_methods_and_exit(for_fix_resolution=True)
+    elif namespace.rewrite_and_then_remove_images \
+            or namespace.rewrite_and_then_delete_images:
         rewrite_concatenate_and_remove_images(namespace)
     elif namespace.rewrite_images:
         just_rewrite_and_concatenate(namespace)

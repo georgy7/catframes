@@ -6,7 +6,11 @@ import sys
 import time
 from multiprocessing import Pool
 
-from catframes.most_common_image_resolution_in_the_folder import scan_resolutions, \
+from catframes.most_common_image_resolution_in_the_folder import \
+    scan_resolutions, \
+    DEFAULT_METHOD, \
+    list_all_methods_and_exit, \
+    find_method_or_fail, \
     check_dependencies as most_common_image_resolution_check_dependencies
 from catframes.utils import *
 from catframes.version import version
@@ -66,13 +70,16 @@ def check_dependencies():
     most_common_image_resolution_check_dependencies()
 
 
-def process(color1, color2, never_change_aspect_ratio):
+def process(color1, color2, never_change_aspect_ratio, resolution_method_name):
     check_dependencies()
+
+    resolution_method = find_method_or_fail(resolution_method_name)
 
     start_time = time.time()
     print('Resolving the most common resolution in the folder...')
 
-    target_resolution_string = scan_resolutions()
+    resolutions = scan_resolutions(True)
+    target_resolution_string = resolution_method(resolutions)
     target_size = target_resolution_string.split('x')
 
     print("Got it.", target_resolution_string)
@@ -169,11 +176,21 @@ def run():
     parser.add_argument('--never-change-aspect-ratio', action='store_true',
                         help='Margins are used if necessary.')
 
+    parser.add_argument('--methods', action='store_true',
+                        help='List all methods.')
+
+    parser.add_argument('-m', '--method', default=DEFAULT_METHOD.code,
+                        help='Set resolution selection method.')
+
     namespace = parser.parse_args(sys.argv[1:])
+
+    if namespace.methods:
+        list_all_methods_and_exit(for_fix_resolution=True)
 
     if namespace.yes_rewrite_images:
         process(namespace.color1,
                 namespace.color2,
-                namespace.never_change_aspect_ratio)
+                namespace.never_change_aspect_ratio,
+                namespace.method)
     else:
         parser.print_help()
