@@ -142,7 +142,7 @@ METHOD_LIST = [
     Method(
         'gtewa',
         'Returns a combination of the most frequent values from the widths '
-        'and heights, that ​​are Greater Than or Equal to their Weighted '
+        'and heights, that are Greater Than or Equal to their Weighted '
         'Averages.',
         'This method may expand all frames in your folder if '
         'both portrait and landscape orientations exist. This may potentially '
