@@ -44,7 +44,7 @@ Aspect ratio difference < 0.45
 
 In this case, the program will ignore aspect ratio and distort the frames.
 
-To disable this, please use ``--never-change-aspect-ratio`` argument.
+To disable this, please use ``[-A|--never-change-aspect-ratio]`` argument.
 You can combine this with ``--color2`` argument.
 
 .. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case2_1.png

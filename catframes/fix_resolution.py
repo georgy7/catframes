@@ -165,7 +165,7 @@ def run():
 
     if not python_supports_allow_abbrev():
         parser.add_argument(YES_REWRITE_IMAGES_FAKE_PARAMETER, action='store_true',
-                            help='Do nothing. Hack for python 3.4.')
+                            help='Do nothing. A hack for python 3.4.')
 
     parser.add_argument('--color1', type=color_argument, default='#41c148',
                         help='Default, green (#41c148).')
@@ -173,7 +173,7 @@ def run():
     parser.add_argument('--color2', type=color_argument, default='#0590b0',
                         help='Default, turquoise (#0590b0).')
 
-    parser.add_argument('--never-change-aspect-ratio', action='store_true',
+    parser.add_argument('-A', '--never-change-aspect-ratio', action='store_true',
                         help='Margins are used if necessary.')
 
     parser.add_argument('--methods', action='store_true',

@@ -1,4 +1,5 @@
 import argparse
+import errno
 import itertools
 import os.path
 import sys
@@ -51,20 +52,28 @@ And the second:
 DEFAULT_FPS = 1
 DEFAULT_OUTPUT = 'output.mp4'
 
+REWRITE_IMAGES = '--rewrite-images'
+REWRITE_AND_THEN_REMOVE_IMAGES = '--rewrite-and-then-remove-images'
+REWRITE_AND_THEN_DELETE_IMAGES = '--rewrite-and-then-delete-images'
+
 
 def output_argument(arg):
     if (not arg.endswith('.mp4')) or (len(arg) <= 4):
         raise argparse.ArgumentTypeError(
             'I do not recommend other formats than mp4 for slideshow-like things. So, I blocked this.')
 
-    if os.path.exists(arg):
-        raise argparse.ArgumentTypeError('File already exists: ' + arg)
-
     return arg
+
+
+def exit_if_file_exists(fn):
+    if os.path.exists(fn):
+        print('File already exists: {}.'.format(fn), file=sys.stderr)
+        exit(errno.EEXIST)
 
 
 def parse_arguments(converter, namespace):
     converter.output = namespace.output
+    exit_if_file_exists(converter.output)
     converter.fps = namespace.fps
     return namespace.draw_file_names
 
@@ -204,17 +213,35 @@ def run():
             formatter_class=argparse.RawDescriptionHelpFormatter
         )
 
-    parser.add_argument('--version', '-version', action='store_true',
+    parser.add_argument('-v', '--version', '-version', action='store_true',
                         help='Show version.')
 
-    parser.add_argument('--rewrite-images', action='store_true',
+    parser.add_argument(REWRITE_IMAGES, action='store_true',
                         help='Make video and then remove source images.')
 
-    parser.add_argument('--rewrite-and-then-remove-images', action='store_true',
+    parser.add_argument(REWRITE_AND_THEN_REMOVE_IMAGES, action='store_true',
                         help='Make video and then remove source images.')
 
-    parser.add_argument('--rewrite-and-then-delete-images', action='store_true',
-                        help='Make video and then remove source images. Alias for --rewrite-and-then-remove-images.')
+    parser.add_argument(REWRITE_AND_THEN_DELETE_IMAGES, action='store_true',
+                        help='Make video and then remove source images. '
+                             'Alias for --rewrite-and-then-remove-images.')
+
+    if not python_supports_allow_abbrev():
+        parser.add_argument(
+            REWRITE_IMAGES[:-1] + 'z',
+            action='store_true',
+            help='Do nothing. A hack for python 3.4.'
+        )
+        parser.add_argument(
+            REWRITE_AND_THEN_REMOVE_IMAGES[:-1] + 'z',
+            action='store_true',
+            help='Do nothing. A hack for python 3.4.'
+        )
+        parser.add_argument(
+            REWRITE_AND_THEN_DELETE_IMAGES[:-1] + 'z',
+            action='store_true',
+            help='Do nothing. A hack for python 3.4.'
+        )
 
     parser.add_argument('-o', '--output', type=output_argument, default=DEFAULT_OUTPUT,
                         help='Output filename. Default: {}.'.format(DEFAULT_OUTPUT))
@@ -231,7 +258,7 @@ def run():
     parser.add_argument('--color2', type=color_argument, default='#0590b0',
                         help='Default, turquoise (#0590b0).')
 
-    parser.add_argument('--never-change-aspect-ratio', action='store_true',
+    parser.add_argument('-A', '--never-change-aspect-ratio', action='store_true',
                         help='Margins are used if necessary.')
 
     parser.add_argument('--methods', action='store_true',
