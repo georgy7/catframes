@@ -59,12 +59,17 @@ class ToVideoConverter:
         self.fps = DEFAULT_FPS
         self.ready = False
 
-    @staticmethod
-    def save_list(filenames, fps):
+    @classmethod
+    def escape_special_characters(cls, fn):
+        return fn.replace("'", "'\\''")
+
+    @classmethod
+    def save_list(cls, filenames, fps):
         duration = 1 / fps
         with open(LIST_FILE_NAME, 'w') as file:
             for name in filenames:
-                file.write("file '%s'\n" % name)
+                f = cls.escape_special_characters(name)
+                file.write("file '%s'\n" % f)
                 file.write("duration %.10f\n" % duration)
 
     def make_file_list_lexicographical_order(self):

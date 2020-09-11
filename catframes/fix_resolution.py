@@ -115,13 +115,14 @@ class FixImage:
         self.never_change_aspect_ratio = never_change_aspect_ratio
 
     def __call__(self, f):
-        image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
+        ef = escape_double_quotes(f)
+        image_resolution_string = os.popen("identify -format '%wx%h' \"{}\"".format(ef)).read()
         if not image_resolution_string:
-            return '\nCould not resolve size of \"{}\"\n'.format(f)
+            return '\nCould not resolve size of \"{}\"\n'.format(ef)
 
         image_resolution = image_resolution_string.split('x')
         if len(image_resolution) < 2:
-            return '\nCould not resolve size of \"{}\"\n'.format(f)
+            return '\nCould not resolve size of \"{}\"\n'.format(ef)
 
         if (image_resolution[0] == self.target_size[0]) and (image_resolution[1] == self.target_size[1]):
             # Skipping.
@@ -130,18 +131,18 @@ class FixImage:
         elif (abs(int(image_resolution[0]) - int(self.target_size[0])) < 16) and \
                 (abs(int(image_resolution[1]) - int(self.target_size[1])) < 16):
             command = 'mogrify -background "{}" -extent {} -gravity NorthWest -quality 98 "{}"'
-            execute(command, self.color1, self.target_resolution_string, f)
+            execute(command, self.color1, self.target_resolution_string, ef)
             return '.'
         else:
             image_aspect_ratio = float(image_resolution[0]) / float(image_resolution[1])
             if (abs(image_aspect_ratio - self.target_aspect_ratio) < 0.45) \
                     and not self.never_change_aspect_ratio:
                 command = 'mogrify -resize {}! -gravity NorthWest -quality 98 "{}"'
-                execute(command, self.target_resolution_string, f)
+                execute(command, self.target_resolution_string, ef)
                 return 's'
             else:
                 command = 'mogrify -background "{}" -resize {} -extent {} -gravity Center -quality 98 "{}"'
-                execute(command, self.color2, self.target_resolution_string, self.target_resolution_string, f)
+                execute(command, self.color2, self.target_resolution_string, self.target_resolution_string, ef)
                 return 'c'
 
 

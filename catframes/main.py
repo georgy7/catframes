@@ -136,7 +136,8 @@ def draw_file_name(a):
     filename = a[1]
     total = a[2]
     command = 'mogrify -gravity North -fill white -font {} -verbose -undercolor \'#00000080\' -annotate +0+5 "{}" -quality 98 "{}"'
-    execute_quiet(command, font, filename, filename)
+    ef = escape_double_quotes(filename)
+    execute_quiet(command, font, ef, ef)
     return total
 
 

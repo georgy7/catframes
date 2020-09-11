@@ -20,7 +20,8 @@ def check_dependencies():
 def get_resolution(f, rename_corrupted: bool):
     if os.path.isdir(f):
         return None
-    out = os.popen("identify -format '%wx%h' \"{}\"".format(f)).read()
+    ef = escape_double_quotes(f)
+    out = os.popen("identify -format '%wx%h' \"{}\"".format(ef)).read()
     if not out:
         if rename_corrupted:
             os.rename(f, f + '_corrupted')
