@@ -3,6 +3,7 @@ import errno
 import itertools
 import os.path
 import sys
+import warnings
 from multiprocessing import Pool
 
 from catframes.fix_resolution import \
@@ -200,6 +201,8 @@ def rewrite_concatenate_and_remove_images(namespace):
 
 
 def run():
+    warnings.warn("The new version is here: http://itustinov.ru/", DeprecationWarning)
+
     if python_supports_allow_abbrev():
         parser = argparse.ArgumentParser(
             description=SHORT_DESCRIPTION.format(version()),

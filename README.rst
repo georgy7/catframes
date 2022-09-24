@@ -3,14 +3,17 @@ Catframes
 
  | |Python versions: 3.3 and above| |PyPI| |License: CC0-1.0| |GitHub code size in bytes|
 
+**This package is no longer supported!**
+The new version is here: http://itustinov.ru/
+
 Features
 --------
 
-1. Fixing unstable frame size
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Fixing negligible cropping (about 8 pixels)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Some software for some reason may save a part of frames with negligible
-cropping (about 8 pixels).
+I don't remember exactly, why I did this.
+Probably to prevent quality loss due to scaling.
 
 .. figure:: https://github.com/georgy7/catframes/raw/master/ReadMe%20images/case1_1.png
    :alt: Feature 1, cropping
@@ -21,11 +24,6 @@ cropping (about 8 pixels).
    :alt: Feature 1, extending
 
    Feature 1, extending
-
-Even if this is not your case (it scales the image, for instance), if a
-resolution was changed to very close one, it's still better to use
-cropping/extending on video, than scaling, to prevent further quality
-loss.
 
 The script aligns the frames to the
 left-top corner.
