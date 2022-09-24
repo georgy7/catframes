@@ -3,7 +3,6 @@ import errno
 import itertools
 import os.path
 import sys
-import warnings
 from multiprocessing import Pool
 
 from catframes.fix_resolution import \
@@ -22,6 +21,14 @@ SHORT_DESCRIPTION = """
 Catframes v{}.
 
 Catframes is a frame concatenation tool.
+
+This package is no longer supported!
+The new version is here: http://itustinov.ru/
+"""
+
+WARNING = """
+This package is no longer supported!
+The new version is here: http://itustinov.ru/
 """
 
 USAGE = """
@@ -201,8 +208,6 @@ def rewrite_concatenate_and_remove_images(namespace):
 
 
 def run():
-    warnings.warn("The new version is here: http://itustinov.ru/", DeprecationWarning)
-
     if python_supports_allow_abbrev():
         parser = argparse.ArgumentParser(
             description=SHORT_DESCRIPTION.format(version()),
@@ -281,11 +286,14 @@ def run():
         print(version())
         sys.exit(0)
     elif namespace.methods:
+        print(WARNING)
         list_all_methods_and_exit(for_fix_resolution=True)
     elif namespace.rewrite_and_then_remove_images \
             or namespace.rewrite_and_then_delete_images:
+        print(WARNING)
         rewrite_concatenate_and_remove_images(namespace)
     elif namespace.rewrite_images:
+        print(WARNING)
         just_rewrite_and_concatenate(namespace)
     else:
         parser.print_help()
