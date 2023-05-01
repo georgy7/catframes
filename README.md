@@ -1,7 +1,7 @@
 Catframes
 =========
 
-A script that concatenate frames.
+A script that concatenates frames.
 
 The abbreviation `cat` in this context familiar to any user of Unix-like systems.
 
