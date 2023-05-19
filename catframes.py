@@ -34,7 +34,7 @@ Catframes
 
 """
 
-from __future__ import annotations  # для псевдонимов в autodoc
+# from __future__ import annotations  # для псевдонимов в autodoc
 
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from datetime import datetime
@@ -60,16 +60,16 @@ from wsgiref.simple_server import make_server
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 import http.client
-from time import sleep
+from time import sleep, monotonic
 from unittest import TestCase
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2022.10'
+__version__ = '2023.05'
 __license__ = 'Zlib'
 
 
@@ -123,7 +123,7 @@ class JobServer:
     def __init__(self, app: WebApp, job: WebJob):
         self._app: WebApp = app
         self._job: WebJob = job
-        self._job_error: Exception|None = None
+        self._job_error: Union[Exception, None] = None
 
     def run(self):
         """Запускает сервер, ждёт завершения работ, останавливает сервер.
@@ -214,8 +214,10 @@ class FileUtils:
         hashsum = hashlib.sha1()
         try:
             with path.expanduser().open(mode = 'rb') as binary:
-                while chunk := binary.read(4096):
+                chunk = binary.read(4096)
+                while chunk:
                     hashsum.update(chunk)
+                    chunk = binary.read(4096)
             return hashsum.hexdigest()
         except OSError:
             return None
@@ -477,7 +479,7 @@ class _FileUtilsTest(TestCase):
         self.assertSequenceEqual(expected, items)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Resolution:
     """Ненулевое разрешение в пикселях."""
 
@@ -547,12 +549,12 @@ class Frame:
         return self.path.parent.parts[-1]
 
     @property
-    def checksum(self) -> str|None:
+    def checksum(self) -> Union[str, None]:
         """Незаполнено, если не удалось прочитать файл в момент создания объекта."""
         return self._checksum
 
     @property
-    def resolution(self) -> Resolution|None:
+    def resolution(self) -> Union[Resolution, None]:
         """Незаполнено, если не удалось прочитать файл в момент создания объекта."""
         return self._resolution
 
@@ -791,7 +793,7 @@ class Quality(Enum):
         return self.value[1]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class OutputOptions:
     """Это опции сохранения видеозаписи. Грубо говоря, опции FFmpeg. Они не влияют ни на выбор
     разрешения, ни на обработку кадров. Ограничение длины не влияет на выбор разрешения, т.к. цель
@@ -802,7 +804,7 @@ class OutputOptions:
     quality: Quality
     destination: Path
     overwrite: bool
-    limit_seconds: int|None
+    limit_seconds: Union[int, None]
 
     def __post_init__(self):
         assert 1 <= self.frame_rate <= 60
@@ -895,13 +897,13 @@ class OutputOptions:
                     '-i', str(list_path)
                 ]
 
-                match self.destination.suffix:
-                    case '.mp4':
-                        ffmpeg_options.extend(self._get_h264_options())
-                    case '.webm':
-                        ffmpeg_options.extend(self._get_vp9_options())
-                    case _:
-                        raise ValueError('Unsupported file name suffix.')
+                suffix = self.destination.suffix
+                if suffix == '.mp4':
+                    ffmpeg_options.extend(self._get_h264_options())
+                elif suffix == '.webm':
+                    ffmpeg_options.extend(self._get_vp9_options())
+                else:
+                    raise ValueError('Unsupported file name suffix.')
 
                 ffmpeg_options.extend([
                     '-r', str(self.frame_rate),
@@ -1016,7 +1018,7 @@ class PillowFrameView(FrameView):
         raise ValueError('Could not find any font.')
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class OverlayModel:
     """Вся информация, которая может быть использована в оверлеях. Она для всех оверлеев кадра
     одинаковая, так что подготавливается один раз перед отрисовкой кадра.
@@ -1039,19 +1041,19 @@ class OverlayModel:
     symlink: bool
     """Является ли файл симлинком в данный момент."""
 
-    mtime: datetime|None
+    mtime: Union[datetime, None]
     """Местное время последнего изменения файла на текущий момент.
 
     Не заполняется, если файла не оказалось на диске.
     """
 
-    size: int|None
+    size: Union[int, None]
     """Размер файла в байтах на текущий момент.
 
     Не заполняется, если файла не оказалось на диске.
     """
 
-    resolution: Resolution|None
+    resolution: Union[Resolution, None]
     """Исходное разрешение кадра на текущий момент.
 
     Не заполняется, если файла нет или его не удалось открыть.
@@ -1152,13 +1154,13 @@ class DefaultFrameView(PillowFrameView):
         self.network_name = platform.node()
 
     def _make_overlay_model(self, frame: Frame, source_size: Tuple[int, int]) -> OverlayModel:
-        match FileUtils.get_checksum(frame.path):
-            case frame.checksum:
-                warning = ''
-            case None:
-                warning = f'{frame.folder}/{frame.name}\nНе удалось определить хеш-сумму.'
-            case _:
-                warning = f'{frame.folder}/{frame.name}\nХеш-сумма изменилась!'
+        file_checksum = FileUtils.get_checksum(frame.path)
+        if file_checksum == frame.checksum:
+            warning = ''
+        elif file_checksum == None:
+            warning = f'{frame.folder}/{frame.name}\nНе удалось определить хеш-сумму.'
+        else:
+            warning = f'{frame.folder}/{frame.name}\nХеш-сумма изменилась!'
 
         return OverlayModel(
             warning=warning,
@@ -1193,19 +1195,18 @@ class DefaultFrameView(PillowFrameView):
 
         min_y, max_y = 0, self.resolution.height-1
 
-        match ypos:
-            case 0:
-                index = line_index
-                return origin[0], min(max_y, origin[1] + index * self.LINE_HEIGHT)
-            case 2:
-                index = total_lines - 1 - line_index
-                return origin[0], max(min_y, origin[1] - index * self.LINE_HEIGHT)
-            case _:
-                index = line_index - (total_lines // 2)
-                unbounded = origin[1] + index * self.LINE_HEIGHT
-                if total_lines % 2 == 0:
-                    unbounded += self.LINE_HEIGHT // 2
-                return origin[0], max(min_y, min(max_y, unbounded))
+        if ypos == 0:
+            index = line_index
+            return origin[0], min(max_y, origin[1] + index * self.LINE_HEIGHT)
+        elif ypos == 2:
+            index = total_lines - 1 - line_index
+            return origin[0], max(min_y, origin[1] - index * self.LINE_HEIGHT)
+        else:
+            index = line_index - (total_lines // 2)
+            unbounded = origin[1] + index * self.LINE_HEIGHT
+            if total_lines % 2 == 0:
+                unbounded += self.LINE_HEIGHT // 2
+            return origin[0], max(min_y, min(max_y, unbounded))
 
     def _draw_multiline(self, xpos: int, ypos: int, text: str, stroke_color_src, fill_color_src):
         lines = text.split('\n')
@@ -1230,7 +1231,7 @@ class DefaultFrameView(PillowFrameView):
                 fill=fill_color_src(line_position))
 
     def _render(self, frame: Frame):
-        overlay_model: OverlayModel|None = None
+        overlay_model: Union[OverlayModel, None] = None
 
         try:
             with Image.open(frame.path) as source:
@@ -1453,49 +1454,49 @@ class OverLang:
     @classmethod
     def _get_unformatted(cls, options) -> Callable[[OverlayModel], str]:
         config = ':'.join(options[1:]) if len(options) > 1 else ''
-        match options[0]:
-            case 'catframes':
-                return lambda _: TITLE
-            case 'machine':
-                return lambda x: x.machine
-            case 'node':
-                return lambda x: x.node
-            case 'vtime':
-                if config:
-                    cls._check_datetime_format(config)
-                    return lambda x: x.vtime.strftime(config)
-                return lambda x: x.vtime.isoformat(timespec='milliseconds')
-            case 'fn':
-                return lambda x: x.filename
-            case 'dir':
-                return lambda x: x.foldername
-            case 'frame':
-                if not config:
-                    raise ValueError('A context of the frame number required.')
-                match config:
-                    case 'dir':
-                        return lambda x: str(x.numdir)
-                    case 'dirs':
-                        return lambda x: str(x.numdirs)
-                    case 'video':
-                        return lambda x: str(x.numvideo)
-                    case _:
-                        raise ValueError(f'Bad context: "{config}".')
-            case 'mtime':
-                if config:
-                    cls._check_datetime_format(config)
-                    return lambda x: x.mtime.strftime(config) if x.mtime else ''
-                return lambda x: x.mtime.isoformat(timespec='milliseconds') if x.mtime else ''
-            case 'size':
-                return lambda x: str(x.size)
-            case 'resolution':
-                return lambda x: str(x.resolution)
-            case 'symlink':
-                if config:
-                    return lambda x: config if x.symlink else ''
-                return lambda x: 'symlink' if x.symlink else ''
-            case _:
-                raise ValueError(f'Unsupported function "{options[0]}".')
+        func = options[0]
+
+        if func == 'catframes':
+            return lambda _: TITLE
+        elif func == 'machine':
+            return lambda x: x.machine
+        elif func == 'node':
+            return lambda x: x.node
+        elif func == 'vtime':
+            if config:
+                cls._check_datetime_format(config)
+                return lambda x: x.vtime.strftime(config)
+            return lambda x: x.vtime.isoformat(timespec='milliseconds')
+        elif func == 'fn':
+            return lambda x: x.filename
+        elif func == 'dir':
+            return lambda x: x.foldername
+        elif func == 'frame':
+            if not config:
+                raise ValueError('A context of the frame number required.')
+            elif config == 'dir':
+                return lambda x: str(x.numdir)
+            elif config == 'dirs':
+                return lambda x: str(x.numdirs)
+            elif config == 'video':
+                return lambda x: str(x.numvideo)
+            else:
+                raise ValueError(f'Bad context: "{config}".')
+        elif func == 'mtime':
+            if config:
+                cls._check_datetime_format(config)
+                return lambda x: x.mtime.strftime(config) if x.mtime else ''
+            return lambda x: x.mtime.isoformat(timespec='milliseconds') if x.mtime else ''
+        elif func == 'size':
+            return lambda x: str(x.size)
+        elif func == 'resolution':
+            return lambda x: str(x.resolution)
+        elif func == 'symlink':
+            if config:
+                return lambda x: config if x.symlink else ''
+            return lambda x: 'symlink' if x.symlink else ''
+        else:
+            raise ValueError(f'Unsupported function "{options[0]}".')
 
     @staticmethod
     def _format(format_string, value) -> str:
@@ -1508,25 +1509,29 @@ class OverLang:
 
         width = int(width_match[0])
         cut = '!' in format_string
+        alignment = format_string[0]
 
-        match format_string[0], cut:
-            case '>', False:
-                result = f'{{0: >{width}}}'.format(value)
-            case '>', True:
-                result = f'{{0: >{width}}}'.format(value)[-width:]
-            case '^', False:
-                result = f'{{0: ^{width}}}'.format(value)
-            case '^', True:
-                result = f'{{0: ^{width}}}'.format(value)
-                side: float = (len(result) - width) / 2
-                if len(result) > width:
-                    result = result[math.ceil(side):]
-                if len(result) > width:
-                    result = result[:-math.floor(side)]
-            case _, False:
-                result = f'{{0: <{width}}}'.format(value)
-            case _, True:
-                result = f'{{0: <{width}}}'.format(value)[:width]
+        if (alignment == '>') and not cut:
+            result = f'{{0: >{width}}}'.format(value)
+
+        elif (alignment == '>') and cut:
+            result = f'{{0: >{width}}}'.format(value)[-width:]
+
+        elif (alignment == '^') and not cut:
+            result = f'{{0: ^{width}}}'.format(value)
+
+        elif (alignment == '^') and cut:
+            result = f'{{0: ^{width}}}'.format(value)
+            side: float = (len(result) - width) / 2
+            if len(result) > width:
+                result = result[math.ceil(side):]
+            if len(result) > width:
+                result = result[:-math.floor(side)]
+
+        elif not cut:
+            result = f'{{0: <{width}}}'.format(value)
+        else:
+            result = f'{{0: <{width}}}'.format(value)[:width]
 
         return result
 
@@ -2015,13 +2020,12 @@ class ConsoleInterface:
         if destination.suffix not in OutputOptions.get_supported_suffixes():
             raise ValueError('Unsupported destination file extension.')
 
-        match self.options.quality:
-            case 'high':
-                quality = Quality.HIGH
-            case 'poor':
-                quality = Quality.POOR
-            case _:
-                quality = Quality.MEDIUM
+        if self.options.quality == 'high':
+            quality = Quality.HIGH
+        elif self.options.quality == 'poor':
+            quality = Quality.POOR
+        else:
+            quality = Quality.MEDIUM
 
         return OutputOptions(
             destination=destination,
@@ -2084,8 +2088,11 @@ def _main():
 
         cli.show_splitter()
         del resolution_table
+
+        processing_start = monotonic()
         view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         output_options.make(frames, view)
+        print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
         print(f'\n{err}\n', file=sys.stderr)
