@@ -69,7 +69,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2023.05'
+__version__ = '2023.06-SNAPSHOT'
 __license__ = 'Zlib'
 
 
@@ -84,6 +84,8 @@ DESCRIPTION = f"""{TITLE}
   Git: https://gitflic.ru/project/georgy7/cona
 
   Git bundle: http://itustinov.ru/cona/latest/cona.pack
+
+  GitHub: https://github.com/georgy7/catframes
 
 """
 
