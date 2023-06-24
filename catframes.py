@@ -101,6 +101,17 @@ WebJob = Callable[[int], None]
 """Функция, которая работает с локальным веб-приложением. Аргумент — номер порта."""
 
 
+@dataclass(frozen=True)
+class JobServerOptions:
+    min_http_port: int
+    max_http_port: int
+
+    def __post_init__(self):
+        assert self.min_http_port > 0
+        assert self.max_http_port > 0
+        assert self.min_http_port <= self.max_http_port
+
+
 class JobServer:
     """Механизм межпроцессного взаимодействия на основе HTTP. Открывает порт и обслуживает другие
     программы, которые контролируются из этого же сервера.
@@ -121,10 +132,12 @@ class JobServer:
     :param app: Функция, которая обслуживает HTTP-запросы.
     :param job: Запускается один раз. Сервер ждёт завершения. Выброшенные исключения приводят
         к остановке сервера и вылетают из метода :meth:`run`.
+    :param options: Системные настройки.
     """
-    def __init__(self, app: WebApp, job: WebJob):
+    def __init__(self, app: WebApp, job: WebJob, options: JobServerOptions):
         self._app: WebApp = app
         self._job: WebJob = job
+        self._options = options
         self._job_error: Union[Exception, None] = None
 
     def run(self):
@@ -146,7 +159,11 @@ class JobServer:
             self._job_error = exc
 
     def _was_running(self) -> bool:
-        port = random.randint(0x2800, 0xFFFF)
+        port = random.randint(
+            self._options.min_http_port,
+            self._options.max_http_port
+        )
+        print(f"\nPort: {port}\n")
         try:
             with make_server(host='', port=port, app=self._app) as httpd:
                 web_thread = threading.Thread(target = httpd.serve_forever)
@@ -203,7 +220,7 @@ class _JobServerTest(TestCase):
                 read('/Item/123'),
                 (200, '/Item/123'.encode("utf-8")))
 
-        server = JobServer(webapp, webjob)
+        server = JobServer(webapp, webjob, JobServerOptions(10240, 65535))
         server.run()
 
 
@@ -835,7 +852,7 @@ class OutputOptions:
         """Возвращает поддерживаемые расширения файлов."""
         return '.mp4', '.webm'
 
-    def make(self, frames: Sequence[Frame], view: FrameView):
+    def make(self, frames: Sequence[Frame], view: FrameView, server_options: JobServerOptions):
         """Обрабатывает с помощью :class:`FrameView` и соединяет кадры последовательности
         в видеозапись. Сортировка последовательности, как и валидация всех опций, должны быть
         сделаны заранее.
@@ -915,7 +932,7 @@ class OutputOptions:
 
                 subprocess.check_call(ffmpeg_options)
 
-        server = JobServer(app, job)
+        server = JobServer(app, job, server_options)
         server.run()
 
 
@@ -1791,6 +1808,7 @@ class ConsoleInterface:
         self._add_input_arguments(parser)
         self._add_rendering_arguments(parser)
         self._add_output_arguments(parser)
+        self._add_system_arguments(parser)
 
         parser.add_argument('--resolutions', action='store_true',
             help='show the resolution choosing process and exit')
@@ -1934,6 +1952,28 @@ class ConsoleInterface:
         video_arguments.add_argument('-f', '--force', action='store_true',
             help='overwrite video file if exists')
 
+    @classmethod
+    def _add_system_arguments(cls, parser: ArgumentParser):
+        def port_range_validator(arg):
+            tip = 'It must be written in the format MinPort:MaxPort.'
+            min_port = 1024
+            if re.match('^\d+:\d+$', arg):
+                nums = list(map(lambda x: int(x), arg.split(':')))
+                if nums[0] > nums[1]:
+                    raise ArgumentTypeError(tip)
+                if min(nums) < min_port:
+                    raise ArgumentTypeError(f'Port number must not be less than {min_port}.')
+                return nums
+            else:
+                raise ArgumentTypeError(tip)
+
+        system_arguments = parser.add_argument_group('System')
+        system_arguments.add_argument('-p', '--port-range', metavar='X',
+            default='10240:65535', type=port_range_validator,
+            help='а range of ports that are allowed to be used ' + 
+                'to interact with FFmpeg (default: %(default)s)')
+
+
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
         print()
@@ -2036,6 +2076,12 @@ class ConsoleInterface:
             quality=quality,
             frame_rate=self.options.frame_rate)
 
+    def get_server_options(self) -> JobServerOptions:
+        return JobServerOptions(
+            self.options.port_range[0],
+            self.options.port_range[1]
+        )
+
     @property
     def statistics_only(self) -> bool:
         """Пользователь не хочет пока делать видео, только посмотреть логику выбора разрешения."""
@@ -2093,7 +2139,7 @@ def _main():
 
         processing_start = monotonic()
         view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
-        output_options.make(frames, view)
+        output_options.make(frames, view, cli.get_server_options())
         print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
