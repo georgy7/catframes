@@ -1829,6 +1829,11 @@ class ConsoleInterface:
         input_arguments.add_argument('--trim-end', metavar='FRAMES',
             type=cls._get_minmax_type(1),
             help='cut off some frames at the end')
+        input_arguments.add_argument('-s', '--sure', action='store_true',
+            help="do not exit if some or all of input directories " + 
+            "do not exist. You are sure that you are specifying " +
+            "the correct folders. If they don't exist, it just has to be " +
+            "shown in the resulting video.")
 
     def _make_layout(self):
         h_positions = ('left', 0), ('right', 2)
