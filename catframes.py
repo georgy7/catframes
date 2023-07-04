@@ -211,8 +211,10 @@ class FileUtils:
     """Модуль вспомогательных функций, связанных с файловой системой."""
 
     @staticmethod
-    def get_checksum(path: Path) -> Optional[str]:
+    def get_checksum(path: Union[Path, None]) -> Optional[str]:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return None
         hashsum = hashlib.sha1()
         try:
             with path.expanduser().open(mode = 'rb') as binary:
@@ -225,16 +227,20 @@ class FileUtils:
             return None
 
     @staticmethod
-    def get_mtime(path: Path) -> Optional[datetime]:
+    def get_mtime(path: Union[Path, None]) -> Optional[datetime]:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return None
         try:
             return datetime.fromtimestamp(os.path.getmtime(path.expanduser()))
         except OSError:
             return None
 
     @staticmethod
-    def get_file_size(path: Path) -> Optional[int]:
+    def get_file_size(path: Union[Path, None]) -> Optional[int]:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return None
         try:
             normal_path = path.expanduser()
             if normal_path.is_file():
@@ -244,8 +250,10 @@ class FileUtils:
             return None
 
     @staticmethod
-    def is_symlink(path: Path) -> bool:
+    def is_symlink(path: Union[Path, None]) -> bool:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return False
         return path.expanduser().is_symlink()
 
     @staticmethod
@@ -507,16 +515,28 @@ class Resolution:
 class Frame:
     """Кадр на диске. Сырьё для :class:`FrameView`. Конструктор создаёт объект, даже если путь
     ведёт в никуда. Не иммутабельная сущность, некоторые поля могут обновляться.
+
+    :param path: Путь к файлу.
+
+    :param banner: Кадр не является отображением никакого файла на диске, т.е. он существует
+    только чтобы что-то сообщить. Соответственно, такой кадр не должен влиять ни на выбор
+    разрешения, ни на подсчет кадров. Рендерится он примерно как кадры, которые были удалены
+    после запуска скрипта.
     """
     __slots__ = '_checksum', '_path', '_resolution', 'numdir', 'numdirs', 'numvideo'
 
-    def __init__(self, path: Path):
-        self._checksum = FileUtils.get_checksum(path)
+    def __init__(self, path: Union[Path, None], banner: bool = False):
         self._path = path
-
         self._resolution = None
+        self._checksum = FileUtils.get_checksum(path)
 
+        assert (path is None) == banner
+        assert (self._path is None) == banner
+
+        # Чек-сумма может быть незаполнена не только из-за того, что путь незаполнен.
+        # Сюда же относятся все ошибки доступа к содержимому.
         if self._checksum:
+            assert path is not None
             try:
                 with Image.open(path.expanduser()) as image:
                     width, height = image.size
@@ -536,19 +556,29 @@ class Frame:
         """
 
     @property
-    def path(self) -> Path:
+    def banner(self) -> bool:
+        return (self._path is None)
+
+    @property
+    def path(self) -> Union[Path, None]:
         """Путь к файлу в директории, указанной пользователем. Может быть симлинком."""
         return self._path
 
     @property
     def name(self) -> str:
-        """Имя файла или симлинка."""
-        return self.path.name
+        """Имя файла или симлинка (для нанесения на кадр)."""
+        if self.path:
+            return self.path.name
+        else:
+            return ''
 
     @property
     def folder(self) -> str:
-        """Имя папки с файлом (для демонстрации пользователю)."""
-        return self.path.parent.parts[-1]
+        """Имя папки с файлом (для нанесения на кадр)."""
+        if self.path:
+            return self.path.parent.parts[-1]
+        else:
+            return ''
 
     @property
     def checksum(self) -> Union[str, None]:
