@@ -522,13 +522,17 @@ class Frame:
     только чтобы что-то сообщить. Соответственно, такой кадр не должен влиять ни на выбор
     разрешения, ни на подсчет кадров. Рендерится он примерно как кадры, которые были удалены
     после запуска скрипта.
-    """
-    __slots__ = '_checksum', '_path', '_resolution', 'numdir', 'numdirs', 'numvideo'
 
-    def __init__(self, path: Union[Path, None], banner: bool = False):
+    :param message: Если это кадр-заглушка (баннер), этот текст будет выведен
+    где-нибудь в центре кадра.
+    """
+    __slots__ = '_checksum', '_path', '_resolution', '_message', 'numdir', 'numdirs', 'numvideo'
+
+    def __init__(self, path: Union[Path, None], banner: bool = False, message: str = ''):
         self._path = path
         self._resolution = None
         self._checksum = FileUtils.get_checksum(path)
+        self._message = message
 
         assert (path is None) == banner
         assert (self._path is None) == banner
@@ -558,6 +562,10 @@ class Frame:
     @property
     def banner(self) -> bool:
         return (self._path is None)
+
+    @property
+    def message(self) -> str:
+        return self._message
 
     @property
     def path(self) -> Union[Path, None]:
