@@ -262,22 +262,37 @@ class FileUtils:
         и, скорее всего, зависит от операционной системы). Файлы определяются по расширениям
         (суффиксам имён). Вложенные папки игнорируются.
 
-        :raises ValueError: путь не является директорией.
-        :raises OSError: не удалось получить список файлов.
+        :raises ValueError: путь – не директория, доступная на просмотр (подробности в сообщении).
+        :raises OSError: что-то, что не было предусмотрено.
         """
         folder = path.expanduser()
 
-        if not folder.is_dir():
-            raise ValueError(f'The path is not a folder: {folder}')
-
         frame_extensions = "jpg", "jpeg", "png", "JPG", "JPEG", "PNG"
 
-        return [
-            file_path
-            for file_path in folder.iterdir()
-            if file_path.is_file()
-            and file_path.suffix[1:] in frame_extensions
-        ]
+        try:
+            # Поскольку здесь мы не читаем файлы,
+            # все ошибки будут свидетельствовать о проблеме с папкой.
+            # Если мы получим PermissionError, вызвав метод is_file(),
+            # это будет значить, что скорее всего папка не даёт нам разрешения
+            # узнать, чем являются её элементы.
+            # Проверено в Alpine: если установить у папки права 600, получится
+            # получить список, но не удасться узнать что-либо о его элементах.
+            # Если же файл будет удалён прямо перед вызовом is_file(),
+            # этот метод согласно документации просто вернёт False.
+            return [
+                file_path
+                for file_path in folder.iterdir()
+                if file_path.is_file()
+                and file_path.suffix[1:] in frame_extensions
+            ]
+        except FileNotFoundError:
+            raise ValueError(f'The path is not a folder: {folder}')
+        except NotADirectoryError:
+            raise ValueError(f'The path is not a folder: {folder}')
+        except PermissionError:
+            raise ValueError(f'Forbidden: {folder}')
+
+        return result
 
     @staticmethod
     def sort_natural(files: List[Path]):
@@ -399,6 +414,79 @@ class _FileUtilsTest(TestCase):
             file_path = Path(folder_path_string) / '1.txt'
             file_path.write_text('12345', encoding='utf-8')
             self.assertEqual(FileUtils.is_symlink(file_path), False)
+
+    def test_list_images_1(self):
+        """В папке есть только файлы JPEG и PNG.
+        """
+        filenames = [
+            '123.jpg',
+            '456.JPEG',
+            '__________.PNG',
+            '_______________.png',
+            'a b c.jpeg',
+            'd e f.JPEG',
+        ]
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            for fn in filenames:
+                file_path = Path(folder_path_string) / fn
+                file_path.touch()
+
+            result = FileUtils.list_images(Path(folder_path_string))
+            self.assertEqual(len(result), len(filenames))
+
+            result_filenames = [os.path.basename(x) for x in result]
+            for x in result_filenames:
+                self.assertIn(x, filenames)
+
+    def test_list_images_2(self):
+        """В папке есть картинки и другие файлы (exe, звуковые и т.п.).
+        """
+        filenames = [
+            '123.jpg',
+            '456.JPEG',
+            '__________.PNG',
+            '_______________.png',
+            'a b c.jpeg',
+            'd e f.JPEG',
+            'g h i.exe',
+            'a_song.wav',
+            'plain.txt',
+        ]
+        expected = [
+            '123.jpg',
+            '456.JPEG',
+            '__________.PNG',
+            '_______________.png',
+            'a b c.jpeg',
+            'd e f.JPEG',
+        ]
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            for fn in filenames:
+                file_path = Path(folder_path_string) / fn
+                file_path.touch()
+
+            result = FileUtils.list_images(Path(folder_path_string))
+            self.assertEqual(len(result), len(expected))
+
+            result_filenames = [os.path.basename(x) for x in result]
+            for x in result_filenames:
+                self.assertIn(x, expected)
+
+    def test_list_images_of_non_existent_folder(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            fake_path = Path(folder_path_string) / 'fake'
+            with self.assertRaisesRegex(ValueError, '\S+'):
+                FileUtils.list_images(fake_path)
+
+    def test_list_images_of_non_existent_parent(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            fake_path = Path(folder_path_string) / 'fake_parent' / 'a_folder'
+            with self.assertRaisesRegex(ValueError, '\S+'):
+                FileUtils.list_images(fake_path)
+
+    def test_list_images_of_forbidden_folder(self):
+        # только на юникс-подобных системах
+        pass # TODO
 
     def test_natural_sort_of_empty_list(self):
         """Не должно падать при сортировке пустых списков файлов."""
@@ -2026,8 +2114,9 @@ class ConsoleInterface:
                 frame.numdirs = previous_frames + number
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
+        initial_frame_count = len(frames)
 
-        print(f'\nThere are {len(frames)} frames in the folders.')
+        print(f'\nThere are {initial_frame_count} frames...')
 
         trim_head = self.options.trim_start
         trim_tail = self.options.trim_end
@@ -2046,7 +2135,11 @@ class ConsoleInterface:
         for frame_index, frame in enumerate(frames):
             frame.numvideo = 1 + frame_index
 
-        print(f'Using {len(frames)} frames...\n')
+        if initial_frame_count != len(frames):
+            print(f'Using {len(frames)} frames...\n')
+        else:
+            print()
+
         return frames
 
     def get_output_options(self) -> OutputOptions:
