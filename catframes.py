@@ -857,6 +857,9 @@ class ResolutionStatistics:
             most_frequent = (xw for xw in filtered if xw[1] == max_weight)
             return round(max(xw[0] for xw in most_frequent))
 
+        if len(self._table) < 1:
+            return Resolution(1280, 720)
+
         res_list, count = zip(*self._table.items())
         width = [resolution.width for resolution in res_list]
         height = [resolution.height for resolution in res_list]
@@ -865,6 +868,84 @@ class ResolutionStatistics:
                 ResolutionUtils.round(find(list(zip(width, count)))),
                 ResolutionUtils.round(find(list(zip(height, count)))))
 
+
+class _ResolutionStatisticsTest(TestCase):
+    def test_simple(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1280, 720)).save(file_1)
+            Image.new("RGB", (800, 800)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] * 3000 + [frame_2] * 2000
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(1280, resolution.width)
+            self.assertEqual(800, resolution.height)
+
+    def test_empty(self):
+        resolution_table = ResolutionStatistics([])
+        lines = [x for x in resolution_table.sort_by_count_desc()]
+        self.assertEqual(0, len(lines))
+
+        resolution = resolution_table.choose()
+        # Default resolution: HD, 720p
+        self.assertEqual(1280, resolution.width)
+        self.assertEqual(720, resolution.height)
+
+    def test_mixed(self):
+        """К простому набору кадров подмешиваются
+        кадры-заглушки, которые должны быть проигнорированы.
+        """
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1280, 720)).save(file_1)
+            Image.new("RGB", (800, 800)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+            banner_1 = Frame(None, True, 'Message 1')
+            banner_2 = Frame(None, True, 'Message 2')
+
+            frames = [banner_1] * 20 + \
+                [frame_1] * 3000 + \
+                [banner_2] * 60 + \
+                [frame_2] * 2000
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(1280, resolution.width)
+            self.assertEqual(800, resolution.height)
+
+    def test_banners_only(self):
+        """Если на входе только кадры-заглушки, результат
+        аналогичен пустому набору кадров (HD).
+        """
+        banner_1 = Frame(None, True, 'Message 1')
+        banner_2 = Frame(None, True, 'Message 2')
+
+        frames = [banner_1] * 3000 + [banner_2] * 2000
+
+        resolution_table = ResolutionStatistics(frames)
+        lines = [x for x in resolution_table.sort_by_count_desc()]
+        self.assertEqual(0, len(lines))
+
+        resolution = resolution_table.choose()
+        # Default resolution: HD, 720p
+        self.assertEqual(1280, resolution.width)
+        self.assertEqual(720, resolution.height)
 
 class FrameResponse(NamedTuple):
     """Ответ сервера на запрос кадра. Предполагается, что раз ответ есть, это HTTP OK."""
