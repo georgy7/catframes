@@ -947,6 +947,7 @@ class _ResolutionStatisticsTest(TestCase):
         self.assertEqual(1280, resolution.width)
         self.assertEqual(720, resolution.height)
 
+
 class FrameResponse(NamedTuple):
     """Ответ сервера на запрос кадра. Предполагается, что раз ответ есть, это HTTP OK."""
     data: bytes
@@ -1983,6 +1984,185 @@ class _OverLangTest(TestCase):
                 OverLang.compile(template)
 
 
+class Enumerator:
+    """Модуль, включающий в себя логику нумерации кадров."""
+
+    @classmethod
+    def enumerate(cls, frame_groups: List[List[Frame]]):
+        """Пронумеровывает кадры на месте."""
+        for folder_index, folder in enumerate(frame_groups):
+            previous_folders = frame_groups[:folder_index]
+            previous_frames = sum((cls.count(x) for x in previous_folders))
+
+            number = 1
+            for frame in folder:
+                if not frame.banner:
+                    frame.numdir = number
+                    frame.numdirs = previous_frames + number
+                    number += 1
+
+    @staticmethod
+    def count(frames: List[Frame]):
+        """Считает кадры, игнорируя кадры-заглушки."""
+        return sum((1 for x in frames if not x.banner))
+
+    @staticmethod
+    def trim_start(frames: List[Frame], n: int) -> List[Frame]:
+        """Возвращает копию списка без указанного числа кадров в начале.
+        Кадры-заглушки игнорируются, будто бы их нет.
+        В возвращаемом списке они остаются в тех же местах, где были в исходном.
+        """
+        result: List[Frame] = []
+        skipped = 0
+        for frame in frames:
+            if (skipped >= n) or (frame.banner):
+                result.append(frame)
+            else:
+                skipped += 1
+        return result
+
+    @staticmethod
+    def trim_end(frames: List[Frame], n: int) -> List[Frame]:
+        """Возвращает копию списка без указанного числа кадров в конце.
+        Кадры-заглушки игнорируются, будто бы их нет.
+        В возвращаемом списке они остаются в тех же местах, где были в исходном.
+        """
+        result: List[Frame] = []
+        skipped = 0
+        for frame in reversed(frames):
+            if (skipped >= n) or (frame.banner):
+                result.append(frame)
+            else:
+                skipped += 1
+        result.reverse()
+        return result
+
+
+class _EnumeratorTest(TestCase):
+    def test_simple(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            Image.new("RGB", (640, 480)).save(file_1)
+
+            frame_groups = []
+            for _ in range(3):
+                frames = []
+                frame_groups.append(frames)
+                for _ in range(100):
+                    frames.append(Frame(file_1))
+
+            Enumerator.enumerate(frame_groups)
+
+            for group_index in range(3):
+                previous = sum(len(x) for x in frame_groups[:group_index])
+                for frame_index in range(100):
+                    frame = frame_groups[group_index][frame_index]
+                    self.assertEqual(1+frame_index, frame.numdir)
+                    self.assertEqual(previous+(1+frame_index), frame.numdirs)
+
+            all_frames = functools.reduce(lambda x, y: x+y, frame_groups)
+            self.assertEqual(300, Enumerator.count(all_frames))
+
+            self.assertEqual(1, all_frames[0].numdirs)
+            self.assertEqual(300, all_frames[-1].numdirs)
+
+            all_frames = Enumerator.trim_start(all_frames, 5)
+
+            self.assertEqual(6, all_frames[0].numdirs)
+            self.assertEqual(300, all_frames[-1].numdirs)
+            self.assertEqual(295, Enumerator.count(all_frames))
+
+            all_frames = Enumerator.trim_end(all_frames, 10)
+
+            self.assertEqual(6, all_frames[0].numdirs)
+            self.assertEqual(290, all_frames[-1].numdirs)
+            self.assertEqual(285, Enumerator.count(all_frames))
+
+    def test_mixed(self):
+        banner_1 = Frame(None, True, 'Message 1')
+        banner_2 = Frame(None, True, 'Message 2')
+        banner_3 = Frame(None, True, 'Message 3')
+
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            Image.new("RGB", (640, 480)).save(file_1)
+
+            frame_groups = []
+            for _ in range(3):
+                frames = []
+                frame_groups.append(frames)
+                for _ in range(100):
+                    frames.append(Frame(file_1))
+
+            # Добавляю 40 кадров-заглушек.
+
+            frame_groups[0].insert(0, banner_1)
+
+            for i in range(10):
+                frame_groups[0].insert(3, banner_1)
+
+            for i in range(20):
+                frame_groups[1].insert(44, banner_1)
+
+            for i in range(5):
+                frame_groups[2].insert(70, banner_3)
+
+            for i in range(4):
+                frame_groups[2].append(banner_3)
+
+            Enumerator.enumerate(frame_groups)
+
+            previous = 0
+            for group_index in range(3):
+                previous_in_the_directory = 0
+                for frame in frame_groups[group_index]:
+                    if not frame.banner:
+
+                        self.assertEqual(previous_in_the_directory + 1, frame.numdir)
+                        self.assertEqual(previous + 1, frame.numdirs)
+
+                        previous_in_the_directory += 1
+                        previous += 1
+
+            all_frames = functools.reduce(lambda x, y: x+y, frame_groups)
+            self.assertEqual(340, len(all_frames))
+            self.assertEqual(300, Enumerator.count(all_frames))
+
+            first_real_frame = next((x for x in all_frames if not x.banner), None)
+            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
+            self.assertIsNotNone(first_real_frame)
+            self.assertIsNotNone(last_real_frame)
+
+            self.assertEqual(1, first_real_frame.numdirs)
+            self.assertEqual(300, last_real_frame.numdirs)
+
+            all_frames = Enumerator.trim_start(all_frames, 5)
+
+            first_real_frame = next((x for x in all_frames if not x.banner), None)
+            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
+            self.assertIsNotNone(first_real_frame)
+            self.assertIsNotNone(last_real_frame)
+
+            self.assertEqual(6, first_real_frame.numdirs)
+            self.assertEqual(300, last_real_frame.numdirs)
+            self.assertEqual(295, Enumerator.count(all_frames))
+            self.assertEqual(335, len(all_frames))
+
+            all_frames = Enumerator.trim_end(all_frames, 10)
+
+            first_real_frame = next((x for x in all_frames if not x.banner), None)
+            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
+            self.assertIsNotNone(first_real_frame)
+            self.assertIsNotNone(last_real_frame)
+
+            self.assertEqual(6, first_real_frame.numdirs)
+            self.assertEqual(290, last_real_frame.numdirs)
+            self.assertEqual(285, Enumerator.count(all_frames))
+            self.assertEqual(325, len(all_frames))
+
+
 class ConsoleInterface:
     """Интерфейс пользователя.
 
@@ -2030,12 +2210,18 @@ class ConsoleInterface:
     @classmethod
     def _add_input_arguments(cls, parser: ArgumentParser):
         input_arguments = parser.add_argument_group('Input')
+
+        # Думаю, имеет смысл убрать эти два аргумента, т.к. они
+        # не соответствуют цели существования этого скрипта.
+        # Это же не софт для видеомонтажа.
+        # Но я пока не уверен.
         input_arguments.add_argument('--trim-start', metavar='FRAMES',
             type=cls._get_minmax_type(1),
             help='cut off some frames at the beginning')
         input_arguments.add_argument('--trim-end', metavar='FRAMES',
             type=cls._get_minmax_type(1),
             help='cut off some frames at the end')
+
         input_arguments.add_argument('-s', '--sure', action='store_true',
             help="do not exit if some or all of input directories " + 
             "do not exist. You are sure that you are specifying " +
@@ -2186,38 +2372,31 @@ class ConsoleInterface:
         ]
 
         print('Numbering frames...')
-        for folder_index, folder in enumerate(frame_groups):
-            previous_folders = frame_groups[:folder_index]
-            previous_frames = sum((len(x) for x in previous_folders))
-            for frame_index, frame in enumerate(folder):
-                number = 1 + frame_index
-                frame.numdir = number
-                frame.numdirs = previous_frames + number
+        Enumerator.enumerate(frame_groups)
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
-        initial_frame_count = len(frames)
+        initial_frame_count = Enumerator.count(frames)
 
         print(f'\nThere are {initial_frame_count} frames...')
 
-        trim_head = self.options.trim_start
-        trim_tail = self.options.trim_end
+        if self.options.trim_start:
+            print(f'The first {self.options.trim_start} frame(s) will not be added.')
+            frames = Enumerator.trim_start(frames, self.options.trim_start)
 
-        if trim_head:
-            print(f'The first {trim_head} frame(s) will not be added.')
-            frames = frames[trim_head:]
+        if self.options.trim_end:
+            print(f'The last {self.options.trim_end} frame(s) will not be added.')
+            frames = Enumerator.trim_end(frames, self.options.trim_end)
 
-        if trim_tail:
-            print(f'The last {trim_tail} frame(s) will not be added.')
-            frames = frames[:-trim_tail]
-
+        # TODO не выбрасывать исключение, если указана опция --sure
         if not frames:
             raise ValueError('Error: empty frame set.')
 
+        # TODO переделать с учётом кадров-заглушек, перенести код в Enumerator
         for frame_index, frame in enumerate(frames):
             frame.numvideo = 1 + frame_index
 
-        if initial_frame_count != len(frames):
-            print(f'Using {len(frames)} frames...\n')
+        if initial_frame_count != Enumerator.count(frames):
+            print(f'Using {Enumerator.count(frames)} frames...\n')
         else:
             print()
 
