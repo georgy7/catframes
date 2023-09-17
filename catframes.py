@@ -871,7 +871,7 @@ class ResolutionStatistics:
 
 
 class _ResolutionStatisticsTest(TestCase):
-    def test_simple(self):
+    def test_simple_1(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -890,6 +890,58 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(1280, resolution.width)
             self.assertEqual(800, resolution.height)
+
+    def test_simple_2(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (720, 1280)).save(file_1)
+            Image.new("RGB", (800, 800)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] * 3000 + [frame_2] * 2000
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(800, resolution.width)
+            self.assertEqual(1280, resolution.height)
+
+    def test_simple_3(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            def make_frame(i, w, h):
+                file = folder_path / '2.jpg'
+                Image.new("RGB", (w, h)).save(file)
+                return Frame(file)
+
+            frames.append(make_frame( 1, 1280,  720))
+            frames.append(make_frame( 2, 1280,  640))
+            frames.append(make_frame( 3,  800,  600))
+            frames.append(make_frame( 4, 1024,  768))
+            frames.append(make_frame( 5,  640,  480))
+
+            frames.append(make_frame( 6,  720, 1280))
+            frames.append(make_frame( 7, 1440, 1080))
+            frames.append(make_frame( 8, 1440, 1080))
+            frames.append(make_frame( 9, 1280,  960))
+            frames.append(make_frame(10, 1280,  960))
+
+            frames.append(make_frame(11, 1280,  960))
+            frames.append(make_frame(12,  800,  600))
+            frames.append(make_frame(13,  800,  600))
+            frames.append(make_frame(14,  800,  600))
+
+            resolution_table = ResolutionStatistics(frames)
+            resolution = resolution_table.choose()
+            self.assertEqual(1280, resolution.width)
+            self.assertEqual(960, resolution.height)
 
     def test_empty(self):
         resolution_table = ResolutionStatistics([])
@@ -948,6 +1000,226 @@ class _ResolutionStatisticsTest(TestCase):
         self.assertEqual(1280, resolution.width)
         self.assertEqual(720, resolution.height)
 
+    def test_hard_choice_1(self):
+        # Обнаружилось, что в некоторых случаях предложенный ранее
+        # алгоритм даёт глупые решения. Рассмотрим этот случай.
+        #
+        # 1056x592 => 12
+        # 800x592 => 6
+        # 1280x718 => 6
+        # 1280x640 => 6
+        # 856x480 => 6
+        #
+        # Решение, если мы ищем ширину и высоту отдельно,
+        # как самые частые значения, большие или равные
+        # среднему взвешенному: 1056x718.
+        #
+        # Однако, если мы уже выбрали ширину 1056, разрешения с большей
+        # шириной будут уменьшены, чтобы быть вписанными в него,
+        # так что высота 718 просто никак не будет задействована.
+        #
+        # Если мы пропорционально уменьшим широкие кадры, получится следующее.
+        #
+        # 1056x592 => 12
+        # 800x592 => 6
+        # 1056x592 => 6
+        # 1056x528 => 6
+        # 856x480 => 6
+        #
+        # Внезапно оказывается, что самое частое вертикальное разрешение здесь -
+        # 592, которое также очевидно выше среднего взвешенного.
+        #
+        # Мы также можем зайти с другой стороны.
+        # Если мы определились с высотой, можно найти средневзвешенную ширину,
+        # соответствующую этой высоте.
+        # И тогда, если выбранная ранее ширина ниже этого числа,
+        # поменять решение о ширине, найдя всё так же
+        # самую частую ширину выше или равную средней взвешенной ширине
+        # из соответствующих данной высоте.
+        # Тогда выбор очевиден: 1280x718.
+        #
+        # Разница не в приоритете ширины или высоты (вопрос второстепенный),
+        # а в том, приводит корректировка к увеличению
+        # или к уменьшению разрешения.
+        # Я склоняюсь ко второму варианту, хоть логика и будет чуть сложнее.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file = folder_path / '1.jpg'
+            frames = []
+            for i in range(36):
+                if i < 12:
+                    Image.new("RGB", (1056, 592)).save(file)
+                elif i < 12+6:
+                    Image.new("RGB", (800, 592)).save(file)
+                elif i < 12+6+6:
+                    Image.new("RGB", (1280, 718)).save(file)
+                elif i < 12+6+6+6:
+                    Image.new("RGB", (1280, 640)).save(file)
+                elif i < 12+6+6+6+6:
+                    Image.new("RGB", (856, 480)).save(file)
+
+                frames.append(Frame(file))
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(5, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(1280, resolution.width)
+            self.assertEqual(718, resolution.height)
+            
+    def test_hard_choice_2(self):
+        # Тот же пример, просто меняем ширину и высоту местами.
+        # В этом относительно простом примере поведение должно остаться неизменным.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file = folder_path / '1.jpg'
+            frames = []
+            for i in range(36):
+                if i < 12:
+                    Image.new("RGB", (592, 1056)).save(file)
+                elif i < 12+6:
+                    Image.new("RGB", (592, 800)).save(file)
+                elif i < 12+6+6:
+                    Image.new("RGB", (718, 1280)).save(file)
+                elif i < 12+6+6+6:
+                    Image.new("RGB", (640, 1280)).save(file)
+                elif i < 12+6+6+6+6:
+                    Image.new("RGB", (480, 856)).save(file)
+
+                frames.append(Frame(file))
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(5, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(718, resolution.width)
+            self.assertEqual(1280, resolution.height)
+
+    def test_hard_choice_3(self):
+        # То же самое, но есть несколько вариантов ширины у данной высоты.
+        # Должна быть выбрана самая частая больше или равная средней взвешенной.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file = folder_path / '1.jpg'
+            frames = []
+
+            counter = 1
+
+            def get_next_file():
+                nonlocal counter
+                return folder_path / (str(counter) + '.jpg');
+
+            def save_file(file):
+                nonlocal counter
+                frames.append(Frame(file))
+                counter += 1
+
+            for i in range(12):
+                file = get_next_file()
+                Image.new("RGB", (1056, 592)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (800, 592)).save(file)
+                save_file(file)
+
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (1100, 718)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (1150, 718)).save(file)
+                save_file(file)
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (1190, 718)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (1400, 718)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (1280, 640)).save(file)
+                save_file(file)
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (856, 480)).save(file)
+                save_file(file)
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(8, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(1190, resolution.width)
+            self.assertEqual(718, resolution.height)
+
+    def test_hard_choice_4(self):
+        # Ширина и высота меняются местами.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            counter = 1
+
+            def get_next_file():
+                nonlocal counter
+                return folder_path / (str(counter) + '.jpg');
+
+            def save_file(file):
+                nonlocal counter
+                frames.append(Frame(file))
+                counter += 1
+
+            for i in range(12):
+                file = get_next_file()
+                Image.new("RGB", (592, 1056)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (592, 800)).save(file)
+                save_file(file)
+
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (718, 1100)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (718, 1150)).save(file)
+                save_file(file)
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (718, 1190)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (718, 1400)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (640, 1280)).save(file)
+                save_file(file)
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (480, 856)).save(file)
+                save_file(file)
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(8, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(718, resolution.width)
+            self.assertEqual(1190, resolution.height)
 
 class FrameResponse(NamedTuple):
     """Ответ сервера на запрос кадра. Предполагается, что раз ответ есть, это HTTP OK."""
