@@ -853,10 +853,29 @@ class ResolutionStatistics:
             weighted_average = total_value / total_weight
 
             filtered = [xw for xw in xw_list if xw[0] >= weighted_average]
-            max_weight = max(xw[1] for xw in filtered)
 
-            most_frequent = (xw for xw in filtered if xw[1] == max_weight)
+            # Здесь могут дублироваться значения, т.к. может быть
+            # много разрешений с одинаковой шириной или с одинаковой высотой.
+            # Нужно просуммировать количества в таких повторах.
+            
+            xmap: Dict[int, int] = {}
+            for xw in filtered:
+                if xw[0] in xmap:
+                    xmap[xw[0]] += xw[1]
+                else:
+                    xmap[xw[0]] = xw[1]
+
+            distinct = xmap.items()
+            max_weight = max(xw[1] for xw in distinct)
+
+            most_frequent = list(xw for xw in distinct if xw[1] == max_weight)
             return round(max(xw[0] for xw in most_frequent))
+
+        def find_other_axis(x, keys: List[int], values: List[int], count: List[int]) -> int:
+            indices = [i for i, k in enumerate(keys) if k == x]
+            values2 = [v for i, v in enumerate(values) if i in indices]
+            count2 = [c for i, c in enumerate(count) if i in indices]
+            return ResolutionUtils.round(find(list(zip(values2, count2))))
 
         if len(self._table) < 1:
             return Resolution(1280, 720)
@@ -865,9 +884,29 @@ class ResolutionStatistics:
         width = [resolution.width for resolution in res_list]
         height = [resolution.height for resolution in res_list]
 
-        return Resolution(
+        result = Resolution(
                 ResolutionUtils.round(find(list(zip(width, count)))),
                 ResolutionUtils.round(find(list(zip(height, count)))))
+
+        alternatives = []
+
+        if result.height < find_other_axis(result.width, width, height, count):
+            alternatives.append(Resolution(
+                result.width,
+                find_other_axis(result.width, width, height, count)))
+
+        if result.width < find_other_axis(result.height, height, width, count):
+            alternatives.append(Resolution(
+                find_other_axis(result.height, height, width, count),
+                result.height))
+
+        if len(alternatives) == 1:
+            return alternatives[0]
+        elif len(alternatives) > 1:
+            alternatives.sort(key=lambda x: x.width*x.height, reverse=True)
+            return alternatives[0]
+
+        return result
 
 
 class _ResolutionStatisticsTest(TestCase):
@@ -888,8 +927,7 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(2, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(1280, resolution.width)
-            self.assertEqual(800, resolution.height)
+            self.assertEqual(str(Resolution(1280, 800)), str(resolution))
 
     def test_simple_2(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
@@ -908,8 +946,7 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(2, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(800, resolution.width)
-            self.assertEqual(1280, resolution.height)
+            self.assertEqual(str(Resolution(800, 1280)), str(resolution))
 
     def test_simple_3(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
@@ -917,7 +954,7 @@ class _ResolutionStatisticsTest(TestCase):
             frames = []
 
             def make_frame(i, w, h):
-                file = folder_path / '2.jpg'
+                file = folder_path / (str(i) + '.jpg')
                 Image.new("RGB", (w, h)).save(file)
                 return Frame(file)
 
@@ -940,8 +977,53 @@ class _ResolutionStatisticsTest(TestCase):
 
             resolution_table = ResolutionStatistics(frames)
             resolution = resolution_table.choose()
-            self.assertEqual(1280, resolution.width)
-            self.assertEqual(960, resolution.height)
+            self.assertEqual(str(Resolution(1280, 960)), str(resolution))
+
+    def test_simple_4(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            def make_frame(i, w, h):
+                file = folder_path / (str(i) + '.jpg')
+                Image.new("RGB", (w, h)).save(file)
+                return Frame(file)
+
+            frame = make_frame(1, 1280, 720)
+            for i in range(98):
+                frames.append(frame)
+
+            frame = make_frame(2, 1920, 1080)
+            for i in range(69):
+                frames.append(frame)
+
+            frame = make_frame(3, 1280, 960)
+            for i in range(57):
+                frames.append(frame)
+
+            frame = make_frame(4, 1280, 640)
+            for i in range(30):
+                frames.append(frame)
+
+            frame = make_frame(5, 1440, 1080)
+            for i in range(30):
+                frames.append(frame)
+
+            frame = make_frame(6, 800, 600)
+            for i in range(14):
+                frames.append(frame)
+
+            frame = make_frame(7, 4096, 2160)
+            for i in range(14):
+                frames.append(frame)
+
+            frame = make_frame(8, 852, 480)
+            for i in range(8):
+                frames.append(frame)
+
+            resolution_table = ResolutionStatistics(frames)
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1920, 1080)), str(resolution))
 
     def test_empty(self):
         resolution_table = ResolutionStatistics([])
@@ -950,8 +1032,7 @@ class _ResolutionStatisticsTest(TestCase):
 
         resolution = resolution_table.choose()
         # Default resolution: HD, 720p
-        self.assertEqual(1280, resolution.width)
-        self.assertEqual(720, resolution.height)
+        self.assertEqual(str(Resolution(1280, 720)), str(resolution))
 
     def test_mixed(self):
         """К простому набору кадров подмешиваются
@@ -979,8 +1060,7 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(2, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(1280, resolution.width)
-            self.assertEqual(800, resolution.height)
+            self.assertEqual(str(Resolution(1280, 800)), str(resolution))
 
     def test_banners_only(self):
         """Если на входе только кадры-заглушки, результат
@@ -997,8 +1077,7 @@ class _ResolutionStatisticsTest(TestCase):
 
         resolution = resolution_table.choose()
         # Default resolution: HD, 720p
-        self.assertEqual(1280, resolution.width)
-        self.assertEqual(720, resolution.height)
+        self.assertEqual(str(Resolution(1280, 720)), str(resolution))
 
     def test_hard_choice_1(self):
         # Обнаружилось, что в некоторых случаях предложенный ранее
@@ -1065,9 +1144,8 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(5, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(1280, resolution.width)
-            self.assertEqual(718, resolution.height)
-            
+            self.assertEqual(str(Resolution(1280, 718)), str(resolution))
+
     def test_hard_choice_2(self):
         # Тот же пример, просто меняем ширину и высоту местами.
         # В этом относительно простом примере поведение должно остаться неизменным.
@@ -1094,15 +1172,13 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(5, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(718, resolution.width)
-            self.assertEqual(1280, resolution.height)
+            self.assertEqual(str(Resolution(718, 1280)), str(resolution))
 
     def test_hard_choice_3(self):
         # То же самое, но есть несколько вариантов ширины у данной высоты.
         # Должна быть выбрана самая частая больше или равная средней взвешенной.
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
-            file = folder_path / '1.jpg'
             frames = []
 
             counter = 1
@@ -1157,8 +1233,7 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(8, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(1190, resolution.width)
-            self.assertEqual(718, resolution.height)
+            self.assertEqual(str(Resolution(1190, 718)), str(resolution))
 
     def test_hard_choice_4(self):
         # Ширина и высота меняются местами.
@@ -1218,8 +1293,8 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(8, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(718, resolution.width)
-            self.assertEqual(1190, resolution.height)
+            self.assertEqual(str(Resolution(718, 1190)), str(resolution))
+
 
 class FrameResponse(NamedTuple):
     """Ответ сервера на запрос кадра. Предполагается, что раз ответ есть, это HTTP OK."""
