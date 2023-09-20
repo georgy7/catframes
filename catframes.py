@@ -1791,6 +1791,15 @@ class DefaultFrameView(PillowFrameView):
     def _render(self, frame: Frame):
         overlay_model: Union[OverlayModel, None] = None
 
+        if frame.banner:
+            self._clear(self.ERROR_BG)
+            self._draw_multiline(
+                1, 1,
+                frame.message,
+                lambda _: self.ERROR_BG,
+                lambda _: self.ERROR_TEXT)
+            return
+
         try:
             with Image.open(frame.path) as source:
                 overlay_model = self._make_overlay_model(frame, source.size)
@@ -2704,20 +2713,34 @@ class ConsoleInterface:
             ни одного изображения.
         """
         print('Scanning for files...')
-        image_groups = [
-            FileUtils.list_images(Path(x))
-            for x in self.options.folders
-        ]
+        frame_groups = []
 
-        print('Sorting the files...')
-        for group in image_groups:
-            FileUtils.sort_natural(group)
+        banner_duration_seconds = 4
 
-        print('Checking these images...')
-        frame_groups = [
-            [Frame(image) for image in group]
-            for group in image_groups
-        ]
+        def get_banner_frames(message):
+            banner = Frame(None, True, message)
+            return [banner for i in range(banner_duration_seconds * self.options.frame_rate)]
+
+        for raw_folder_path in self.options.folders:
+            folder_path = Path(raw_folder_path)
+            real_images: Union[List[Path], None] = None
+            try:
+                real_images = FileUtils.list_images(folder_path)
+            except (ValueError, OSError) as e:
+                if self.options.sure:
+                    frame_groups.append(get_banner_frames(f'{type(e).__name__}: {str(e)}'))
+                else:
+                    raise
+
+            if real_images is None:
+                # Либо мы выбросили исключение ранее,
+                # либо кадры-заглушки уже добавлены.
+                pass
+            elif (len(real_images) < 1) and self.options.sure:
+                frame_groups.append(get_banner_frames(f'Could not find images in {folder_path}'))
+            else:
+                FileUtils.sort_natural(real_images)
+                frame_groups.append([Frame(image) for image in real_images])
 
         print('Numbering frames...')
         Enumerator.enumerate(frame_groups)
