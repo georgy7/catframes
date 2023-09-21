@@ -55,6 +55,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import textwrap
 from wsgiref.simple_server import make_server
 
 from abc import ABC, abstractmethod
@@ -1710,6 +1711,7 @@ class DefaultFrameView(PillowFrameView):
         self.vtime = datetime.now()
         self.machine = platform.machine()
         self.network_name = platform.node()
+        self.message_text_wrapper = textwrap.TextWrapper(width=70)
 
     def _make_overlay_model(self, frame: Frame, source_size: Tuple[int, int]) -> OverlayModel:
         file_checksum = FileUtils.get_checksum(frame.path)
@@ -1788,6 +1790,9 @@ class DefaultFrameView(PillowFrameView):
                 stroke_fill=stroke_color,
                 fill=fill_color_src(line_position))
 
+    def _wrap(self, text):
+        return '\n'.join(self.message_text_wrapper.wrap(text))
+
     def _render(self, frame: Frame):
         overlay_model: Union[OverlayModel, None] = None
 
@@ -1795,7 +1800,7 @@ class DefaultFrameView(PillowFrameView):
             self._clear(self.ERROR_BG)
             self._draw_multiline(
                 1, 1,
-                frame.message,
+                self._wrap(frame.message),
                 lambda _: self.ERROR_BG,
                 lambda _: self.ERROR_TEXT)
             return
@@ -1809,7 +1814,7 @@ class DefaultFrameView(PillowFrameView):
             self._clear(self.ERROR_BG)
             self._draw_multiline(
                 1, 1,
-                f'{frame.folder}/{frame.name}\n{image_open_error.__class__.__name__}',
+                self._wrap(f'{frame.folder}/{frame.name}\n{image_open_error.__class__.__name__}'),
                 lambda _: self.ERROR_BG,
                 lambda _: self.ERROR_TEXT)
 
