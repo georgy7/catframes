@@ -55,6 +55,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import textwrap
 from wsgiref.simple_server import make_server
 
 from abc import ABC, abstractmethod
@@ -115,6 +116,7 @@ class JobServerOptions:
 class JobServer:
     """Механизм межпроцессного взаимодействия на основе HTTP. Открывает порт и обслуживает другие
     программы, которые контролируются из этого же сервера.
+    Этот объект похож на два куска хлеба в сэндвиче, которые обнимают процесс-начинку.
 
     Грубо говоря, эта штука позволяет делать что-то вроде динамической файловой системы, если
     считать URL файлами: в тот момент, когда что-то запрашивается сторонней программой, оно
@@ -228,8 +230,10 @@ class FileUtils:
     """Модуль вспомогательных функций, связанных с файловой системой."""
 
     @staticmethod
-    def get_checksum(path: Path) -> Optional[str]:
+    def get_checksum(path: Union[Path, None]) -> Optional[str]:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return None
         hashsum = hashlib.sha1()
         try:
             with path.expanduser().open(mode = 'rb') as binary:
@@ -242,16 +246,20 @@ class FileUtils:
             return None
 
     @staticmethod
-    def get_mtime(path: Path) -> Optional[datetime]:
+    def get_mtime(path: Union[Path, None]) -> Optional[datetime]:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return None
         try:
             return datetime.fromtimestamp(os.path.getmtime(path.expanduser()))
         except OSError:
             return None
 
     @staticmethod
-    def get_file_size(path: Path) -> Optional[int]:
+    def get_file_size(path: Union[Path, None]) -> Optional[int]:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return None
         try:
             normal_path = path.expanduser()
             if normal_path.is_file():
@@ -261,8 +269,10 @@ class FileUtils:
             return None
 
     @staticmethod
-    def is_symlink(path: Path) -> bool:
+    def is_symlink(path: Union[Path, None]) -> bool:
         """Функция не выбрасывает исключения."""
+        if not path:
+            return False
         return path.expanduser().is_symlink()
 
     @staticmethod
@@ -271,22 +281,37 @@ class FileUtils:
         и, скорее всего, зависит от операционной системы). Файлы определяются по расширениям
         (суффиксам имён). Вложенные папки игнорируются.
 
-        :raises ValueError: путь не является директорией.
-        :raises OSError: не удалось получить список файлов.
+        :raises ValueError: путь – не директория, доступная на просмотр (подробности в сообщении).
+        :raises OSError: что-то, что не было предусмотрено.
         """
         folder = path.expanduser()
 
-        if not folder.is_dir():
-            raise ValueError(f'The path is not a folder: {folder}')
-
         frame_extensions = "jpg", "jpeg", "png", "JPG", "JPEG", "PNG"
 
-        return [
-            file_path
-            for file_path in folder.iterdir()
-            if file_path.is_file()
-            and file_path.suffix[1:] in frame_extensions
-        ]
+        try:
+            # Поскольку здесь мы не читаем файлы,
+            # все ошибки будут свидетельствовать о проблеме с папкой.
+            # Если мы получим PermissionError, вызвав метод is_file(),
+            # это будет значить, что скорее всего папка не даёт нам разрешения
+            # узнать, чем являются её элементы.
+            # Проверено в Alpine: если установить у папки права 600, получится
+            # получить список, но не удасться узнать что-либо о его элементах.
+            # Если же файл будет удалён прямо перед вызовом is_file(),
+            # этот метод согласно документации просто вернёт False.
+            return [
+                file_path
+                for file_path in folder.iterdir()
+                if file_path.is_file()
+                and file_path.suffix[1:] in frame_extensions
+            ]
+        except FileNotFoundError:
+            raise ValueError(f'The path is not a folder: {folder}')
+        except NotADirectoryError:
+            raise ValueError(f'The path is not a folder: {folder}')
+        except PermissionError:
+            raise ValueError(f'Forbidden: {folder}')
+
+        return result
 
     @staticmethod
     def sort_natural(files: List[Path]):
@@ -409,6 +434,79 @@ class _FileUtilsTest(TestCase):
             file_path.write_text('12345', encoding='utf-8')
             self.assertEqual(FileUtils.is_symlink(file_path), False)
 
+    def test_list_images_1(self):
+        """В папке есть только файлы JPEG и PNG.
+        """
+        filenames = [
+            '123.jpg',
+            '456.JPEG',
+            '__________.PNG',
+            '_______________.png',
+            'a b c.jpeg',
+            'd e f.JPEG',
+        ]
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            for fn in filenames:
+                file_path = Path(folder_path_string) / fn
+                file_path.touch()
+
+            result = FileUtils.list_images(Path(folder_path_string))
+            self.assertEqual(len(result), len(filenames))
+
+            result_filenames = [os.path.basename(x) for x in result]
+            for x in result_filenames:
+                self.assertIn(x, filenames)
+
+    def test_list_images_2(self):
+        """В папке есть картинки и другие файлы (exe, звуковые и т.п.).
+        """
+        filenames = [
+            '123.jpg',
+            '456.JPEG',
+            '__________.PNG',
+            '_______________.png',
+            'a b c.jpeg',
+            'd e f.JPEG',
+            'g h i.exe',
+            'a_song.wav',
+            'plain.txt',
+        ]
+        expected = [
+            '123.jpg',
+            '456.JPEG',
+            '__________.PNG',
+            '_______________.png',
+            'a b c.jpeg',
+            'd e f.JPEG',
+        ]
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            for fn in filenames:
+                file_path = Path(folder_path_string) / fn
+                file_path.touch()
+
+            result = FileUtils.list_images(Path(folder_path_string))
+            self.assertEqual(len(result), len(expected))
+
+            result_filenames = [os.path.basename(x) for x in result]
+            for x in result_filenames:
+                self.assertIn(x, expected)
+
+    def test_list_images_of_non_existent_folder(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            fake_path = Path(folder_path_string) / 'fake'
+            with self.assertRaisesRegex(ValueError, '\S+'):
+                FileUtils.list_images(fake_path)
+
+    def test_list_images_of_non_existent_parent(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            fake_path = Path(folder_path_string) / 'fake_parent' / 'a_folder'
+            with self.assertRaisesRegex(ValueError, '\S+'):
+                FileUtils.list_images(fake_path)
+
+    def test_list_images_of_forbidden_folder(self):
+        # только на юникс-подобных системах
+        pass # TODO
+
     def test_natural_sort_of_empty_list(self):
         """Не должно падать при сортировке пустых списков файлов."""
         items = []
@@ -524,16 +622,32 @@ class Resolution:
 class Frame:
     """Кадр на диске. Сырьё для :class:`FrameView`. Конструктор создаёт объект, даже если путь
     ведёт в никуда. Не иммутабельная сущность, некоторые поля могут обновляться.
+
+    :param path: Путь к файлу.
+
+    :param banner: Кадр не является отображением никакого файла на диске, т.е. он существует
+    только чтобы что-то сообщить. Соответственно, такой кадр не должен влиять ни на выбор
+    разрешения, ни на подсчет кадров. Рендерится он примерно как кадры, которые были удалены
+    после запуска скрипта.
+
+    :param message: Если это кадр-заглушка (баннер), этот текст будет выведен
+    где-нибудь в центре кадра.
     """
-    __slots__ = '_checksum', '_path', '_resolution', 'numdir', 'numdirs', 'numvideo'
+    __slots__ = '_checksum', '_path', '_resolution', '_message', 'numdir', 'numdirs', 'numvideo'
 
-    def __init__(self, path: Path):
-        self._checksum = FileUtils.get_checksum(path)
+    def __init__(self, path: Union[Path, None], banner: bool = False, message: str = ''):
         self._path = path
-
         self._resolution = None
+        self._checksum = FileUtils.get_checksum(path)
+        self._message = message
 
+        assert (path is None) == banner
+        assert (self._path is None) == banner
+
+        # Чек-сумма может быть незаполнена не только из-за того, что путь незаполнен.
+        # Сюда же относятся все ошибки доступа к содержимому.
         if self._checksum:
+            assert path is not None
             try:
                 with Image.open(path.expanduser()) as image:
                     width, height = image.size
@@ -553,19 +667,33 @@ class Frame:
         """
 
     @property
-    def path(self) -> Path:
+    def banner(self) -> bool:
+        return (self._path is None)
+
+    @property
+    def message(self) -> str:
+        return self._message
+
+    @property
+    def path(self) -> Union[Path, None]:
         """Путь к файлу в директории, указанной пользователем. Может быть симлинком."""
         return self._path
 
     @property
     def name(self) -> str:
-        """Имя файла или симлинка."""
-        return self.path.name
+        """Имя файла или симлинка (для нанесения на кадр)."""
+        if self.path:
+            return self.path.name
+        else:
+            return ''
 
     @property
     def folder(self) -> str:
-        """Имя папки с файлом (для демонстрации пользователю)."""
-        return self.path.parent.parts[-1]
+        """Имя папки с файлом (для нанесения на кадр)."""
+        if self.path:
+            return self.path.parent.parts[-1]
+        else:
+            return ''
 
     @property
     def checksum(self) -> Union[str, None]:
@@ -743,18 +871,447 @@ class ResolutionStatistics:
             weighted_average = total_value / total_weight
 
             filtered = [xw for xw in xw_list if xw[0] >= weighted_average]
-            max_weight = max(xw[1] for xw in filtered)
 
-            most_frequent = (xw for xw in filtered if xw[1] == max_weight)
+            # Здесь могут дублироваться значения, т.к. может быть
+            # много разрешений с одинаковой шириной или с одинаковой высотой.
+            # Нужно просуммировать количества в таких повторах.
+            
+            xmap: Dict[int, int] = {}
+            for xw in filtered:
+                if xw[0] in xmap:
+                    xmap[xw[0]] += xw[1]
+                else:
+                    xmap[xw[0]] = xw[1]
+
+            distinct = xmap.items()
+            max_weight = max(xw[1] for xw in distinct)
+
+            most_frequent = list(xw for xw in distinct if xw[1] == max_weight)
             return round(max(xw[0] for xw in most_frequent))
+
+        def find_other_axis(x, keys: List[int], values: List[int], count: List[int]) -> int:
+            indices = [i for i, k in enumerate(keys) if k == x]
+            values2 = [v for i, v in enumerate(values) if i in indices]
+            count2 = [c for i, c in enumerate(count) if i in indices]
+            return ResolutionUtils.round(find(list(zip(values2, count2))))
+
+        if len(self._table) < 1:
+            return Resolution(1280, 720)
 
         res_list, count = zip(*self._table.items())
         width = [resolution.width for resolution in res_list]
         height = [resolution.height for resolution in res_list]
 
-        return Resolution(
+        result = Resolution(
                 ResolutionUtils.round(find(list(zip(width, count)))),
                 ResolutionUtils.round(find(list(zip(height, count)))))
+
+        alternatives = []
+
+        if result.height < find_other_axis(result.width, width, height, count):
+            alternatives.append(Resolution(
+                result.width,
+                find_other_axis(result.width, width, height, count)))
+
+        if result.width < find_other_axis(result.height, height, width, count):
+            alternatives.append(Resolution(
+                find_other_axis(result.height, height, width, count),
+                result.height))
+
+        if len(alternatives) == 1:
+            return alternatives[0]
+        elif len(alternatives) > 1:
+            alternatives.sort(key=lambda x: x.width*x.height, reverse=True)
+            return alternatives[0]
+
+        return result
+
+
+class _ResolutionStatisticsTest(TestCase):
+    def test_simple_1(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1280, 720)).save(file_1)
+            Image.new("RGB", (800, 800)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] * 3000 + [frame_2] * 2000
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1280, 800)), str(resolution))
+
+    def test_simple_2(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (720, 1280)).save(file_1)
+            Image.new("RGB", (800, 800)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] * 3000 + [frame_2] * 2000
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(800, 1280)), str(resolution))
+
+    def test_simple_3(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            def make_frame(i, w, h):
+                file = folder_path / (str(i) + '.jpg')
+                Image.new("RGB", (w, h)).save(file)
+                return Frame(file)
+
+            frames.append(make_frame( 1, 1280,  720))
+            frames.append(make_frame( 2, 1280,  640))
+            frames.append(make_frame( 3,  800,  600))
+            frames.append(make_frame( 4, 1024,  768))
+            frames.append(make_frame( 5,  640,  480))
+
+            frames.append(make_frame( 6,  720, 1280))
+            frames.append(make_frame( 7, 1440, 1080))
+            frames.append(make_frame( 8, 1440, 1080))
+            frames.append(make_frame( 9, 1280,  960))
+            frames.append(make_frame(10, 1280,  960))
+
+            frames.append(make_frame(11, 1280,  960))
+            frames.append(make_frame(12,  800,  600))
+            frames.append(make_frame(13,  800,  600))
+            frames.append(make_frame(14,  800,  600))
+
+            resolution_table = ResolutionStatistics(frames)
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1280, 960)), str(resolution))
+
+    def test_simple_4(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            def make_frame(i, w, h):
+                file = folder_path / (str(i) + '.jpg')
+                Image.new("RGB", (w, h)).save(file)
+                return Frame(file)
+
+            frame = make_frame(1, 1280, 720)
+            for i in range(98):
+                frames.append(frame)
+
+            frame = make_frame(2, 1920, 1080)
+            for i in range(69):
+                frames.append(frame)
+
+            frame = make_frame(3, 1280, 960)
+            for i in range(57):
+                frames.append(frame)
+
+            frame = make_frame(4, 1280, 640)
+            for i in range(30):
+                frames.append(frame)
+
+            frame = make_frame(5, 1440, 1080)
+            for i in range(30):
+                frames.append(frame)
+
+            frame = make_frame(6, 800, 600)
+            for i in range(14):
+                frames.append(frame)
+
+            frame = make_frame(7, 4096, 2160)
+            for i in range(14):
+                frames.append(frame)
+
+            frame = make_frame(8, 852, 480)
+            for i in range(8):
+                frames.append(frame)
+
+            resolution_table = ResolutionStatistics(frames)
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1920, 1080)), str(resolution))
+
+    def test_empty(self):
+        resolution_table = ResolutionStatistics([])
+        lines = [x for x in resolution_table.sort_by_count_desc()]
+        self.assertEqual(0, len(lines))
+
+        resolution = resolution_table.choose()
+        # Default resolution: HD, 720p
+        self.assertEqual(str(Resolution(1280, 720)), str(resolution))
+
+    def test_mixed(self):
+        """К простому набору кадров подмешиваются
+        кадры-заглушки, которые должны быть проигнорированы.
+        """
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1280, 720)).save(file_1)
+            Image.new("RGB", (800, 800)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+            banner_1 = Frame(None, True, 'Message 1')
+            banner_2 = Frame(None, True, 'Message 2')
+
+            frames = [banner_1] * 20 + \
+                [frame_1] * 3000 + \
+                [banner_2] * 60 + \
+                [frame_2] * 2000
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1280, 800)), str(resolution))
+
+    def test_banners_only(self):
+        """Если на входе только кадры-заглушки, результат
+        аналогичен пустому набору кадров (HD).
+        """
+        banner_1 = Frame(None, True, 'Message 1')
+        banner_2 = Frame(None, True, 'Message 2')
+
+        frames = [banner_1] * 3000 + [banner_2] * 2000
+
+        resolution_table = ResolutionStatistics(frames)
+        lines = [x for x in resolution_table.sort_by_count_desc()]
+        self.assertEqual(0, len(lines))
+
+        resolution = resolution_table.choose()
+        # Default resolution: HD, 720p
+        self.assertEqual(str(Resolution(1280, 720)), str(resolution))
+
+    def test_hard_choice_1(self):
+        # Обнаружилось, что в некоторых случаях предложенный ранее
+        # алгоритм даёт глупые решения. Рассмотрим этот случай.
+        #
+        # 1056x592 => 12
+        # 800x592 => 6
+        # 1280x718 => 6
+        # 1280x640 => 6
+        # 856x480 => 6
+        #
+        # Решение, если мы ищем ширину и высоту отдельно,
+        # как самые частые значения, большие или равные
+        # среднему взвешенному: 1056x718.
+        #
+        # Однако, если мы уже выбрали ширину 1056, разрешения с большей
+        # шириной будут уменьшены, чтобы быть вписанными в него,
+        # так что высота 718 просто никак не будет задействована.
+        #
+        # Если мы пропорционально уменьшим широкие кадры, получится следующее.
+        #
+        # 1056x592 => 12
+        # 800x592 => 6
+        # 1056x592 => 6
+        # 1056x528 => 6
+        # 856x480 => 6
+        #
+        # Внезапно оказывается, что самое частое вертикальное разрешение здесь -
+        # 592, которое также очевидно выше среднего взвешенного.
+        #
+        # Мы также можем зайти с другой стороны.
+        # Если мы определились с высотой, можно найти средневзвешенную ширину,
+        # соответствующую этой высоте.
+        # И тогда, если выбранная ранее ширина ниже этого числа,
+        # поменять решение о ширине, найдя всё так же
+        # самую частую ширину выше или равную средней взвешенной ширине
+        # из соответствующих данной высоте.
+        # Тогда выбор очевиден: 1280x718.
+        #
+        # Разница не в приоритете ширины или высоты (вопрос второстепенный),
+        # а в том, приводит корректировка к увеличению
+        # или к уменьшению разрешения.
+        # Я склоняюсь ко второму варианту, хоть логика и будет чуть сложнее.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file = folder_path / '1.jpg'
+            frames = []
+            for i in range(36):
+                if i < 12:
+                    Image.new("RGB", (1056, 592)).save(file)
+                elif i < 12+6:
+                    Image.new("RGB", (800, 592)).save(file)
+                elif i < 12+6+6:
+                    Image.new("RGB", (1280, 718)).save(file)
+                elif i < 12+6+6+6:
+                    Image.new("RGB", (1280, 640)).save(file)
+                elif i < 12+6+6+6+6:
+                    Image.new("RGB", (856, 480)).save(file)
+
+                frames.append(Frame(file))
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(5, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1280, 718)), str(resolution))
+
+    def test_hard_choice_2(self):
+        # Тот же пример, просто меняем ширину и высоту местами.
+        # В этом относительно простом примере поведение должно остаться неизменным.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file = folder_path / '1.jpg'
+            frames = []
+            for i in range(36):
+                if i < 12:
+                    Image.new("RGB", (592, 1056)).save(file)
+                elif i < 12+6:
+                    Image.new("RGB", (592, 800)).save(file)
+                elif i < 12+6+6:
+                    Image.new("RGB", (718, 1280)).save(file)
+                elif i < 12+6+6+6:
+                    Image.new("RGB", (640, 1280)).save(file)
+                elif i < 12+6+6+6+6:
+                    Image.new("RGB", (480, 856)).save(file)
+
+                frames.append(Frame(file))
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(5, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(718, 1280)), str(resolution))
+
+    def test_hard_choice_3(self):
+        # То же самое, но есть несколько вариантов ширины у данной высоты.
+        # Должна быть выбрана самая частая больше или равная средней взвешенной.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            counter = 1
+
+            def get_next_file():
+                nonlocal counter
+                return folder_path / (str(counter) + '.jpg');
+
+            def save_file(file):
+                nonlocal counter
+                frames.append(Frame(file))
+                counter += 1
+
+            for i in range(12):
+                file = get_next_file()
+                Image.new("RGB", (1056, 592)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (800, 592)).save(file)
+                save_file(file)
+
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (1100, 718)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (1150, 718)).save(file)
+                save_file(file)
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (1190, 718)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (1400, 718)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (1280, 640)).save(file)
+                save_file(file)
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (856, 480)).save(file)
+                save_file(file)
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(8, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1190, 718)), str(resolution))
+
+    def test_hard_choice_4(self):
+        # Ширина и высота меняются местами.
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            frames = []
+
+            counter = 1
+
+            def get_next_file():
+                nonlocal counter
+                return folder_path / (str(counter) + '.jpg');
+
+            def save_file(file):
+                nonlocal counter
+                frames.append(Frame(file))
+                counter += 1
+
+            for i in range(12):
+                file = get_next_file()
+                Image.new("RGB", (592, 1056)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (592, 800)).save(file)
+                save_file(file)
+
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (718, 1100)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (718, 1150)).save(file)
+                save_file(file)
+            for i in range(2):
+                file = get_next_file()
+                Image.new("RGB", (718, 1190)).save(file)
+                save_file(file)
+            for i in range(1):
+                file = get_next_file()
+                Image.new("RGB", (718, 1400)).save(file)
+                save_file(file)
+
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (640, 1280)).save(file)
+                save_file(file)
+            for i in range(6):
+                file = get_next_file()
+                Image.new("RGB", (480, 856)).save(file)
+                save_file(file)
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(8, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(718, 1190)), str(resolution))
 
 
 class FrameResponse(NamedTuple):
@@ -1171,6 +1728,7 @@ class DefaultFrameView(PillowFrameView):
         self.vtime = datetime.now()
         self.machine = platform.machine()
         self.network_name = platform.node()
+        self.message_text_wrapper = textwrap.TextWrapper(width=70)
 
     def _make_overlay_model(self, frame: Frame, source_size: Tuple[int, int]) -> OverlayModel:
         file_checksum = FileUtils.get_checksum(frame.path)
@@ -1249,8 +1807,20 @@ class DefaultFrameView(PillowFrameView):
                 stroke_fill=stroke_color,
                 fill=fill_color_src(line_position))
 
+    def _wrap(self, text):
+        return '\n'.join(self.message_text_wrapper.wrap(text))
+
     def _render(self, frame: Frame):
         overlay_model: Union[OverlayModel, None] = None
+
+        if frame.banner:
+            self._clear(self.ERROR_BG)
+            self._draw_multiline(
+                1, 1,
+                self._wrap(frame.message),
+                lambda _: self.ERROR_BG,
+                lambda _: self.ERROR_TEXT)
+            return
 
         try:
             with Image.open(frame.path) as source:
@@ -1261,7 +1831,7 @@ class DefaultFrameView(PillowFrameView):
             self._clear(self.ERROR_BG)
             self._draw_multiline(
                 1, 1,
-                f'{frame.folder}/{frame.name}\n{image_open_error.__class__.__name__}',
+                self._wrap(f'{frame.folder}/{frame.name}\n{image_open_error.__class__.__name__}'),
                 lambda _: self.ERROR_BG,
                 lambda _: self.ERROR_TEXT)
 
@@ -1793,6 +2363,185 @@ class _OverLangTest(TestCase):
                 OverLang.compile(template)
 
 
+class Enumerator:
+    """Модуль, включающий в себя логику нумерации кадров."""
+
+    @classmethod
+    def enumerate(cls, frame_groups: List[List[Frame]]):
+        """Пронумеровывает кадры на месте."""
+        for folder_index, folder in enumerate(frame_groups):
+            previous_folders = frame_groups[:folder_index]
+            previous_frames = sum((cls.count(x) for x in previous_folders))
+
+            number = 1
+            for frame in folder:
+                if not frame.banner:
+                    frame.numdir = number
+                    frame.numdirs = previous_frames + number
+                    number += 1
+
+    @staticmethod
+    def count(frames: List[Frame]):
+        """Считает кадры, игнорируя кадры-заглушки."""
+        return sum((1 for x in frames if not x.banner))
+
+    @staticmethod
+    def trim_start(frames: List[Frame], n: int) -> List[Frame]:
+        """Возвращает копию списка без указанного числа кадров в начале.
+        Кадры-заглушки игнорируются, будто бы их нет.
+        В возвращаемом списке они остаются в тех же местах, где были в исходном.
+        """
+        result: List[Frame] = []
+        skipped = 0
+        for frame in frames:
+            if (skipped >= n) or (frame.banner):
+                result.append(frame)
+            else:
+                skipped += 1
+        return result
+
+    @staticmethod
+    def trim_end(frames: List[Frame], n: int) -> List[Frame]:
+        """Возвращает копию списка без указанного числа кадров в конце.
+        Кадры-заглушки игнорируются, будто бы их нет.
+        В возвращаемом списке они остаются в тех же местах, где были в исходном.
+        """
+        result: List[Frame] = []
+        skipped = 0
+        for frame in reversed(frames):
+            if (skipped >= n) or (frame.banner):
+                result.append(frame)
+            else:
+                skipped += 1
+        result.reverse()
+        return result
+
+
+class _EnumeratorTest(TestCase):
+    def test_simple(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            Image.new("RGB", (640, 480)).save(file_1)
+
+            frame_groups = []
+            for _ in range(3):
+                frames = []
+                frame_groups.append(frames)
+                for _ in range(100):
+                    frames.append(Frame(file_1))
+
+            Enumerator.enumerate(frame_groups)
+
+            for group_index in range(3):
+                previous = sum(len(x) for x in frame_groups[:group_index])
+                for frame_index in range(100):
+                    frame = frame_groups[group_index][frame_index]
+                    self.assertEqual(1+frame_index, frame.numdir)
+                    self.assertEqual(previous+(1+frame_index), frame.numdirs)
+
+            all_frames = functools.reduce(lambda x, y: x+y, frame_groups)
+            self.assertEqual(300, Enumerator.count(all_frames))
+
+            self.assertEqual(1, all_frames[0].numdirs)
+            self.assertEqual(300, all_frames[-1].numdirs)
+
+            all_frames = Enumerator.trim_start(all_frames, 5)
+
+            self.assertEqual(6, all_frames[0].numdirs)
+            self.assertEqual(300, all_frames[-1].numdirs)
+            self.assertEqual(295, Enumerator.count(all_frames))
+
+            all_frames = Enumerator.trim_end(all_frames, 10)
+
+            self.assertEqual(6, all_frames[0].numdirs)
+            self.assertEqual(290, all_frames[-1].numdirs)
+            self.assertEqual(285, Enumerator.count(all_frames))
+
+    def test_mixed(self):
+        banner_1 = Frame(None, True, 'Message 1')
+        banner_2 = Frame(None, True, 'Message 2')
+        banner_3 = Frame(None, True, 'Message 3')
+
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            Image.new("RGB", (640, 480)).save(file_1)
+
+            frame_groups = []
+            for _ in range(3):
+                frames = []
+                frame_groups.append(frames)
+                for _ in range(100):
+                    frames.append(Frame(file_1))
+
+            # Добавляю 40 кадров-заглушек.
+
+            frame_groups[0].insert(0, banner_1)
+
+            for i in range(10):
+                frame_groups[0].insert(3, banner_1)
+
+            for i in range(20):
+                frame_groups[1].insert(44, banner_1)
+
+            for i in range(5):
+                frame_groups[2].insert(70, banner_3)
+
+            for i in range(4):
+                frame_groups[2].append(banner_3)
+
+            Enumerator.enumerate(frame_groups)
+
+            previous = 0
+            for group_index in range(3):
+                previous_in_the_directory = 0
+                for frame in frame_groups[group_index]:
+                    if not frame.banner:
+
+                        self.assertEqual(previous_in_the_directory + 1, frame.numdir)
+                        self.assertEqual(previous + 1, frame.numdirs)
+
+                        previous_in_the_directory += 1
+                        previous += 1
+
+            all_frames = functools.reduce(lambda x, y: x+y, frame_groups)
+            self.assertEqual(340, len(all_frames))
+            self.assertEqual(300, Enumerator.count(all_frames))
+
+            first_real_frame = next((x for x in all_frames if not x.banner), None)
+            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
+            self.assertIsNotNone(first_real_frame)
+            self.assertIsNotNone(last_real_frame)
+
+            self.assertEqual(1, first_real_frame.numdirs)
+            self.assertEqual(300, last_real_frame.numdirs)
+
+            all_frames = Enumerator.trim_start(all_frames, 5)
+
+            first_real_frame = next((x for x in all_frames if not x.banner), None)
+            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
+            self.assertIsNotNone(first_real_frame)
+            self.assertIsNotNone(last_real_frame)
+
+            self.assertEqual(6, first_real_frame.numdirs)
+            self.assertEqual(300, last_real_frame.numdirs)
+            self.assertEqual(295, Enumerator.count(all_frames))
+            self.assertEqual(335, len(all_frames))
+
+            all_frames = Enumerator.trim_end(all_frames, 10)
+
+            first_real_frame = next((x for x in all_frames if not x.banner), None)
+            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
+            self.assertIsNotNone(first_real_frame)
+            self.assertIsNotNone(last_real_frame)
+
+            self.assertEqual(6, first_real_frame.numdirs)
+            self.assertEqual(290, last_real_frame.numdirs)
+            self.assertEqual(285, Enumerator.count(all_frames))
+            self.assertEqual(325, len(all_frames))
+
+
 class ConsoleInterface:
     """Интерфейс пользователя.
 
@@ -1841,12 +2590,23 @@ class ConsoleInterface:
     @classmethod
     def _add_input_arguments(cls, parser: ArgumentParser):
         input_arguments = parser.add_argument_group('Input')
+
+        # Думаю, имеет смысл убрать эти два аргумента, т.к. они
+        # не соответствуют цели существования этого скрипта.
+        # Это же не софт для видеомонтажа.
+        # Но я пока не уверен.
         input_arguments.add_argument('--trim-start', metavar='FRAMES',
             type=cls._get_minmax_type(1),
             help='cut off some frames at the beginning')
         input_arguments.add_argument('--trim-end', metavar='FRAMES',
             type=cls._get_minmax_type(1),
             help='cut off some frames at the end')
+
+        input_arguments.add_argument('-s', '--sure', action='store_true',
+            help="do not exit if some or all of input directories " + 
+            "do not exist. You are sure that you are specifying " +
+            "the correct folders. If they don't exist, it just has to be " +
+            "shown in the resulting video.")
 
     def _make_layout(self):
         h_positions = ('left', 0), ('right', 2)
@@ -1998,52 +2758,69 @@ class ConsoleInterface:
             ни одного изображения.
         """
         print('Scanning for files...')
-        image_groups = [
-            FileUtils.list_images(Path(x))
-            for x in self.options.folders
-        ]
+        frame_groups = []
 
-        print('Sorting the files...')
-        for group in image_groups:
-            FileUtils.sort_natural(group)
+        banner_duration_seconds = 4
 
-        print('Checking these images...')
-        frame_groups = [
-            [Frame(image) for image in group]
-            for group in image_groups
-        ]
+        def get_banner_frames(message):
+            banner = Frame(None, True, message)
+            return [banner for i in range(banner_duration_seconds * self.options.frame_rate)]
+
+        for raw_folder_path in self.options.folders:
+            folder_path = Path(raw_folder_path)
+            real_images: Union[List[Path], None] = None
+            try:
+                real_images = FileUtils.list_images(folder_path)
+            except (ValueError, OSError) as e:
+                if self.options.sure:
+                    frame_groups.append(get_banner_frames(f'{type(e).__name__}: {str(e)}'))
+                else:
+                    raise
+
+            if real_images is None:
+                # Либо мы выбросили исключение ранее,
+                # либо кадры-заглушки уже добавлены.
+                pass
+            elif (len(real_images) < 1) and self.options.sure:
+                frame_groups.append(get_banner_frames(f'Could not find images in {folder_path}'))
+            else:
+                FileUtils.sort_natural(real_images)
+                frame_groups.append([Frame(image) for image in real_images])
 
         print('Numbering frames...')
-        for folder_index, folder in enumerate(frame_groups):
-            previous_folders = frame_groups[:folder_index]
-            previous_frames = sum((len(x) for x in previous_folders))
-            for frame_index, frame in enumerate(folder):
-                number = 1 + frame_index
-                frame.numdir = number
-                frame.numdirs = previous_frames + number
+        Enumerator.enumerate(frame_groups)
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
+        initial_frame_count = Enumerator.count(frames)
 
-        print(f'\nThere are {len(frames)} frames in the folders.')
+        print(f'\nThere are {initial_frame_count} frames...')
 
-        trim_head = self.options.trim_start
-        trim_tail = self.options.trim_end
+        if self.options.trim_start:
+            print(f'The first {self.options.trim_start} frame(s) will not be added.')
+            frames = Enumerator.trim_start(frames, self.options.trim_start)
 
-        if trim_head:
-            print(f'The first {trim_head} frame(s) will not be added.')
-            frames = frames[trim_head:]
+        if self.options.trim_end:
+            print(f'The last {self.options.trim_end} frame(s) will not be added.')
+            frames = Enumerator.trim_end(frames, self.options.trim_end)
 
-        if trim_tail:
-            print(f'The last {trim_tail} frame(s) will not be added.')
-            frames = frames[:-trim_tail]
-
+        # Имеется ввиду, что совсем никаких кадров нет, даже кадров-заглушек.
+        # Если не только несуществующие, но и пустые папки будут приводить
+        # к добавлению кадров-заглушек, это невозможная ситуация.
+        # Добавление заглушек для пустых папок имеет смысл, если указана
+        # опция --sure, ведь если мы уверены, что указали папки верно,
+        # в них должны быть кадры.
         if not frames:
             raise ValueError('Error: empty frame set.')
 
+        # TODO переделать с учётом кадров-заглушек, перенести код в Enumerator
         for frame_index, frame in enumerate(frames):
             frame.numvideo = 1 + frame_index
 
-        print(f'Using {len(frames)} frames...\n')
+        if initial_frame_count != Enumerator.count(frames):
+            print(f'Using {Enumerator.count(frames)} frames...\n')
+        else:
+            print()
+
         return frames
 
     def get_output_options(self) -> OutputOptions:
