@@ -70,7 +70,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2023.09-SNAPSHOT'
+__version__ = '2023.9.0-rc1'
 __license__ = 'Zlib'
 
 
@@ -82,11 +82,9 @@ DESCRIPTION = f"""{TITLE}
 
   Documentation: http://itustinov.ru/cona/latest/docs/html/catframes.html
 
-  Git: https://gitflic.ru/project/georgy7/cona
-
-  Git bundle: http://itustinov.ru/cona/latest/cona.pack
-
-  GitHub: https://github.com/georgy7/catframes
+  Pip package: https://github.com/georgy7/catframes
+  My collection of scripts: https://gitflic.ru/project/georgy7/cona
+  Self-hosted Git bundle: http://itustinov.ru/cona/latest/cona.pack
 
 """
 
@@ -2563,11 +2561,11 @@ class ConsoleInterface:
             help='show the resolution choosing process and exit')
 
         parser.add_argument('folders', metavar='FOLDER', nargs='+',
-            help='folders with frames in the order of appearance in the video.')
+            help='a sequence of folders with images')
 
         supported_suffixes = ', '.join(OutputOptions.get_supported_suffixes())
         parser.add_argument('destination', metavar='VIDEO',
-            help=f'the output video file ({supported_suffixes}).')
+            help=f'an output video file ({supported_suffixes})')
 
         self.options = parser.parse_args()
         self._layout = self._make_layout()
@@ -2591,16 +2589,15 @@ class ConsoleInterface:
     def _add_input_arguments(cls, parser: ArgumentParser):
         input_arguments = parser.add_argument_group('Input')
 
-        # Думаю, имеет смысл убрать эти два аргумента, т.к. они
+        # Deprecated, так как эти два аргумента
         # не соответствуют цели существования этого скрипта.
         # Это же не софт для видеомонтажа.
-        # Но я пока не уверен.
         input_arguments.add_argument('--trim-start', metavar='FRAMES',
             type=cls._get_minmax_type(1),
-            help='cut off some frames at the beginning')
+            help='|deprecated| cut off some frames at the beginning')
         input_arguments.add_argument('--trim-end', metavar='FRAMES',
             type=cls._get_minmax_type(1),
-            help='cut off some frames at the end')
+            help='|deprecated| cut off some frames at the end')
 
         input_arguments.add_argument('-s', '--sure', action='store_true',
             help="do not exit if some or all of input directories " + 
@@ -2664,7 +2661,7 @@ class ConsoleInterface:
                 help=base_help+help_tail,
                 default=default)
 
-        overlay_help_head = 'overlay the text at the'
+        overlay_help_head = 'text at the'
 
         for pos in h_positions:
             add_overlay_argument(
@@ -2812,9 +2809,11 @@ class ConsoleInterface:
         if not frames:
             raise ValueError('Error: empty frame set.')
 
-        # TODO переделать с учётом кадров-заглушек, перенести код в Enumerator
-        for frame_index, frame in enumerate(frames):
-            frame.numvideo = 1 + frame_index
+        frame_number = 1
+        for frame in frames:
+            if not frame.banner:
+                frame.numvideo = frame_number
+                frame_number += 1
 
         if initial_frame_count != Enumerator.count(frames):
             print(f'Using {Enumerator.count(frames)} frames...\n')
