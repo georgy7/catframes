@@ -2887,7 +2887,8 @@ class ConsoleInterface:
             print('...')
 
 
-def _main():
+def main():
+    gc.set_threshold(100, 10, 10)   # По-умолчанию 700-10-10.
     try:
         if not shutil.which('ffmpeg'):
             raise ValueError('FFmpeg not found.')
@@ -2924,5 +2925,4 @@ def _main():
 
 
 if __name__ == "__main__":
-    gc.set_threshold(100, 10, 10)   # По-умолчанию 700-10-10.
-    _main()
+    main()

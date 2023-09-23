@@ -1,0 +1,36 @@
+[project]
+name = "catframes"
+version = "2023.9.0-rc1"
+
+description = "A handy tool for combining images into videos via FFmpeg."
+
+readme = "README.md"
+license = {file = "LICENSE.txt"}
+
+requires-python = ">=3.7"
+
+authors = [
+  {name = "Georgy Ustinov", email = "inbox@itustinov.ru" }
+]
+
+classifiers = [
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: zlib/libpng License"
+]
+
+dependencies = [
+  "Pillow>=9.2.0"
+]
+
+[project.urls]
+"Docs" = "http://itustinov.ru/cona/latest/docs/html/catframes.html"
+"Source code" = "https://github.com/georgy7/catframes"
+"Alternative repository" = "https://gitflic.ru/project/georgy7/cona"
+
+[project.scripts]
+catframes = "catframes.catframes:main"
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
