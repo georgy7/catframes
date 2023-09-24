@@ -70,11 +70,11 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2023.9.0-rc1'
+__version__ = '2023.9.0'
 __license__ = 'Zlib'
 
 
-TITLE = f'Catframes v{__version__}'
+TITLE = f'Catframes {__version__}'
 
 DESCRIPTION = f"""{TITLE}
 
@@ -82,7 +82,7 @@ DESCRIPTION = f"""{TITLE}
 
   Documentation: http://itustinov.ru/cona/latest/docs/html/catframes.html
 
-  Pip package: https://github.com/georgy7/catframes
+  This package source code: https://github.com/georgy7/catframes
   My collection of scripts: https://gitflic.ru/project/georgy7/cona
   Self-hosted Git bundle: http://itustinov.ru/cona/latest/cona.pack
 
@@ -2561,7 +2561,7 @@ class ConsoleInterface:
             help='show the resolution choosing process and exit')
 
         parser.add_argument('folders', metavar='FOLDER', nargs='+',
-            help='a sequence of folders with images')
+            help='a folder with images')
 
         supported_suffixes = ', '.join(OutputOptions.get_supported_suffixes())
         parser.add_argument('destination', metavar='VIDEO',
