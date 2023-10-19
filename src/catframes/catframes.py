@@ -70,7 +70,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2023.9.1-SNAPSHOT'
+__version__ = '2023.9.1'
 __license__ = 'Zlib'
 
 
@@ -899,21 +899,27 @@ class ResolutionStatistics:
         width = [resolution.width for resolution in res_list]
         height = [resolution.height for resolution in res_list]
 
+        raw_result = Resolution(
+                find(list(zip(width, count))),
+                find(list(zip(height, count))))
+
         result = Resolution(
-                ResolutionUtils.round(find(list(zip(width, count)))),
-                ResolutionUtils.round(find(list(zip(height, count)))))
+                ResolutionUtils.round(raw_result.width),
+                ResolutionUtils.round(raw_result.height))
 
         alternatives = []
 
-        if result.height < find_other_axis(result.width, width, height, count):
+        if result.height < ResolutionUtils.round(find_other_axis(raw_result.width, width, height, count)):
             alternatives.append(Resolution(
                 result.width,
-                find_other_axis(result.width, width, height, count)))
+                ResolutionUtils.round(find_other_axis(result.width, width, height, count))
+            ))
 
-        if result.width < find_other_axis(result.height, height, width, count):
+        if result.width < ResolutionUtils.round(find_other_axis(raw_result.height, height, width, count)):
             alternatives.append(Resolution(
-                find_other_axis(result.height, height, width, count),
-                result.height))
+                ResolutionUtils.round(find_other_axis(result.height, height, width, count)),
+                result.height
+            ))
 
         if len(alternatives) == 1:
             return alternatives[0]
@@ -1146,7 +1152,9 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(2, len(lines))
 
             resolution = resolution_table.choose()
-            self.assertEqual(str(Resolution(ResolutionUtils.round(799), 1280)), str(resolution))
+            self.assertEqual(
+                str(Resolution(ResolutionUtils.round(799), 1280)),
+                str(resolution))
 
     def test_empty(self):
         resolution_table = ResolutionStatistics([])

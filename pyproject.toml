@@ -1,6 +1,6 @@
 [project]
 name = "catframes"
-version = "2023.9.1-SNAPSHOT"
+version = "2023.9.1"
 
 description = "A handy tool for combining images into videos via FFmpeg."
 
