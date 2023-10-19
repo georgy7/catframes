@@ -1040,6 +1040,114 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1920, 1080)), str(resolution))
 
+    def test_simple_5_even_even(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1024, 768)).save(file_1)
+            Image.new("RGB", (1024, 768)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] + [frame_2]
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(1, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(1024, 768)), str(resolution))
+
+    def test_simple_5_odd_even(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1023, 768)).save(file_1)
+            Image.new("RGB", (1023, 768)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] + [frame_2]
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(1, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(
+                ResolutionUtils.round(1023),
+                ResolutionUtils.round(768)
+            )), str(resolution))
+
+    def test_simple_5_even_odd(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1024, 767)).save(file_1)
+            Image.new("RGB", (1024, 767)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] + [frame_2]
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(1, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(
+                ResolutionUtils.round(1024),
+                ResolutionUtils.round(767)
+            )), str(resolution))
+
+    def test_simple_5_odd_odd(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (1023, 767)).save(file_1)
+            Image.new("RGB", (1023, 767)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] + [frame_2]
+
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(1, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(
+                ResolutionUtils.round(1023),
+                ResolutionUtils.round(767)
+            )), str(resolution))
+
+    def test_simple_6(self):
+        with tempfile.TemporaryDirectory() as folder_path_string:
+            folder_path = Path(folder_path_string)
+            file_1 = folder_path / '1.jpg'
+            file_2 = folder_path / '2.jpg'
+            Image.new("RGB", (720, 1280)).save(file_1)
+            Image.new("RGB", (799, 799)).save(file_2)
+
+            frame_1 = Frame(file_1)
+            frame_2 = Frame(file_2)
+
+            frames = [frame_1] * 3000 + [frame_2] * 2000
+            resolution_table = ResolutionStatistics(frames)
+            lines = [x for x in resolution_table.sort_by_count_desc()]
+            self.assertEqual(2, len(lines))
+
+            resolution = resolution_table.choose()
+            self.assertEqual(str(Resolution(ResolutionUtils.round(799), 1280)), str(resolution))
+
     def test_empty(self):
         resolution_table = ResolutionStatistics([])
         lines = [x for x in resolution_table.sort_by_count_desc()]
