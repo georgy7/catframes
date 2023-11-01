@@ -70,7 +70,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2023.9.1'
+__version__ = '2024.4.0-SNAPSHOT'
 __license__ = 'Zlib'
 
 
