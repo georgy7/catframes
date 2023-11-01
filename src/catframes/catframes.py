@@ -630,7 +630,7 @@ class Frame:
     :param message: Если это кадр-заглушка (баннер), этот текст будет выведен
     где-нибудь в центре кадра.
     """
-    __slots__ = '_checksum', '_path', '_resolution', '_message', 'numdir', 'numdirs', 'numvideo'
+    __slots__ = '_checksum', '_path', '_resolution', '_message', 'numdir', 'numvideo'
 
     def __init__(self, path: Union[Path, None], banner: bool = False, message: str = ''):
         self._path = path
@@ -655,13 +655,8 @@ class Frame:
         self.numdir: int = 0
         """Каким он будет по счету в своей папке, если её содержимое отсортировать."""
 
-        self.numdirs: int = 0
-        """Каким он будет по счету, если отсортировать изображения в папках и склеить списки."""
-
         self.numvideo: int = 0
-        """Как :attr:`numdirs`, но если пользователь просит отрезать сколько-то кадров из начала
-        последовательности, нумерация всё равно начинается с единицы, т.к. это первый кадр в видео.
-        """
+        """Каким он будет по счету, если отсортировать изображения в папках и склеить эти списки."""
 
     @property
     def banner(self) -> bool:
@@ -778,8 +773,7 @@ class ResolutionUtils:
         ограничения, поэтому это округление не обязательно идёт до ближайшего целого. Имеет смысл
         использовать как финальный этап выбора разрешения видео.
         """
-        # H264 требует чётные размеры. Если мы выбираем самое частое разрешение, то, пожалуй,
-        # будем отрезать нечётный пиксель, чтобы не терять качество из-за масштабирования.
+        # H264 требует чётные размеры.
         return math.floor(value/2)*2
 
     @staticmethod
@@ -1749,16 +1743,10 @@ class OverlayModel:
     """
 
     numdir: int
-    """Номер кадра в текущей директории, начиная с единицы. Если мы пропускаем N кадров опцией
-    ``--trim-start=N``, и N меньше числа кадров в первой директории, у первого кадра видео этот
-    номер будет равен N+1.
-    """
-    numdirs: int
-    """Номер кадра во всех директориях (сплошная нумерация). Если мы пропускаем N кадров опцией
-    ``--trim-start=N``, первый кадр видео всегда будет под номером N+1.
-    """
+    """Номер кадра в директории, начиная с единицы."""
+
     numvideo: int
-    """Сплошная нумерация, но всегда начинается с единицы."""
+    """Номер кадра в итоговом видео, начиная с единицы."""
 
     vtime: datetime
     """Приблизительное местное время создания видео."""
@@ -1771,7 +1759,6 @@ class OverlayModel:
         assert isinstance(self.filename, str)
         assert isinstance(self.foldername, str)
         assert isinstance(self.numdir, int)
-        assert isinstance(self.numdirs, int)
         assert isinstance(self.numvideo, int)
         assert isinstance(self.vtime, datetime)
         assert isinstance(self.machine, str)
@@ -1861,7 +1848,6 @@ class DefaultFrameView(PillowFrameView):
             size=FileUtils.get_file_size(frame.path),
             resolution=Resolution(source_size[0], source_size[1]),
             numdir=frame.numdir,
-            numdirs=frame.numdirs,
             numvideo=frame.numvideo,
             vtime=self.vtime,
             machine=self.machine,
@@ -2071,10 +2057,9 @@ class OverLang:
 
                                 Возможные значения:
 
-                                * ``dir`` — текущая директория;
-                                * ``dirs`` — все директории;
-                                * ``video`` — видеозапись: нумерация начинается с единицы даже при
-                                  использовании опции ``--trim-start``.
+                                * ``dir`` — директория;
+                                * ``video`` — видеозапись;
+                                * ``dirs`` — синоним ``video`` для обратной совместимости.
         ``{mtime[:формат]}``    Местное время последнего изменения кадра на диске. Пустая строка,
                                 если не получается определить.
 
@@ -2179,7 +2164,7 @@ class OverLang:
             elif config == 'dir':
                 return lambda x: str(x.numdir)
             elif config == 'dirs':
-                return lambda x: str(x.numdirs)
+                return lambda x: str(x.numvideo)
             elif config == 'video':
                 return lambda x: str(x.numvideo)
             else:
@@ -2251,7 +2236,6 @@ class _OverLangTest(TestCase):
             size=1234567,
             resolution=Resolution(640, 480),
             numdir=55,
-            numdirs=555,
             numvideo=520,
             vtime=datetime(2022, 9, 9, 15, 5, 54, 320000),
             machine='БК-0010',
@@ -2387,7 +2371,7 @@ class _OverLangTest(TestCase):
         """Просто приводит к строке значения из модели."""
         model = self._get_overlay_mockup()
         self._check_overlay(model, 'frame:dir', str(model.numdir))
-        self._check_overlay(model, 'frame:dirs', str(model.numdirs))
+        self._check_overlay(model, 'frame:dirs', str(model.numvideo))
         self._check_overlay(model, 'frame:video', str(model.numvideo))
 
     def test_mtime(self):
@@ -2490,44 +2474,13 @@ class Enumerator:
             for frame in folder:
                 if not frame.banner:
                     frame.numdir = number
-                    frame.numdirs = previous_frames + number
+                    frame.numvideo = previous_frames + number
                     number += 1
 
     @staticmethod
     def count(frames: List[Frame]):
         """Считает кадры, игнорируя кадры-заглушки."""
         return sum((1 for x in frames if not x.banner))
-
-    @staticmethod
-    def trim_start(frames: List[Frame], n: int) -> List[Frame]:
-        """Возвращает копию списка без указанного числа кадров в начале.
-        Кадры-заглушки игнорируются, будто бы их нет.
-        В возвращаемом списке они остаются в тех же местах, где были в исходном.
-        """
-        result: List[Frame] = []
-        skipped = 0
-        for frame in frames:
-            if (skipped >= n) or (frame.banner):
-                result.append(frame)
-            else:
-                skipped += 1
-        return result
-
-    @staticmethod
-    def trim_end(frames: List[Frame], n: int) -> List[Frame]:
-        """Возвращает копию списка без указанного числа кадров в конце.
-        Кадры-заглушки игнорируются, будто бы их нет.
-        В возвращаемом списке они остаются в тех же местах, где были в исходном.
-        """
-        result: List[Frame] = []
-        skipped = 0
-        for frame in reversed(frames):
-            if (skipped >= n) or (frame.banner):
-                result.append(frame)
-            else:
-                skipped += 1
-        result.reverse()
-        return result
 
 
 class _EnumeratorTest(TestCase):
@@ -2551,25 +2504,13 @@ class _EnumeratorTest(TestCase):
                 for frame_index in range(100):
                     frame = frame_groups[group_index][frame_index]
                     self.assertEqual(1+frame_index, frame.numdir)
-                    self.assertEqual(previous+(1+frame_index), frame.numdirs)
+                    self.assertEqual(previous+(1+frame_index), frame.numvideo)
 
             all_frames = functools.reduce(lambda x, y: x+y, frame_groups)
             self.assertEqual(300, Enumerator.count(all_frames))
 
-            self.assertEqual(1, all_frames[0].numdirs)
-            self.assertEqual(300, all_frames[-1].numdirs)
-
-            all_frames = Enumerator.trim_start(all_frames, 5)
-
-            self.assertEqual(6, all_frames[0].numdirs)
-            self.assertEqual(300, all_frames[-1].numdirs)
-            self.assertEqual(295, Enumerator.count(all_frames))
-
-            all_frames = Enumerator.trim_end(all_frames, 10)
-
-            self.assertEqual(6, all_frames[0].numdirs)
-            self.assertEqual(290, all_frames[-1].numdirs)
-            self.assertEqual(285, Enumerator.count(all_frames))
+            self.assertEqual(1, all_frames[0].numvideo)
+            self.assertEqual(300, all_frames[-1].numvideo)
 
     def test_mixed(self):
         banner_1 = Frame(None, True, 'Message 1')
@@ -2613,7 +2554,7 @@ class _EnumeratorTest(TestCase):
                     if not frame.banner:
 
                         self.assertEqual(previous_in_the_directory + 1, frame.numdir)
-                        self.assertEqual(previous + 1, frame.numdirs)
+                        self.assertEqual(previous + 1, frame.numvideo)
 
                         previous_in_the_directory += 1
                         previous += 1
@@ -2627,32 +2568,8 @@ class _EnumeratorTest(TestCase):
             self.assertIsNotNone(first_real_frame)
             self.assertIsNotNone(last_real_frame)
 
-            self.assertEqual(1, first_real_frame.numdirs)
-            self.assertEqual(300, last_real_frame.numdirs)
-
-            all_frames = Enumerator.trim_start(all_frames, 5)
-
-            first_real_frame = next((x for x in all_frames if not x.banner), None)
-            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
-            self.assertIsNotNone(first_real_frame)
-            self.assertIsNotNone(last_real_frame)
-
-            self.assertEqual(6, first_real_frame.numdirs)
-            self.assertEqual(300, last_real_frame.numdirs)
-            self.assertEqual(295, Enumerator.count(all_frames))
-            self.assertEqual(335, len(all_frames))
-
-            all_frames = Enumerator.trim_end(all_frames, 10)
-
-            first_real_frame = next((x for x in all_frames if not x.banner), None)
-            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
-            self.assertIsNotNone(first_real_frame)
-            self.assertIsNotNone(last_real_frame)
-
-            self.assertEqual(6, first_real_frame.numdirs)
-            self.assertEqual(290, last_real_frame.numdirs)
-            self.assertEqual(285, Enumerator.count(all_frames))
-            self.assertEqual(325, len(all_frames))
+            self.assertEqual(1, first_real_frame.numvideo)
+            self.assertEqual(300, last_real_frame.numvideo)
 
 
 class ConsoleInterface:
@@ -2703,17 +2620,6 @@ class ConsoleInterface:
     @classmethod
     def _add_input_arguments(cls, parser: ArgumentParser):
         input_arguments = parser.add_argument_group('Input')
-
-        # Deprecated, так как эти два аргумента
-        # не соответствуют цели существования этого скрипта.
-        # Это же не софт для видеомонтажа.
-        input_arguments.add_argument('--trim-start', metavar='FRAMES',
-            type=cls._get_minmax_type(1),
-            help='|deprecated| cut off some frames at the beginning')
-        input_arguments.add_argument('--trim-end', metavar='FRAMES',
-            type=cls._get_minmax_type(1),
-            help='|deprecated| cut off some frames at the end')
-
         input_arguments.add_argument('-s', '--sure', action='store_true',
             help="do not exit if some or all of input directories " + 
             "do not exist. You are sure that you are specifying " +
@@ -2863,8 +2769,7 @@ class ConsoleInterface:
         print(f"{'-'*42}\n")
 
     def get_input_sequence(self) -> Sequence[Frame]:
-        """Возвращает отсортированную и пронумерованную последовательность кадров, которую попросил
-        пользователь: параметры ``--trim-start`` и ``--trim-end`` уже применены.
+        """Возвращает отсортированную и пронумерованную последовательность кадров.
 
         :raises ValueError: не удалось прочитать список файлов или в указанных директориях нет
             ни одного изображения.
@@ -2903,17 +2808,8 @@ class ConsoleInterface:
         Enumerator.enumerate(frame_groups)
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
-        initial_frame_count = Enumerator.count(frames)
 
-        print(f'\nThere are {initial_frame_count} frames...')
-
-        if self.options.trim_start:
-            print(f'The first {self.options.trim_start} frame(s) will not be added.')
-            frames = Enumerator.trim_start(frames, self.options.trim_start)
-
-        if self.options.trim_end:
-            print(f'The last {self.options.trim_end} frame(s) will not be added.')
-            frames = Enumerator.trim_end(frames, self.options.trim_end)
+        print(f'\nThere are {Enumerator.count(frames)} frames...')
 
         # Имеется ввиду, что совсем никаких кадров нет, даже кадров-заглушек.
         # Если не только несуществующие, но и пустые папки будут приводить
@@ -2924,16 +2820,7 @@ class ConsoleInterface:
         if not frames:
             raise ValueError('Error: empty frame set.')
 
-        frame_number = 1
-        for frame in frames:
-            if not frame.banner:
-                frame.numvideo = frame_number
-                frame_number += 1
-
-        if initial_frame_count != Enumerator.count(frames):
-            print(f'Using {Enumerator.count(frames)} frames...\n')
-        else:
-            print()
+        print()
 
         return frames
 
