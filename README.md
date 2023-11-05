@@ -1,8 +1,58 @@
 Catframes
 =========
 
-A script that concatenates frames.
+A script that concatenates frames. FFmpeg wrapper.
 
-The abbreviation `cat` in this context familiar to any user of Unix-like systems.
+
+Installation
+------------
+
+### From PyPI
+
+I recommend to do it as root.
+
+```
+python3 -m pip install catframes
+```
+
+Installing dependencies:
+
+Alpine: `apk add ffmpeg font-dejavu`
+
+Debian/Ubuntu: `apt-get install ffmpeg fonts-dejavu`
+
+Centos: `yum install ffmpeg dejavu-sans-mono-fonts`
+
+
+### From source code (Linux, Unix-like)
+
+Catframes is a script. Everything, including tests,
+is contained in a single file that you can upload
+to the system yourself.
+
+```
+cp catframes.py /usr/local/bin/
+chmod 755       /usr/local/bin/catframes.py
+ln -s /usr/local/bin/catframes.py /usr/local/bin/catframes
+```
+
+Installing dependencies: exactly the same, except for [Pillow](https://python-pillow.org/).
+If you don't want to use pip, the library usually can be installed from the operating system repository.
+
+Alpine: `apk add py3-pillow`
+
+Debian/Ubuntu: `apt-get install python3-pil`
+
+Centos/RHEL: `yum install python3-pillow`
+
+It is better to run tests as a regular user.
+
+```
+python3 -m unittest discover /usr/local/bin/ -p catframes.py
+```
+
+
+See also
+--------
 
 **[Documentation (in Russian)](https://itustinov.ru/cona/latest/docs/html/catframes.html)**
