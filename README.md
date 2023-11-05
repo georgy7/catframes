@@ -21,10 +21,10 @@ Alpine: `apk add ffmpeg font-dejavu`
 
 Debian/Ubuntu: `apt-get install ffmpeg fonts-dejavu`
 
-Centos: `yum install ffmpeg dejavu-sans-mono-fonts`
+Centos/RHEL: `yum install ffmpeg dejavu-sans-mono-fonts`
 
 
-### From source code (Linux, Unix-like)
+### From source (Linux, Unix-like)
 
 Catframes is a script. Everything, including tests,
 is contained in a single file that you can upload
@@ -49,6 +49,41 @@ It is better to run tests as a regular user.
 
 ```
 python3 -m unittest discover /usr/local/bin/ -p catframes.py
+```
+
+
+### From source (Windows)
+
+0. You need Python3 to be available in `cmd` as `python3`.
+1. Copy both `catframes.py` and `catframes.bat` to a folder (for instance, `C:\Program Files\MyScripts`).
+2. Add this folder to `PATH` environment variable.
+3. Install [FFmpeg](https://ffmpeg.org/download.html).
+4. Add the folder, where installed `ffmpeg.exe`, to the `PATH` environment variable.
+5. Install Pillow.
+
+You don't have to install fonts, because Windows already has Courier New.
+
+You may install Pillow, using `pip`.
+
+If you don't use `pip` for some reason, you can
+[download Pillow `*.whl` file](https://pypi.org/project/Pillow/#files),
+corresponding to your Python version, unpack it and put `PIL`
+in your Python interpreter directory.
+This usually works.
+Files with the `whl` extension are ordinary ZIP archives.
+
+If everything is done, the following commands will work in any folder.
+
+```
+ffmpeg --help
+
+catframes --help
+```
+
+The command that runs tests:
+
+```
+python3 -m unittest discover "C:\Program Files\MyScripts" -p catframes.py
 ```
 
 
