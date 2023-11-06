@@ -23,12 +23,14 @@ Debian/Ubuntu: `apt-get install ffmpeg fonts-dejavu`
 
 Centos/RHEL: `yum install ffmpeg dejavu-sans-mono-fonts`
 
+Windows: [Get FFmpeg Windows builds](https://ffmpeg.org/download.html)
+
 
 ### From source (Linux, Unix-like)
 
 Catframes is a script. Everything, including tests,
 is contained in a single file that you can upload
-to the system yourself.
+to a system yourself.
 
 ```
 cp catframes.py /usr/local/bin/
@@ -37,7 +39,8 @@ ln -s /usr/local/bin/catframes.py /usr/local/bin/catframes
 ```
 
 Installing dependencies: exactly the same, except for [Pillow](https://python-pillow.org/).
-If you don't want to use pip, the library usually can be installed from the operating system repository.
+
+If you don't want to use pip, the library usually can be installed from operating system repository.
 
 Alpine: `apk add py3-pillow`
 
@@ -58,29 +61,29 @@ python3 -m unittest discover /usr/local/bin/ -p catframes.py
 1. Copy both `catframes.py` and `catframes.bat` to a folder (for instance, `C:\Program Files\MyScripts`).
 2. Add this folder to `PATH` environment variable.
 3. Install [FFmpeg](https://ffmpeg.org/download.html).
-4. Add the folder, where installed `ffmpeg.exe`, to the `PATH` environment variable.
+4. Add the folder, where `ffmpeg.exe` is installed, to the `PATH` environment variable.
 5. Install Pillow.
 
 You don't have to install fonts, because Windows already has Courier New.
 
 You may install Pillow, using `pip`.
 
-If you don't use `pip` for some reason, you can
+If you don't use `pip` for some reason, you may
 [download Pillow `*.whl` file](https://pypi.org/project/Pillow/#files),
 corresponding to your Python version, unpack it and put `PIL`
 in your Python interpreter directory.
 This usually works.
-Files with the `whl` extension are ordinary ZIP archives.
+Files with `whl` extension are ordinary ZIP archives.
 
 If everything is done, the following commands will work in any folder.
 
 ```
-ffmpeg --help
+ffmpeg -version
 
 catframes --help
 ```
 
-The command that runs tests:
+You may run unit tests with the following line:
 
 ```
 python3 -m unittest discover "C:\Program Files\MyScripts" -p catframes.py
