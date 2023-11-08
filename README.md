@@ -3,6 +3,13 @@ Catframes
 
 A script that concatenates frames. FFmpeg wrapper.
 
+With this software, you can, for example,
+
+* create a timelapse video,
+* turn an animation rendered in a PNG sequence into a video,
+* or compress a sequence of frames from a surveillance camera using a video codec.
+
+The script simply accepts folders with JPEG and PNG files as input and outputs MP4 or WebM.
 
 Installation
 ------------
@@ -94,9 +101,9 @@ Usage
 -----
 
 Video encoding is a long process. If you are launching the program for the first time,
-a good way to try different options is to use the parameter `--limit` to make short video samples.
+a good way to try different options is to use `--limit` to make short video samples.
 
-The command to run it with standard settings looks like this:
+The command to run it with default settings looks like this:
 
     catframes folderA folderB folderC result.webm
 
@@ -104,14 +111,14 @@ For automatic launches (through a CRON job, etc.), I recommend to add these o
 
     catframes -sf --port-range=10140:10240 folderA folderB folderC result.webm
 
-### Standard settings
+### Default settings
 
 **Frame rate:** 30 frames per second.
 
 You may change it with `-r` parameter.
 Acceptable values are from 1 to 60.
 All source frames will be included, so this parameter
-determines the speed of video record.
+determines speed of your video record.
 
 **Compression quality:** medium.
 
@@ -126,7 +133,8 @@ It takes values in formats `#rrggbb` and `#rgb` (hexadecimal digits; `#abc` mean
 ### Text overlays
 
 There is a 3 by 3 grid. You can place labels in all cells except the central one.
-Please, use the parameters `--left`, `--right`, `--top`, `--left-top`, etc.
+
+Please, use `--left`, `--right`, `--top`, `--left-top`, etc.
 
 **Important:** One of the cells must be reserved for important warnings.
 It is set by `WARN` value (in any case). By default, this is the top cell.
