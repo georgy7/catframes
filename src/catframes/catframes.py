@@ -2592,12 +2592,17 @@ class ConsoleInterface:
         parser.add_argument('--resolutions', action='store_true',
             help='show the resolution choosing process and exit')
 
-        parser.add_argument('folders', metavar='FOLDER', nargs='+',
-            help='a folder with images')
-
-        supported_suffixes = ', '.join(OutputOptions.get_supported_suffixes())
-        parser.add_argument('destination', metavar='VIDEO',
-            help=f'an output video file ({supported_suffixes})')
+        supported_suffixes = ' or '.join(map(lambda x: x[1:], OutputOptions.get_supported_suffixes()))
+        parser.add_argument('paths', metavar='PATH', nargs='+',
+            help='The paths are input folders (a source), ' + 
+            'and the last one is an output video file ' +
+            f'({supported_suffixes}, a destination). ' + 
+            'The order of the folders determines in which order ' +
+            'they will be concatenated. ' +
+            'If `--resolutions` argument is used, the destination path is optional. ' +
+            'That means, that if the last path points ' +
+            'to a folder or a symlink to a folder, ' +
+            'the script treat it as an input folder.')
 
         self.options = parser.parse_args()
         self._layout = self._make_layout()
