@@ -2578,7 +2578,7 @@ class ConsoleInterface:
     Превращает аргументы командной строки в настройки и наборы данных. И тут также выводится
     информация в стандартный вывод по ходу анализа параметров скрипта.
     """
-    __slots__ = 'options', '_layout'
+    __slots__ = '_args', '_source', '_destination', '_layout'
 
     def __init__(self):
         parser = ArgumentParser(prog='catframes.py', description=DESCRIPTION,
@@ -2602,9 +2602,24 @@ class ConsoleInterface:
             'If `--resolutions` argument is used, the destination path is optional. ' +
             'That means, that if the last path points ' +
             'to a folder or a symlink to a folder, ' +
+            'even if its name is similar to a video file, ' +
             'the script treat it as an input folder.')
 
-        self.options = parser.parse_args()
+        self._args = parser.parse_args()
+        if self._args.resolutions and \
+                (
+                    (len(self._args.paths) <= 1) or
+                    Path(self._args.paths[-1]).expanduser().is_dir() or
+                    Path(self._args.paths[-1]).suffix not in OutputOptions.get_supported_suffixes()
+                ):
+            self._source = self._args.paths
+            self._destination = None
+        elif len(self._args.paths) <= 1:
+            parser.error('A destination path is required.')
+        else:
+            self._source = self._args.paths[:-1]
+            self._destination = self._args.paths[-1]
+
         self._layout = self._make_layout()
 
     @staticmethod
@@ -2638,7 +2653,7 @@ class ConsoleInterface:
 
         result = Layout()
         has_warning = False
-        options_dict = vars(self.options)
+        options_dict = vars(self._args)
 
         def add_overlay(xpos: int, ypos: int, option_name: str):
             nonlocal has_warning
@@ -2756,17 +2771,26 @@ class ConsoleInterface:
             help='а range of ports that are allowed to be used ' + 
                 'to interact with FFmpeg (default: %(default)s)')
 
-
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
         print()
-        for key, value in vars(self.options).items():
+        for key, value in vars(self._args).items():
+            if 'paths' == key:
+                continue
+
             if isinstance(value, list):
                 print(f'  {key}:')
                 for item in value:
                     print(f'    - {item}')
             elif value:
                 print(f'  {key}: {value}')
+
+        print(f'  source:')
+        for item in self._source:
+            print(f'    - {item}')
+        if None != self._destination:
+            print(f'  destination:')
+            print(f'    - {self._destination}')
         print()
 
     def show_splitter(self):
@@ -2786,15 +2810,15 @@ class ConsoleInterface:
 
         def get_banner_frames(message):
             banner = Frame(None, True, message)
-            return [banner for i in range(banner_duration_seconds * self.options.frame_rate)]
+            return [banner for i in range(banner_duration_seconds * self._args.frame_rate)]
 
-        for raw_folder_path in self.options.folders:
+        for raw_folder_path in self._args.folders:
             folder_path = Path(raw_folder_path)
             real_images: Union[List[Path], None] = None
             try:
                 real_images = FileUtils.list_images(folder_path)
             except (ValueError, OSError) as e:
-                if self.options.sure:
+                if self._args.sure:
                     frame_groups.append(get_banner_frames(f'{type(e).__name__}: {str(e)}'))
                 else:
                     raise
@@ -2803,7 +2827,7 @@ class ConsoleInterface:
                 # Либо мы выбросили исключение ранее,
                 # либо кадры-заглушки уже добавлены.
                 pass
-            elif (len(real_images) < 1) and self.options.sure:
+            elif (len(real_images) < 1) and self._args.sure:
                 frame_groups.append(get_banner_frames(f'Could not find images in {folder_path}'))
             else:
                 FileUtils.sort_natural(real_images)
@@ -2834,7 +2858,7 @@ class ConsoleInterface:
 
         :raises ValueError: пользователь указал файл с недопустимым расширением и т.п.
         """
-        destination = Path(self.options.destination)
+        destination = Path(self._args.destination)
 
         if destination.is_dir():
             raise ValueError('Destination must not be a folder.')
@@ -2845,35 +2869,35 @@ class ConsoleInterface:
         if destination.suffix not in OutputOptions.get_supported_suffixes():
             raise ValueError('Unsupported destination file extension.')
 
-        if self.options.quality == 'high':
+        if self._args.quality == 'high':
             quality = Quality.HIGH
-        elif self.options.quality == 'poor':
+        elif self._args.quality == 'poor':
             quality = Quality.POOR
         else:
             quality = Quality.MEDIUM
 
         return OutputOptions(
             destination=destination,
-            overwrite=bool(self.options.force),
-            limit_seconds=self.options.limit,
+            overwrite=bool(self._args.force),
+            limit_seconds=self._args.limit,
             quality=quality,
-            frame_rate=self.options.frame_rate)
+            frame_rate=self._args.frame_rate)
 
     def get_server_options(self) -> JobServerOptions:
         return JobServerOptions(
-            self.options.port_range[0],
-            self.options.port_range[1]
+            self._args.port_range[0],
+            self._args.port_range[1]
         )
 
     @property
     def statistics_only(self) -> bool:
         """Пользователь не хочет пока делать видео, только посмотреть логику выбора разрешения."""
-        return self.options.resolutions
+        return self._args.resolutions
 
     @property
     def margin_color(self) -> str:
         """В случае полупрозрачных кадров, это будет также цвет фона."""
-        return self.options.margin_color
+        return self._args.margin_color
 
     @property
     def layout(self) -> Layout:
