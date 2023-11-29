@@ -2812,7 +2812,7 @@ class ConsoleInterface:
             banner = Frame(None, True, message)
             return [banner for i in range(banner_duration_seconds * self._args.frame_rate)]
 
-        for raw_folder_path in self._args.folders:
+        for raw_folder_path in self._source:
             folder_path = Path(raw_folder_path)
             real_images: Union[List[Path], None] = None
             try:
@@ -2858,7 +2858,7 @@ class ConsoleInterface:
 
         :raises ValueError: пользователь указал файл с недопустимым расширением и т.п.
         """
-        destination = Path(self._args.destination)
+        destination = Path(self._destination)
 
         if destination.is_dir():
             raise ValueError('Destination must not be a folder.')
@@ -2930,7 +2930,7 @@ def main():
         print(f'The number of overlays: {len(cli.layout)}\n')
         cli.show_splitter()
 
-        output_options = cli.get_output_options()
+        output_options = None if cli.statistics_only else cli.get_output_options()
         frames = cli.get_input_sequence()
 
         resolution_table = ResolutionStatistics(frames)
