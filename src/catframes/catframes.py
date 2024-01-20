@@ -1444,17 +1444,17 @@ class FrameView(ABC):
 class Quality(Enum):
     """Абстракция над бесконечными настройками качества FFmpeg."""
 
-    HIGH = 8, 4
+    HIGH = 8, 4, 'yuv444p'
     """Очень высокое, но всё же с потерями. Подходит для художественных таймлапсов, где важно
     сохранить текстуру, световые переливы, зернистость камеры. Битрейт — как у JPEG 75.
     """
 
-    MEDIUM = 16, 18
+    MEDIUM = 16, 18, 'yuv422p'
     """Подойдёт почти для любых задач. Зернистость видео пропадает, градиенты становятся чуть
     грубее, картинка может быть чуть мутнее, но детали легко узнаваемы.
     """
 
-    POOR = 22, 31
+    POOR = 22, 31, 'yuv420p'
     """Некоторые мелкие детали становятся неразличимыми."""
 
     def get_h264_crf(self, fps: int) -> int:
@@ -1474,6 +1474,9 @@ class Quality(Enum):
     def get_vp9_crf(self) -> int:
         """Мои тесты показали, что опция CRF в VP9 не связана с частотой кадров."""
         return self.value[1]
+
+    def get_pix_fmt(self) -> str:
+        return self.value[2]
 
 
 @dataclass(frozen=True)
@@ -1501,15 +1504,21 @@ class OutputOptions:
         # Настраивать промежутки между ключевыми кадрами смысла нет: большинство плееров
         # умеют точно перематывать, даже если между ними большие промежутки.
         h264_crf = self.quality.get_h264_crf(self.frame_rate)
-        return ['-pix_fmt', 'yuv420p', '-c:v', 'libx264',
+        return [
+            '-pix_fmt', self.quality.get_pix_fmt(),
+            '-c:v', 'libx264',
             '-preset', 'fast', '-tune', 'fastdecode',
             '-movflags', '+faststart',
-            '-crf', str(h264_crf)]
+            '-crf', str(h264_crf)
+        ]
 
     def _get_vp9_options(self) -> Sequence[str]:
         vp9_crf = self.quality.get_vp9_crf()
-        return ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p',
-            '-crf', str(vp9_crf), '-b:v', '0']
+        return [
+            '-c:v', 'libvpx-vp9',
+            '-pix_fmt', self.quality.get_pix_fmt(),
+            '-crf', str(vp9_crf), '-b:v', '0'
+        ]
 
     @staticmethod
     def get_supported_suffixes() -> Sequence[str]:
@@ -2867,7 +2876,10 @@ class ConsoleInterface:
             raise ValueError('Destination must not be a symbolic link.')
 
         if destination.suffix not in OutputOptions.get_supported_suffixes():
-            raise ValueError('Unsupported destination file extension.')
+            expected = ', '.join(
+                map(lambda x: x[1:], OutputOptions.get_supported_suffixes())
+            )
+            raise ValueError(f'Unsupported destination file extension.\nExpected: {expected}.')
 
         if self._args.quality == 'high':
             quality = Quality.HIGH
