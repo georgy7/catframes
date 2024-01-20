@@ -2930,7 +2930,13 @@ def main():
         print(f'The number of overlays: {len(cli.layout)}\n')
         cli.show_splitter()
 
-        output_options = None if cli.statistics_only else cli.get_output_options()
+        if not cli.statistics_only:
+            output_options = cli.get_output_options()
+            if (not output_options.overwrite) and output_options.destination.exists():
+                raise ValueError('Destination file already exists.')
+        else:
+            output_options = None
+
         frames = cli.get_input_sequence()
 
         resolution_table = ResolutionStatistics(frames)
