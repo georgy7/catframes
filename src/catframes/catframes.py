@@ -283,7 +283,7 @@ class FileUtils:
         """
         folder = path.expanduser()
 
-        frame_extensions = "jpg", "jpeg", "png", "JPG", "JPEG", "PNG"
+        frame_extensions = "jpg", "jpeg", "png", "qoi", "pcx"
 
         try:
             # Поскольку здесь мы не читаем файлы,
@@ -299,7 +299,7 @@ class FileUtils:
                 file_path
                 for file_path in folder.iterdir()
                 if file_path.is_file()
-                and file_path.suffix[1:] in frame_extensions
+                and file_path.suffix[1:].lower() in frame_extensions
             ]
         except FileNotFoundError:
             raise ValueError(f'The path is not a folder: {folder}')
