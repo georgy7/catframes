@@ -70,7 +70,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.4.0-SNAPSHOT'
+__version__ = '2024.2.0'
 __license__ = 'Zlib'
 
 
@@ -307,8 +307,6 @@ class FileUtils:
             raise ValueError(f'The path is not a folder: {folder}')
         except PermissionError:
             raise ValueError(f'Forbidden: {folder}')
-
-        return result
 
     @staticmethod
     def sort_natural(files: List[Path]):
@@ -1930,6 +1928,9 @@ class DefaultFrameView(PillowFrameView):
                 lambda _: self.ERROR_BG,
                 lambda _: self.ERROR_TEXT)
             return
+
+        # (frame.path is None) == frame.banner
+        assert frame.path is not None
 
         try:
             with Image.open(frame.path) as source:
