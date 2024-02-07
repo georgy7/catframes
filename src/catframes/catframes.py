@@ -70,7 +70,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2023.9.1'
+__version__ = '2024.2.0'
 __license__ = 'Zlib'
 
 
@@ -283,7 +283,7 @@ class FileUtils:
         """
         folder = path.expanduser()
 
-        frame_extensions = "jpg", "jpeg", "png", "JPG", "JPEG", "PNG"
+        frame_extensions = "jpg", "jpeg", "png", "qoi", "pcx"
 
         try:
             # Поскольку здесь мы не читаем файлы,
@@ -299,7 +299,7 @@ class FileUtils:
                 file_path
                 for file_path in folder.iterdir()
                 if file_path.is_file()
-                and file_path.suffix[1:] in frame_extensions
+                and file_path.suffix[1:].lower() in frame_extensions
             ]
         except FileNotFoundError:
             raise ValueError(f'The path is not a folder: {folder}')
@@ -307,8 +307,6 @@ class FileUtils:
             raise ValueError(f'The path is not a folder: {folder}')
         except PermissionError:
             raise ValueError(f'Forbidden: {folder}')
-
-        return result
 
     @staticmethod
     def sort_natural(files: List[Path]):
@@ -630,7 +628,7 @@ class Frame:
     :param message: Если это кадр-заглушка (баннер), этот текст будет выведен
     где-нибудь в центре кадра.
     """
-    __slots__ = '_checksum', '_path', '_resolution', '_message', 'numdir', 'numdirs', 'numvideo'
+    __slots__ = '_checksum', '_path', '_resolution', '_message', 'numdir', 'numvideo'
 
     def __init__(self, path: Union[Path, None], banner: bool = False, message: str = ''):
         self._path = path
@@ -655,13 +653,8 @@ class Frame:
         self.numdir: int = 0
         """Каким он будет по счету в своей папке, если её содержимое отсортировать."""
 
-        self.numdirs: int = 0
-        """Каким он будет по счету, если отсортировать изображения в папках и склеить списки."""
-
         self.numvideo: int = 0
-        """Как :attr:`numdirs`, но если пользователь просит отрезать сколько-то кадров из начала
-        последовательности, нумерация всё равно начинается с единицы, т.к. это первый кадр в видео.
-        """
+        """Каким он будет по счету, если отсортировать изображения в папках и склеить эти списки."""
 
     @property
     def banner(self) -> bool:
@@ -778,8 +771,7 @@ class ResolutionUtils:
         ограничения, поэтому это округление не обязательно идёт до ближайшего целого. Имеет смысл
         использовать как финальный этап выбора разрешения видео.
         """
-        # H264 требует чётные размеры. Если мы выбираем самое частое разрешение, то, пожалуй,
-        # будем отрезать нечётный пиксель, чтобы не терять качество из-за масштабирования.
+        # H264 требует чётные размеры.
         return math.floor(value/2)*2
 
     @staticmethod
@@ -1450,17 +1442,17 @@ class FrameView(ABC):
 class Quality(Enum):
     """Абстракция над бесконечными настройками качества FFmpeg."""
 
-    HIGH = 8, 4
+    HIGH = 1, 3, 'yuv444p'
     """Очень высокое, но всё же с потерями. Подходит для художественных таймлапсов, где важно
     сохранить текстуру, световые переливы, зернистость камеры. Битрейт — как у JPEG 75.
     """
 
-    MEDIUM = 16, 18
+    MEDIUM = 12, 14, 'yuv422p'
     """Подойдёт почти для любых задач. Зернистость видео пропадает, градиенты становятся чуть
     грубее, картинка может быть чуть мутнее, но детали легко узнаваемы.
     """
 
-    POOR = 22, 31
+    POOR = 22, 31, 'yuv420p'
     """Некоторые мелкие детали становятся неразличимыми."""
 
     def get_h264_crf(self, fps: int) -> int:
@@ -1480,6 +1472,9 @@ class Quality(Enum):
     def get_vp9_crf(self) -> int:
         """Мои тесты показали, что опция CRF в VP9 не связана с частотой кадров."""
         return self.value[1]
+
+    def get_pix_fmt(self) -> str:
+        return self.value[2]
 
 
 @dataclass(frozen=True)
@@ -1507,15 +1502,22 @@ class OutputOptions:
         # Настраивать промежутки между ключевыми кадрами смысла нет: большинство плееров
         # умеют точно перематывать, даже если между ними большие промежутки.
         h264_crf = self.quality.get_h264_crf(self.frame_rate)
-        return ['-pix_fmt', 'yuv420p', '-c:v', 'libx264',
+        return [
+            '-pix_fmt', self.quality.get_pix_fmt(),
+            '-c:v', 'libx264',
             '-preset', 'fast', '-tune', 'fastdecode',
             '-movflags', '+faststart',
-            '-crf', str(h264_crf)]
+            '-crf', str(h264_crf)
+        ]
 
     def _get_vp9_options(self) -> Sequence[str]:
         vp9_crf = self.quality.get_vp9_crf()
-        return ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p',
-            '-crf', str(vp9_crf), '-b:v', '0']
+        return [
+            '-c:v', 'libvpx-vp9',
+            '-deadline', 'realtime',
+            '-pix_fmt', self.quality.get_pix_fmt(),
+            '-crf', str(vp9_crf), '-b:v', '0'
+        ]
 
     @staticmethod
     def get_supported_suffixes() -> Sequence[str]:
@@ -1749,16 +1751,10 @@ class OverlayModel:
     """
 
     numdir: int
-    """Номер кадра в текущей директории, начиная с единицы. Если мы пропускаем N кадров опцией
-    ``--trim-start=N``, и N меньше числа кадров в первой директории, у первого кадра видео этот
-    номер будет равен N+1.
-    """
-    numdirs: int
-    """Номер кадра во всех директориях (сплошная нумерация). Если мы пропускаем N кадров опцией
-    ``--trim-start=N``, первый кадр видео всегда будет под номером N+1.
-    """
+    """Номер кадра в директории, начиная с единицы."""
+
     numvideo: int
-    """Сплошная нумерация, но всегда начинается с единицы."""
+    """Номер кадра в итоговом видео, начиная с единицы."""
 
     vtime: datetime
     """Приблизительное местное время создания видео."""
@@ -1771,7 +1767,6 @@ class OverlayModel:
         assert isinstance(self.filename, str)
         assert isinstance(self.foldername, str)
         assert isinstance(self.numdir, int)
-        assert isinstance(self.numdirs, int)
         assert isinstance(self.numvideo, int)
         assert isinstance(self.vtime, datetime)
         assert isinstance(self.machine, str)
@@ -1861,7 +1856,6 @@ class DefaultFrameView(PillowFrameView):
             size=FileUtils.get_file_size(frame.path),
             resolution=Resolution(source_size[0], source_size[1]),
             numdir=frame.numdir,
-            numdirs=frame.numdirs,
             numvideo=frame.numvideo,
             vtime=self.vtime,
             machine=self.machine,
@@ -1934,6 +1928,9 @@ class DefaultFrameView(PillowFrameView):
                 lambda _: self.ERROR_BG,
                 lambda _: self.ERROR_TEXT)
             return
+
+        # (frame.path is None) == frame.banner
+        assert frame.path is not None
 
         try:
             with Image.open(frame.path) as source:
@@ -2071,10 +2068,9 @@ class OverLang:
 
                                 Возможные значения:
 
-                                * ``dir`` — текущая директория;
-                                * ``dirs`` — все директории;
-                                * ``video`` — видеозапись: нумерация начинается с единицы даже при
-                                  использовании опции ``--trim-start``.
+                                * ``dir`` — директория;
+                                * ``video`` — видеозапись;
+                                * ``dirs`` — синоним ``video`` для обратной совместимости.
         ``{mtime[:формат]}``    Местное время последнего изменения кадра на диске. Пустая строка,
                                 если не получается определить.
 
@@ -2179,7 +2175,7 @@ class OverLang:
             elif config == 'dir':
                 return lambda x: str(x.numdir)
             elif config == 'dirs':
-                return lambda x: str(x.numdirs)
+                return lambda x: str(x.numvideo)
             elif config == 'video':
                 return lambda x: str(x.numvideo)
             else:
@@ -2251,7 +2247,6 @@ class _OverLangTest(TestCase):
             size=1234567,
             resolution=Resolution(640, 480),
             numdir=55,
-            numdirs=555,
             numvideo=520,
             vtime=datetime(2022, 9, 9, 15, 5, 54, 320000),
             machine='БК-0010',
@@ -2387,7 +2382,7 @@ class _OverLangTest(TestCase):
         """Просто приводит к строке значения из модели."""
         model = self._get_overlay_mockup()
         self._check_overlay(model, 'frame:dir', str(model.numdir))
-        self._check_overlay(model, 'frame:dirs', str(model.numdirs))
+        self._check_overlay(model, 'frame:dirs', str(model.numvideo))
         self._check_overlay(model, 'frame:video', str(model.numvideo))
 
     def test_mtime(self):
@@ -2490,44 +2485,13 @@ class Enumerator:
             for frame in folder:
                 if not frame.banner:
                     frame.numdir = number
-                    frame.numdirs = previous_frames + number
+                    frame.numvideo = previous_frames + number
                     number += 1
 
     @staticmethod
     def count(frames: List[Frame]):
         """Считает кадры, игнорируя кадры-заглушки."""
         return sum((1 for x in frames if not x.banner))
-
-    @staticmethod
-    def trim_start(frames: List[Frame], n: int) -> List[Frame]:
-        """Возвращает копию списка без указанного числа кадров в начале.
-        Кадры-заглушки игнорируются, будто бы их нет.
-        В возвращаемом списке они остаются в тех же местах, где были в исходном.
-        """
-        result: List[Frame] = []
-        skipped = 0
-        for frame in frames:
-            if (skipped >= n) or (frame.banner):
-                result.append(frame)
-            else:
-                skipped += 1
-        return result
-
-    @staticmethod
-    def trim_end(frames: List[Frame], n: int) -> List[Frame]:
-        """Возвращает копию списка без указанного числа кадров в конце.
-        Кадры-заглушки игнорируются, будто бы их нет.
-        В возвращаемом списке они остаются в тех же местах, где были в исходном.
-        """
-        result: List[Frame] = []
-        skipped = 0
-        for frame in reversed(frames):
-            if (skipped >= n) or (frame.banner):
-                result.append(frame)
-            else:
-                skipped += 1
-        result.reverse()
-        return result
 
 
 class _EnumeratorTest(TestCase):
@@ -2551,25 +2515,13 @@ class _EnumeratorTest(TestCase):
                 for frame_index in range(100):
                     frame = frame_groups[group_index][frame_index]
                     self.assertEqual(1+frame_index, frame.numdir)
-                    self.assertEqual(previous+(1+frame_index), frame.numdirs)
+                    self.assertEqual(previous+(1+frame_index), frame.numvideo)
 
             all_frames = functools.reduce(lambda x, y: x+y, frame_groups)
             self.assertEqual(300, Enumerator.count(all_frames))
 
-            self.assertEqual(1, all_frames[0].numdirs)
-            self.assertEqual(300, all_frames[-1].numdirs)
-
-            all_frames = Enumerator.trim_start(all_frames, 5)
-
-            self.assertEqual(6, all_frames[0].numdirs)
-            self.assertEqual(300, all_frames[-1].numdirs)
-            self.assertEqual(295, Enumerator.count(all_frames))
-
-            all_frames = Enumerator.trim_end(all_frames, 10)
-
-            self.assertEqual(6, all_frames[0].numdirs)
-            self.assertEqual(290, all_frames[-1].numdirs)
-            self.assertEqual(285, Enumerator.count(all_frames))
+            self.assertEqual(1, all_frames[0].numvideo)
+            self.assertEqual(300, all_frames[-1].numvideo)
 
     def test_mixed(self):
         banner_1 = Frame(None, True, 'Message 1')
@@ -2613,7 +2565,7 @@ class _EnumeratorTest(TestCase):
                     if not frame.banner:
 
                         self.assertEqual(previous_in_the_directory + 1, frame.numdir)
-                        self.assertEqual(previous + 1, frame.numdirs)
+                        self.assertEqual(previous + 1, frame.numvideo)
 
                         previous_in_the_directory += 1
                         previous += 1
@@ -2627,32 +2579,8 @@ class _EnumeratorTest(TestCase):
             self.assertIsNotNone(first_real_frame)
             self.assertIsNotNone(last_real_frame)
 
-            self.assertEqual(1, first_real_frame.numdirs)
-            self.assertEqual(300, last_real_frame.numdirs)
-
-            all_frames = Enumerator.trim_start(all_frames, 5)
-
-            first_real_frame = next((x for x in all_frames if not x.banner), None)
-            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
-            self.assertIsNotNone(first_real_frame)
-            self.assertIsNotNone(last_real_frame)
-
-            self.assertEqual(6, first_real_frame.numdirs)
-            self.assertEqual(300, last_real_frame.numdirs)
-            self.assertEqual(295, Enumerator.count(all_frames))
-            self.assertEqual(335, len(all_frames))
-
-            all_frames = Enumerator.trim_end(all_frames, 10)
-
-            first_real_frame = next((x for x in all_frames if not x.banner), None)
-            last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
-            self.assertIsNotNone(first_real_frame)
-            self.assertIsNotNone(last_real_frame)
-
-            self.assertEqual(6, first_real_frame.numdirs)
-            self.assertEqual(290, last_real_frame.numdirs)
-            self.assertEqual(285, Enumerator.count(all_frames))
-            self.assertEqual(325, len(all_frames))
+            self.assertEqual(1, first_real_frame.numvideo)
+            self.assertEqual(300, last_real_frame.numvideo)
 
 
 class ConsoleInterface:
@@ -2661,7 +2589,7 @@ class ConsoleInterface:
     Превращает аргументы командной строки в настройки и наборы данных. И тут также выводится
     информация в стандартный вывод по ходу анализа параметров скрипта.
     """
-    __slots__ = 'options', '_layout'
+    __slots__ = '_args', '_source', '_destination', '_layout'
 
     def __init__(self):
         parser = ArgumentParser(prog='catframes.py', description=DESCRIPTION,
@@ -2675,14 +2603,34 @@ class ConsoleInterface:
         parser.add_argument('--resolutions', action='store_true',
             help='show the resolution choosing process and exit')
 
-        parser.add_argument('folders', metavar='FOLDER', nargs='+',
-            help='a folder with images')
+        supported_suffixes = ' or '.join(map(lambda x: x[1:], OutputOptions.get_supported_suffixes()))
+        parser.add_argument('paths', metavar='PATH', nargs='+',
+            help='The paths are input folders (a source), ' + 
+            'and the last one is an output video file ' +
+            f'({supported_suffixes}, a destination). ' + 
+            'The order of the folders determines in which order ' +
+            'they will be concatenated. ' +
+            'If `--resolutions` argument is used, the destination path is optional. ' +
+            'That means, that if the last path points ' +
+            'to a folder or a symlink to a folder, ' +
+            'even if its name is similar to a video file, ' +
+            'the script treat it as an input folder.')
 
-        supported_suffixes = ', '.join(OutputOptions.get_supported_suffixes())
-        parser.add_argument('destination', metavar='VIDEO',
-            help=f'an output video file ({supported_suffixes})')
+        self._args = parser.parse_args()
+        if self._args.resolutions and \
+                (
+                    (len(self._args.paths) <= 1) or
+                    Path(self._args.paths[-1]).expanduser().is_dir() or
+                    Path(self._args.paths[-1]).suffix not in OutputOptions.get_supported_suffixes()
+                ):
+            self._source = self._args.paths
+            self._destination = None
+        elif len(self._args.paths) <= 1:
+            parser.error('A destination path is required.')
+        else:
+            self._source = self._args.paths[:-1]
+            self._destination = self._args.paths[-1]
 
-        self.options = parser.parse_args()
         self._layout = self._make_layout()
 
     @staticmethod
@@ -2703,17 +2651,6 @@ class ConsoleInterface:
     @classmethod
     def _add_input_arguments(cls, parser: ArgumentParser):
         input_arguments = parser.add_argument_group('Input')
-
-        # Deprecated, так как эти два аргумента
-        # не соответствуют цели существования этого скрипта.
-        # Это же не софт для видеомонтажа.
-        input_arguments.add_argument('--trim-start', metavar='FRAMES',
-            type=cls._get_minmax_type(1),
-            help='|deprecated| cut off some frames at the beginning')
-        input_arguments.add_argument('--trim-end', metavar='FRAMES',
-            type=cls._get_minmax_type(1),
-            help='|deprecated| cut off some frames at the end')
-
         input_arguments.add_argument('-s', '--sure', action='store_true',
             help="do not exit if some or all of input directories " + 
             "do not exist. You are sure that you are specifying " +
@@ -2727,7 +2664,7 @@ class ConsoleInterface:
 
         result = Layout()
         has_warning = False
-        options_dict = vars(self.options)
+        options_dict = vars(self._args)
 
         def add_overlay(xpos: int, ypos: int, option_name: str):
             nonlocal has_warning
@@ -2845,17 +2782,26 @@ class ConsoleInterface:
             help='а range of ports that are allowed to be used ' + 
                 'to interact with FFmpeg (default: %(default)s)')
 
-
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
         print()
-        for key, value in vars(self.options).items():
+        for key, value in vars(self._args).items():
+            if 'paths' == key:
+                continue
+
             if isinstance(value, list):
                 print(f'  {key}:')
                 for item in value:
                     print(f'    - {item}')
             elif value:
                 print(f'  {key}: {value}')
+
+        print(f'  source:')
+        for item in self._source:
+            print(f'    - {item}')
+        if None != self._destination:
+            print(f'  destination:')
+            print(f'    - {self._destination}')
         print()
 
     def show_splitter(self):
@@ -2863,8 +2809,7 @@ class ConsoleInterface:
         print(f"{'-'*42}\n")
 
     def get_input_sequence(self) -> Sequence[Frame]:
-        """Возвращает отсортированную и пронумерованную последовательность кадров, которую попросил
-        пользователь: параметры ``--trim-start`` и ``--trim-end`` уже применены.
+        """Возвращает отсортированную и пронумерованную последовательность кадров.
 
         :raises ValueError: не удалось прочитать список файлов или в указанных директориях нет
             ни одного изображения.
@@ -2876,15 +2821,15 @@ class ConsoleInterface:
 
         def get_banner_frames(message):
             banner = Frame(None, True, message)
-            return [banner for i in range(banner_duration_seconds * self.options.frame_rate)]
+            return [banner for i in range(banner_duration_seconds * self._args.frame_rate)]
 
-        for raw_folder_path in self.options.folders:
+        for raw_folder_path in self._source:
             folder_path = Path(raw_folder_path)
             real_images: Union[List[Path], None] = None
             try:
                 real_images = FileUtils.list_images(folder_path)
             except (ValueError, OSError) as e:
-                if self.options.sure:
+                if self._args.sure:
                     frame_groups.append(get_banner_frames(f'{type(e).__name__}: {str(e)}'))
                 else:
                     raise
@@ -2893,7 +2838,7 @@ class ConsoleInterface:
                 # Либо мы выбросили исключение ранее,
                 # либо кадры-заглушки уже добавлены.
                 pass
-            elif (len(real_images) < 1) and self.options.sure:
+            elif (len(real_images) < 1) and self._args.sure:
                 frame_groups.append(get_banner_frames(f'Could not find images in {folder_path}'))
             else:
                 FileUtils.sort_natural(real_images)
@@ -2903,17 +2848,8 @@ class ConsoleInterface:
         Enumerator.enumerate(frame_groups)
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
-        initial_frame_count = Enumerator.count(frames)
 
-        print(f'\nThere are {initial_frame_count} frames...')
-
-        if self.options.trim_start:
-            print(f'The first {self.options.trim_start} frame(s) will not be added.')
-            frames = Enumerator.trim_start(frames, self.options.trim_start)
-
-        if self.options.trim_end:
-            print(f'The last {self.options.trim_end} frame(s) will not be added.')
-            frames = Enumerator.trim_end(frames, self.options.trim_end)
+        print(f'\nThere are {Enumerator.count(frames)} frames...')
 
         # Имеется ввиду, что совсем никаких кадров нет, даже кадров-заглушек.
         # Если не только несуществующие, но и пустые папки будут приводить
@@ -2924,16 +2860,7 @@ class ConsoleInterface:
         if not frames:
             raise ValueError('Error: empty frame set.')
 
-        frame_number = 1
-        for frame in frames:
-            if not frame.banner:
-                frame.numvideo = frame_number
-                frame_number += 1
-
-        if initial_frame_count != Enumerator.count(frames):
-            print(f'Using {Enumerator.count(frames)} frames...\n')
-        else:
-            print()
+        print()
 
         return frames
 
@@ -2942,7 +2869,7 @@ class ConsoleInterface:
 
         :raises ValueError: пользователь указал файл с недопустимым расширением и т.п.
         """
-        destination = Path(self.options.destination)
+        destination = Path(self._destination)
 
         if destination.is_dir():
             raise ValueError('Destination must not be a folder.')
@@ -2951,37 +2878,40 @@ class ConsoleInterface:
             raise ValueError('Destination must not be a symbolic link.')
 
         if destination.suffix not in OutputOptions.get_supported_suffixes():
-            raise ValueError('Unsupported destination file extension.')
+            expected = ', '.join(
+                map(lambda x: x[1:], OutputOptions.get_supported_suffixes())
+            )
+            raise ValueError(f'Unsupported destination file extension.\nExpected: {expected}.')
 
-        if self.options.quality == 'high':
+        if self._args.quality == 'high':
             quality = Quality.HIGH
-        elif self.options.quality == 'poor':
+        elif self._args.quality == 'poor':
             quality = Quality.POOR
         else:
             quality = Quality.MEDIUM
 
         return OutputOptions(
             destination=destination,
-            overwrite=bool(self.options.force),
-            limit_seconds=self.options.limit,
+            overwrite=bool(self._args.force),
+            limit_seconds=self._args.limit,
             quality=quality,
-            frame_rate=self.options.frame_rate)
+            frame_rate=self._args.frame_rate)
 
     def get_server_options(self) -> JobServerOptions:
         return JobServerOptions(
-            self.options.port_range[0],
-            self.options.port_range[1]
+            self._args.port_range[0],
+            self._args.port_range[1]
         )
 
     @property
     def statistics_only(self) -> bool:
         """Пользователь не хочет пока делать видео, только посмотреть логику выбора разрешения."""
-        return self.options.resolutions
+        return self._args.resolutions
 
     @property
     def margin_color(self) -> str:
         """В случае полупрозрачных кадров, это будет также цвет фона."""
-        return self.options.margin_color
+        return self._args.margin_color
 
     @property
     def layout(self) -> Layout:
@@ -3014,7 +2944,13 @@ def main():
         print(f'The number of overlays: {len(cli.layout)}\n')
         cli.show_splitter()
 
-        output_options = cli.get_output_options()
+        if not cli.statistics_only:
+            output_options = cli.get_output_options()
+            if (not output_options.overwrite) and output_options.destination.exists():
+                raise ValueError('Destination file already exists.')
+        else:
+            output_options = None
+
         frames = cli.get_input_sequence()
 
         resolution_table = ResolutionStatistics(frames)
