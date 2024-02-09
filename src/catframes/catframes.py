@@ -57,6 +57,7 @@ import tempfile
 import threading
 import textwrap
 from wsgiref.simple_server import make_server
+from queue import Queue
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -1524,25 +1525,29 @@ class OutputOptions:
         """Возвращает поддерживаемые расширения файлов."""
         return '.mp4', '.webm'
 
-    def make(self, frames: Sequence[Frame], view: FrameView, server_options: JobServerOptions):
-        """Обрабатывает с помощью :class:`FrameView` и соединяет кадры последовательности
-        в видеозапись. Сортировка последовательности, как и валидация всех опций, должны быть
-        сделаны заранее.
-
-        Всё происходит в ОЗУ. Диск используется только для
-
-        1. чтения кадров,
-        2. хранения списка кадров в текстовом временном файле,
-        3. сохранения видео.
-
-        Скрипт ответственнен примерно за одну пятую суммарного с FFmpeg потребления памяти.
-        """
+    def limit_frames(self, frames: Sequence[Frame]):
         if self.limit_seconds:
             frames = frames[:(self.limit_seconds*self.frame_rate)]
+        return frames
+
+    def make(self, frames: Sequence[Frame], \
+            index_render_results_queue: Queue, server_options: JobServerOptions):
 
         # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
         offset: int = random.randint(0, max(0, sys.maxsize - len(frames)))
+
+        index_render_results = {}
+
+        @functools.lru_cache(maxsize=7)
+        def get_render_result(index):
+            if index in index_render_results:
+                return index_render_results.pop(index)
+            temp = (-1, None)
+            while temp[0] != index:
+                temp = index_render_results_queue.get()
+                index_render_results[temp[0]] = temp[1]
+            return index_render_results.pop(index)
 
         def app(environ, start_response):
             method: str = environ['REQUEST_METHOD']
@@ -1554,9 +1559,8 @@ class OutputOptions:
             if http_get and img_page:
                 frame_index = int(img_page.groups()[0]) - offset
                 if frame_index in range(len(frames)):
-                    frame = frames[frame_index]
                     status = '200 OK'
-                    render_result = view.apply(frame)
+                    render_result = get_render_result(frame_index)
                     headers = [('Content-type', render_result.content_type)]
                     start_response(status, headers)
                     return [render_result.data]
@@ -2967,7 +2971,20 @@ def main():
 
         processing_start = monotonic()
         view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
-        output_options.make(frames, view, cli.get_server_options())
+
+        view_to_server_queue = Queue(maxsize = 2)
+        frames = output_options.limit_frames(frames)
+
+        def process_frames():
+            nonlocal view_to_server_queue
+            nonlocal frames
+            for i in range(len(frames)):
+                frame = frames[i]
+                view_to_server_queue.put((i, view.apply(frame)))
+
+        threading.Thread(target=process_frames, daemon=False).start()
+
+        output_options.make(frames, view_to_server_queue, cli.get_server_options())
         print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
