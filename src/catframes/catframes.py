@@ -1516,6 +1516,7 @@ class OutputOptions:
         return [
             '-c:v', 'libvpx-vp9',
             '-deadline', 'realtime',
+            '-cpu-used', '4',
             '-pix_fmt', self.quality.get_pix_fmt(),
             '-crf', str(vp9_crf), '-b:v', '0'
         ]
