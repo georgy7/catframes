@@ -57,7 +57,8 @@ import tempfile
 import threading
 import textwrap
 from wsgiref.simple_server import make_server
-from queue import Queue
+from queue import Queue, Empty
+from collections import deque
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -1478,6 +1479,50 @@ class Quality(Enum):
         return self.value[2]
 
 
+class FrameProcessor:
+    def __init__(self, view: FrameView):
+        # Не так важно, какой размер у очередей, ведь узкое место -
+        # сжатие видео, а не обработка кадров. Главное - чтобы
+        # поток, сжимающий видео, доходя до момента получения результатов,
+        # вытягивал в себя сразу всё содержимое очереди вывода.
+        self._input: Queue = Queue(maxsize = 5)
+        self._output: Queue = Queue(maxsize = 7)
+        self._view: FrameView = view
+        self._alive: bool = True
+
+        def process_frames():
+            while self._alive:
+                try:
+                    # Нельзя использовать блокирующий get -
+                    # процесс зависнет после последнего кадра.
+                    i, frame = self._input.get(timeout=0.2)
+                    self._output.put((i, self._view.apply(frame)))
+                except Empty:
+                    pass
+
+        threading.Thread(target=process_frames, daemon=False).start()
+
+    def request_frame(self, frame_index: int, frame: Frame):
+        self._input.put((frame_index, frame))
+
+    @property
+    def empty(self) -> bool:
+        return self._output.empty()
+
+    def get_next(self):
+        return self._output.get_nowait()
+
+    def wait_next(self, seconds, default_value):
+        try:
+            return self._output.get(timeout=seconds)
+        except Empty:
+            return default_value
+
+    def shutdown(self):
+        # TODO graceful shutdown, including KeyboardInterrupt
+        self._alive = False
+
+
 @dataclass(frozen=True)
 class OutputOptions:
     """Это опции сохранения видеозаписи. Грубо говоря, опции FFmpeg. Они не влияют ни на выбор
@@ -1532,23 +1577,52 @@ class OutputOptions:
         return frames
 
     def make(self, frames: Sequence[Frame], \
-            index_render_results_queue: Queue, server_options: JobServerOptions):
+            frame_processor: FrameProcessor, \
+            server_options: JobServerOptions):
 
         # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
         offset: int = random.randint(0, max(0, sys.maxsize - len(frames)))
 
-        index_render_results = {}
+        render_results = deque()
+        max_results = 10
 
-        @functools.lru_cache(maxsize=7)
-        def get_render_result(index):
-            if index in index_render_results:
-                return index_render_results.pop(index)
-            temp = (-1, None)
-            while temp[0] != index:
-                temp = index_render_results_queue.get()
-                index_render_results[temp[0]] = temp[1]
-            return index_render_results.pop(index)
+        # Чтобы случайно не запрашивать по сто раз один и тот же кадр.
+        requested = deque()
+        # Чтобы не делать проверку перед popleft: так в очереди всегода будет 3 элемента.
+        requested.append(-1)
+        requested.append(-1)
+        requested.append(-1)
+
+        def get_render_result(frame_index):
+            while not frame_processor.empty:
+                render_results.append(frame_processor.get_next())
+
+            result = next((x[1] for x in render_results if frame_index==x[0]), None)
+
+            # Preloading:
+            next_index = frame_index + 1
+            if (next_index < len(frames)) and not (next_index in requested):
+                requested.append(next_index)
+                requested.popleft()
+                frame_processor.request_frame(next_index, frames[next_index])
+
+            if result is None:
+                requested.append(frame_index)
+                requested.popleft()
+                frame_processor.request_frame(frame_index, frames[frame_index])
+
+                while result is None:
+                    x = frame_processor.wait_next(0.2, None)
+                    if None != x:
+                        render_results.append(x)
+                        if frame_index == x[0]:
+                            result = x[1]
+
+            while len(render_results) > max_results:
+                render_results.popleft()
+
+            return result
 
         def app(environ, start_response):
             method: str = environ['REQUEST_METHOD']
@@ -2971,21 +3045,13 @@ def main():
         del resolution_table
 
         processing_start = monotonic()
+
         view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
-
-        view_to_server_queue = Queue(maxsize = 2)
         frames = output_options.limit_frames(frames)
+        frame_processor = FrameProcessor(view)
+        output_options.make(frames, frame_processor, cli.get_server_options())
+        frame_processor.shutdown()
 
-        def process_frames():
-            nonlocal view_to_server_queue
-            nonlocal frames
-            for i in range(len(frames)):
-                frame = frames[i]
-                view_to_server_queue.put((i, view.apply(frame)))
-
-        threading.Thread(target=process_frames, daemon=False).start()
-
-        output_options.make(frames, view_to_server_queue, cli.get_server_options())
         print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
