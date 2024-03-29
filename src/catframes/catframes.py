@@ -1518,8 +1518,10 @@ class FrameProcessor:
         except Empty:
             return default_value
 
-    def shutdown(self):
-        # TODO graceful shutdown, including KeyboardInterrupt
+    def __enter__(self):
+        return self
+
+    def __exit__(self, x_type, x_val, x_tb):
         self._alive = False
 
 
@@ -3048,9 +3050,9 @@ def main():
 
         view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         frames = output_options.limit_frames(frames)
-        frame_processor = FrameProcessor(view)
-        output_options.make(frames, frame_processor, cli.get_server_options())
-        frame_processor.shutdown()
+        
+        with FrameProcessor(view) as frame_processor:
+            output_options.make(frames, frame_processor, cli.get_server_options())
 
         print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
