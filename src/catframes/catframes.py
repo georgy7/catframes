@@ -3,7 +3,7 @@
 """
 Catframes
 
-© Устинов Г.М., 2022, 2023
+© Устинов Г.М., 2022–2024
 
 Данное програмное обеспечение предоставляется «как есть», без каких-либо явных или подразумеваемых
 гарантий. Ни в каком случае авторы не несут ответственность за любые убытки, возникшие в результате
@@ -30,7 +30,7 @@ Catframes
    библиотекой `x264 <https://www.videolan.org/developers/x264.html>`_ (GPLv2),
    с расширением ``webm`` — библиотекой libvpx (3-пунктовая BSD).
 2. Библиотека `Pillow <https://python-pillow.org/>`_ — пермиссивная лицензия HPND.
-3. Хотя бы один юникодный моноширинный TrueType-шрифт (см. код PillowFrameView).
+3. Хотя бы один поддерживаемый юникодный моноширинный TrueType-шрифт (см. код PillowFrameView).
 
 """
 
@@ -57,6 +57,8 @@ import tempfile
 import threading
 import textwrap
 from wsgiref.simple_server import make_server
+from queue import Queue, Empty
+from collections import deque
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -70,7 +72,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.2.0'
+__version__ = '2024.4.0-SNAPSHOT'
 __license__ = 'Zlib'
 
 
@@ -1477,6 +1479,52 @@ class Quality(Enum):
         return self.value[2]
 
 
+class FrameProcessor:
+    def __init__(self, view: FrameView):
+        # Не так важно, какой размер у очередей, ведь узкое место -
+        # сжатие видео, а не обработка кадров. Главное - чтобы
+        # поток, сжимающий видео, доходя до момента получения результатов,
+        # вытягивал в себя сразу всё содержимое очереди вывода.
+        self._input: Queue = Queue(maxsize = 5)
+        self._output: Queue = Queue(maxsize = 7)
+        self._view: FrameView = view
+        self._alive: bool = True
+
+        def process_frames():
+            while self._alive:
+                try:
+                    # Нельзя использовать блокирующий get -
+                    # процесс зависнет после последнего кадра.
+                    i, frame = self._input.get(timeout=0.2)
+                    self._output.put((i, self._view.apply(frame)))
+                except Empty:
+                    pass
+
+        threading.Thread(target=process_frames, daemon=False).start()
+
+    def request_frame(self, frame_index: int, frame: Frame):
+        self._input.put((frame_index, frame))
+
+    @property
+    def empty(self) -> bool:
+        return self._output.empty()
+
+    def get_next(self):
+        return self._output.get_nowait()
+
+    def wait_next(self, seconds, default_value):
+        try:
+            return self._output.get(timeout=seconds)
+        except Empty:
+            return default_value
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, x_type, x_val, x_tb):
+        self._alive = False
+
+
 @dataclass(frozen=True)
 class OutputOptions:
     """Это опции сохранения видеозаписи. Грубо говоря, опции FFmpeg. Они не влияют ни на выбор
@@ -1515,6 +1563,7 @@ class OutputOptions:
         return [
             '-c:v', 'libvpx-vp9',
             '-deadline', 'realtime',
+            '-cpu-used', '4',
             '-pix_fmt', self.quality.get_pix_fmt(),
             '-crf', str(vp9_crf), '-b:v', '0'
         ]
@@ -1524,25 +1573,58 @@ class OutputOptions:
         """Возвращает поддерживаемые расширения файлов."""
         return '.mp4', '.webm'
 
-    def make(self, frames: Sequence[Frame], view: FrameView, server_options: JobServerOptions):
-        """Обрабатывает с помощью :class:`FrameView` и соединяет кадры последовательности
-        в видеозапись. Сортировка последовательности, как и валидация всех опций, должны быть
-        сделаны заранее.
-
-        Всё происходит в ОЗУ. Диск используется только для
-
-        1. чтения кадров,
-        2. хранения списка кадров в текстовом временном файле,
-        3. сохранения видео.
-
-        Скрипт ответственнен примерно за одну пятую суммарного с FFmpeg потребления памяти.
-        """
+    def limit_frames(self, frames: Sequence[Frame]):
         if self.limit_seconds:
             frames = frames[:(self.limit_seconds*self.frame_rate)]
+        return frames
+
+    def make(self, frames: Sequence[Frame], \
+            frame_processor: FrameProcessor, \
+            server_options: JobServerOptions):
 
         # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
         offset: int = random.randint(0, max(0, sys.maxsize - len(frames)))
+
+        render_results = deque()
+        max_results = 10
+
+        # Чтобы случайно не запрашивать по сто раз один и тот же кадр.
+        requested = deque()
+        # Чтобы не делать проверку перед popleft: так в очереди всегда будет 3 элемента.
+        requested.append(-1)
+        requested.append(-1)
+        requested.append(-1)
+
+        def get_render_result(frame_index):
+            while not frame_processor.empty:
+                render_results.append(frame_processor.get_next())
+
+            result = next((x[1] for x in render_results if frame_index==x[0]), None)
+
+            # Preloading:
+            next_index = frame_index + 1
+            if (next_index < len(frames)) and not (next_index in requested):
+                requested.append(next_index)
+                requested.popleft()
+                frame_processor.request_frame(next_index, frames[next_index])
+
+            if result is None:
+                requested.append(frame_index)
+                requested.popleft()
+                frame_processor.request_frame(frame_index, frames[frame_index])
+
+                while result is None:
+                    x = frame_processor.wait_next(0.2, None)
+                    if None != x:
+                        render_results.append(x)
+                        if frame_index == x[0]:
+                            result = x[1]
+
+            while len(render_results) > max_results:
+                render_results.popleft()
+
+            return result
 
         def app(environ, start_response):
             method: str = environ['REQUEST_METHOD']
@@ -1554,9 +1636,8 @@ class OutputOptions:
             if http_get and img_page:
                 frame_index = int(img_page.groups()[0]) - offset
                 if frame_index in range(len(frames)):
-                    frame = frames[frame_index]
                     status = '200 OK'
-                    render_result = view.apply(frame)
+                    render_result = get_render_result(frame_index)
                     headers = [('Content-type', render_result.content_type)]
                     start_response(status, headers)
                     return [render_result.data]
@@ -2966,8 +3047,13 @@ def main():
         del resolution_table
 
         processing_start = monotonic()
+
         view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
-        output_options.make(frames, view, cli.get_server_options())
+        frames = output_options.limit_frames(frames)
+        
+        with FrameProcessor(view) as frame_processor:
+            output_options.make(frames, frame_processor, cli.get_server_options())
+
         print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
