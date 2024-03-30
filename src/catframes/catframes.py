@@ -166,11 +166,17 @@ class JobServer:
         )
         print(f"\nPort: {port}\n")
         try:
-            with make_server(host='', port=port, app=self._app) as httpd:
+
+            httpd = make_server(host='', port=port, app=self._app)
+            try:
                 web_thread = threading.Thread(target = httpd.serve_forever)
+                web_thread.daemon = True
                 web_thread.start()
                 self._do_the_job(port)
+            finally:
+                # WSGIServer inherits this method from socketserver.BaseServer
                 httpd.shutdown()
+
             return True
         except OSError:
             return False
