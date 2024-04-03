@@ -72,7 +72,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.3.0'
+__version__ = '2024.3.1'
 __license__ = 'Zlib'
 
 
@@ -174,8 +174,8 @@ class JobServer:
                 web_thread.start()
                 self._do_the_job(port)
             finally:
-                # WSGIServer inherits this method from socketserver.BaseServer
-                httpd.shutdown()
+                httpd.shutdown()        # Exit loop.
+                httpd.server_close()    # Clean up the server.
 
             return True
         except OSError:
