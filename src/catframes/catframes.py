@@ -91,15 +91,17 @@ DESCRIPTION = f"""{TITLE}
 """
 
 HTTPService = Callable[[dict, Callable], Iterable[bytes]]
-"""Первый аргумент — WSGI environment (включает всю информацию о запросе), второй — функция начала
-ответа, которая принимает статус HTTP-ответа и список HTTP-заголовков. В терминах MVC, это еще
-неразграниченные роутинг с контроллерами.
+"""A function that is similar to HttpServlet in Java.
 
-Подробнее читайте в официальной документации: :py:func:`wsgiref.simple_server.make_server`.
+The first argument is WSGI environment (includes all information about the request),
+the second is the response start function, which accepts the status of the HTTP response
+and a list of HTTP headers.
+
+Read more in the official documentation: :py:func:`wsgiref.simple_server.make_server`.
 """
 
 HTTPClient = Callable[[int], None]
-"""Функция, которая работает с локальным веб-приложением. Аргумент — номер порта."""
+"""A function that uses a local HTTP service. The argument is the port number."""
 
 
 @dataclass(frozen=True)
@@ -130,8 +132,8 @@ class TwoFromTheChest:
     1. You should use a firewall on your computer.
     2. It is better not to send URL lists over the HTTP channel.
 
-    :param giver: This is a function that responds to HTTP requests.
-    :param eater: This is a function that controls the source of HTTP requests. It runs synchronously and
+    :param giver: The function that responds to HTTP requests.
+    :param eater: The function that controls the source of HTTP requests. It runs synchronously and
         only once. Exceptions thrown from here will be re-thrown from the method :meth:`start`.
     :param options: System settings.
     """
@@ -142,9 +144,9 @@ class TwoFromTheChest:
         self._eater_error: Union[Exception, None] = None
 
     def start(self):
-        """Запускает этих двоих, ждёт когда едок наестся.
+        """It waits until the eater is full.
 
-        :raises Exception: если исключение вылетело из едока.
+        :raises Exception: thrown by the eater.
         """
         while not self._was_running():
             print('Trying different port...')
@@ -155,8 +157,8 @@ class TwoFromTheChest:
         try:
             self._eater(http_port)
         except Exception as exc:
-            # Ловля общего исключения обоснована:
-            # нужно остановить сервер, а потом можно перевыбросить.
+            # Catching a general exception is justified:
+            # I stop the server and then re-throw this exception.
             self._eater_error = exc
 
     def _was_running(self) -> bool:
