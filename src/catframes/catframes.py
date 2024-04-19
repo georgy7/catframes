@@ -184,7 +184,7 @@ class TwoFromTheChest:
             return False
 
 
-class _TwoOfTheCasketTest(TestCase):
+class _TwoFromTheChestTest(TestCase):
     def test_get(self):
         """Сервер должен ждать завершения работ. Здесь используются GET-запросы и ASCII-пути."""
 
