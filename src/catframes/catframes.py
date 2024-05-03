@@ -72,7 +72,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.4.0-SNAPSHOT'
+__version__ = '2024.4.0'
 __license__ = 'Zlib'
 
 
@@ -234,11 +234,11 @@ class _TwoFromTheChestTest(TestCase):
 
 
 class FileUtils:
-    """Модуль вспомогательных функций, связанных с файловой системой."""
+    """A module of auxiliary functions related to the file system."""
 
     @staticmethod
     def get_checksum(path: Union[Path, None]) -> Optional[str]:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return None
         hashsum = hashlib.sha1()
@@ -254,7 +254,7 @@ class FileUtils:
 
     @staticmethod
     def get_mtime(path: Union[Path, None]) -> Optional[datetime]:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return None
         try:
@@ -264,7 +264,7 @@ class FileUtils:
 
     @staticmethod
     def get_file_size(path: Union[Path, None]) -> Optional[int]:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return None
         try:
@@ -277,7 +277,7 @@ class FileUtils:
 
     @staticmethod
     def is_symlink(path: Union[Path, None]) -> bool:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return False
         return path.expanduser().is_symlink()
@@ -603,7 +603,7 @@ class _FileUtilsTest(TestCase):
 
 @dataclass(frozen=True)
 class Resolution:
-    """Ненулевое разрешение в пикселях."""
+    """Non-zero size in pixels."""
 
     width: int
     height: int
@@ -613,14 +613,14 @@ class Resolution:
         assert self.height > 0
 
     def __str__(self):
-        """Возвращает строку вида ``ШxВ``. Икс в качестве разделителя выбран из соображений
-        совместимости с максимальным числом шрифтов оверлеев и кодировок терминалов.
+        """Returns a string of the form `WxH". The letter X was chosen as the separator
+        for compatibility reasons with most fonts and encodings.
         """
         return f'{self.width}x{self.height}'
 
     @property
     def ratio(self) -> float:
-        """Соотношение сторон. Всегда больше нуля."""
+        """Aspect ratio. Always more than zero."""
         return self.width / self.height
 
 
