@@ -72,7 +72,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.3.1'
+__version__ = '2024.4.0'
 __license__ = 'Zlib'
 
 
@@ -90,20 +90,22 @@ DESCRIPTION = f"""{TITLE}
 
 """
 
-WebApp = Callable[[dict, Callable], Iterable[bytes]]
-"""Первый аргумент — WSGI environment (включает всю информацию о запросе), второй — функция начала
-ответа, которая принимает статус HTTP-ответа и список HTTP-заголовков. В терминах MVC, это еще
-неразграниченные роутинг с контроллерами.
+HTTPService = Callable[[dict, Callable], Iterable[bytes]]
+"""A function that is similar to HttpServlet in Java.
 
-Подробнее читайте в официальной документации: :py:func:`wsgiref.simple_server.make_server`.
+The first argument is WSGI environment (includes all information about the request),
+the second is the response start function, which accepts the status of the HTTP response
+and a list of HTTP headers.
+
+Read more in the official documentation: :py:func:`wsgiref.simple_server.make_server`.
 """
 
-WebJob = Callable[[int], None]
-"""Функция, которая работает с локальным веб-приложением. Аргумент — номер порта."""
+HTTPClient = Callable[[int], None]
+"""A function that uses a local HTTP service. The argument is the port number."""
 
 
 @dataclass(frozen=True)
-class JobServerOptions:
+class TheChestParameterSet:
     min_http_port: int
     max_http_port: int
 
@@ -113,66 +115,66 @@ class JobServerOptions:
         assert self.min_http_port <= self.max_http_port
 
 
-class JobServer:
-    """Механизм межпроцессного взаимодействия на основе HTTP. Открывает порт и обслуживает другие
-    программы, которые контролируются из этого же сервера.
-    Этот объект похож на два куска хлеба в сэндвиче, которые обнимают процесс-начинку.
+class TwoFromTheChest:
+    """Two from the chest, at my behest! Is that true, you'll do anything for me?
 
-    Грубо говоря, эта штука позволяет делать что-то вроде динамической файловой системы, если
-    считать URL файлами: в тот момент, когда что-то запрашивается сторонней программой, оно
-    подготавливается на лету. Не тратится дисковое пространство, а если не использовать временные
-    файлы при обработке запросов, то и ресурс SSD.
+    This is from the cartoon Vovka in the Far-Around Kingdom (1965).
 
-    В целях безопасности:
+    It is an HTTP-based interprocess communication mechanism that works like a web server, providing data,
+    while simultaneously starting a data recipient and waiting for it to complete.
+    It is assumed that it is used to run an external process that can read data over the network.
+    FFmpeg can read images either from disk (as files) or over the network (as URLs).
+    If it is necessary to process the images before giving them to this program, it is faster to send them
+    over the network than to save them to disk. It also reduces disc wear.
 
-    1. на компьютере следует использовать файрвол;
-    2. лучше не передавать списки URL по HTTP-каналу.
+    For security reasons:
 
-    Номер порта выбирается случайно из диапазона, указанного в настройках.
+    1. You should use a firewall on your computer.
+    2. It is better not to send URL lists over the HTTP channel.
 
-    :param app: Функция, которая обслуживает HTTP-запросы.
-    :param job: Запускается один раз. Сервер ждёт завершения. Выброшенные исключения приводят
-        к остановке сервера и вылетают из метода :meth:`run`.
-    :param options: Системные настройки.
+    :param giver: The function that responds to HTTP requests.
+    :param eater: The function that controls the source of HTTP requests. It runs synchronously and
+        only once. Exceptions thrown from here will be re-thrown from the method :meth:`start`.
+    :param options: System settings.
     """
-    def __init__(self, app: WebApp, job: WebJob, options: JobServerOptions):
-        self._app: WebApp = app
-        self._job: WebJob = job
+    def __init__(self, giver: HTTPService, eater: HTTPClient, options: TheChestParameterSet):
+        self._giver: HTTPService = giver
+        self._eater: HTTPClient = eater
         self._options = options
-        self._job_error: Union[Exception, None] = None
+        self._eater_error: Union[Exception, None] = None
 
-    def run(self):
-        """Запускает сервер, ждёт завершения работ, останавливает сервер.
+    def start(self):
+        """It waits until the eater is full.
 
-        :raises Exception: если исключение вылетело из джобы.
+        :raises Exception: thrown by the eater.
         """
         while not self._was_running():
             print('Trying different port...')
-        if self._job_error:
-            raise self._job_error
+        if self._eater_error:
+            raise self._eater_error
 
-    def _do_the_job(self, port):
+    def _eat(self, http_port):
         try:
-            self._job(port)
+            self._eater(http_port)
         except Exception as exc:
-            # Ловля общего исключения обоснована:
-            # нужно остановить сервер, а потом можно перевыбросить.
-            self._job_error = exc
+            # Catching a general exception is justified:
+            # I stop the server and then re-throw this exception.
+            self._eater_error = exc
 
     def _was_running(self) -> bool:
-        port = random.randint(
+        http_port = random.randint(
             self._options.min_http_port,
             self._options.max_http_port
         )
-        print(f"\nPort: {port}\n")
+        print(f"\nPort: {http_port}\n")
         try:
 
-            httpd = make_server(host='', port=port, app=self._app)
+            httpd = make_server(host='', port=http_port, app=self._giver)
             try:
                 web_thread = threading.Thread(target = httpd.serve_forever)
                 web_thread.daemon = True
                 web_thread.start()
-                self._do_the_job(port)
+                self._eat(http_port)
             finally:
                 httpd.shutdown()        # Exit loop.
                 httpd.server_close()    # Clean up the server.
@@ -182,13 +184,13 @@ class JobServer:
             return False
 
 
-class _JobServerTest(TestCase):
+class _TwoFromTheChestTest(TestCase):
     def test_get(self):
         """Сервер должен ждать завершения работ. Здесь используются GET-запросы и ASCII-пути."""
 
         content = 'Hello World'.encode("utf-8")
 
-        def webapp(environ, start_response):
+        def service(environ, start_response):
             method: str = environ['REQUEST_METHOD']
             pathname: str = environ['PATH_INFO']
 
@@ -209,7 +211,7 @@ class _JobServerTest(TestCase):
             start_response(status, headers)
             return ['Not found.'.encode("utf-8")]
 
-        def webjob(port):
+        def client(port):
             base_url = f'localhost:{port}'
 
             def read(pathname):
@@ -227,16 +229,16 @@ class _JobServerTest(TestCase):
                 read('/Item/123'),
                 (200, '/Item/123'.encode("utf-8")))
 
-        server = JobServer(webapp, webjob, JobServerOptions(10240, 65535))
-        server.run()
+        these_guys = TwoFromTheChest(service, client, TheChestParameterSet(10240, 65535))
+        these_guys.start()
 
 
 class FileUtils:
-    """Модуль вспомогательных функций, связанных с файловой системой."""
+    """A module of auxiliary functions related to the file system."""
 
     @staticmethod
     def get_checksum(path: Union[Path, None]) -> Optional[str]:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return None
         hashsum = hashlib.sha1()
@@ -252,7 +254,7 @@ class FileUtils:
 
     @staticmethod
     def get_mtime(path: Union[Path, None]) -> Optional[datetime]:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return None
         try:
@@ -262,7 +264,7 @@ class FileUtils:
 
     @staticmethod
     def get_file_size(path: Union[Path, None]) -> Optional[int]:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return None
         try:
@@ -275,7 +277,7 @@ class FileUtils:
 
     @staticmethod
     def is_symlink(path: Union[Path, None]) -> bool:
-        """Функция не выбрасывает исключения."""
+        """This function does not throw exceptions."""
         if not path:
             return False
         return path.expanduser().is_symlink()
@@ -601,7 +603,7 @@ class _FileUtilsTest(TestCase):
 
 @dataclass(frozen=True)
 class Resolution:
-    """Ненулевое разрешение в пикселях."""
+    """Non-zero size in pixels."""
 
     width: int
     height: int
@@ -611,14 +613,14 @@ class Resolution:
         assert self.height > 0
 
     def __str__(self):
-        """Возвращает строку вида ``ШxВ``. Икс в качестве разделителя выбран из соображений
-        совместимости с максимальным числом шрифтов оверлеев и кодировок терминалов.
+        """Returns a string of the form `WxH". The letter X was chosen as the separator
+        for compatibility reasons with most fonts and encodings.
         """
         return f'{self.width}x{self.height}'
 
     @property
     def ratio(self) -> float:
-        """Соотношение сторон. Всегда больше нуля."""
+        """Aspect ratio. Always more than zero."""
         return self.width / self.height
 
 
@@ -1585,8 +1587,8 @@ class OutputOptions:
         return frames
 
     def make(self, frames: Sequence[Frame], \
-            frame_processor: FrameProcessor, \
-            server_options: JobServerOptions):
+             frame_processor: FrameProcessor, \
+             server_options: TheChestParameterSet):
 
         # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
@@ -1632,7 +1634,7 @@ class OutputOptions:
 
             return result
 
-        def app(environ, start_response):
+        def service(environ, start_response):
             method: str = environ['REQUEST_METHOD']
             pathname: str = environ['PATH_INFO']
 
@@ -1653,7 +1655,7 @@ class OutputOptions:
             start_response(status, headers)
             return ['Not found.'.encode("utf-8")]
 
-        def job(port: int):
+        def client(port: int):
             base_url = f'http://localhost:{port}/img/'
 
             with tempfile.TemporaryDirectory() as folder_path_string:
@@ -1691,8 +1693,8 @@ class OutputOptions:
 
                 subprocess.check_call(ffmpeg_options)
 
-        server = JobServer(app, job, server_options)
-        server.run()
+        these_guys = TwoFromTheChest(service, client, server_options)
+        these_guys.start()
 
 
 class PillowFrameView(FrameView):
@@ -2984,8 +2986,8 @@ class ConsoleInterface:
             quality=quality,
             frame_rate=self._args.frame_rate)
 
-    def get_server_options(self) -> JobServerOptions:
-        return JobServerOptions(
+    def get_server_options(self) -> TheChestParameterSet:
+        return TheChestParameterSet(
             self._args.port_range[0],
             self._args.port_range[1]
         )
