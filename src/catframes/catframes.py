@@ -911,15 +911,15 @@ class ResolutionStatistics:
 
         alternatives = []
 
-        if result.height < ResolutionUtils.round(find_other_axis(raw_result.width, width, height, count)):
+        if result.height < ResolutionUtils.round(find_other_axis(raw_result.width, width, height, list(count))):
             alternatives.append(Resolution(
                 result.width,
-                ResolutionUtils.round(find_other_axis(result.width, width, height, count))
+                ResolutionUtils.round(find_other_axis(result.width, width, height, list(count)))
             ))
 
-        if result.width < ResolutionUtils.round(find_other_axis(raw_result.height, height, width, count)):
+        if result.width < ResolutionUtils.round(find_other_axis(raw_result.height, height, width, list(count))):
             alternatives.append(Resolution(
-                ResolutionUtils.round(find_other_axis(result.height, height, width, count)),
+                ResolutionUtils.round(find_other_axis(result.height, height, width, list(count))),
                 result.height
             ))
 
