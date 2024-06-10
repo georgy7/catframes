@@ -72,7 +72,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.4.0'
+__version__ = '2024.8.0-SNAPSHOT'
 __license__ = 'Zlib'
 
 
@@ -620,7 +620,7 @@ class Resolution:
 
     @property
     def ratio(self) -> float:
-        """Aspect ratio. Always more than zero."""
+        """Aspect ratio. Always greater than zero."""
         return self.width / self.height
 
 
