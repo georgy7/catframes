@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from tkinter import Tk, Toplevel, ttk, font
+from abc import ABC, abstractmethod
 
 
 class Lang:
@@ -26,6 +27,8 @@ class Lang:
             'sets.lbLang': 'Language:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
+
+            'task.title': 'New Task'
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -37,6 +40,8 @@ class Lang:
             'sets.lbLang': 'Язык:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
+
+            'task.title': 'Новая задача'
         },
     }
 
@@ -66,26 +71,61 @@ class Lang:
 class Styles(ttk.Style):
     """Класс для определения стилей виджетов"""
 
-    def __init__(self, root_window: Tk):
+    def __init__(self, root: Tk):
         super().__init__()
-        self.theme_use('alt')
-        self.configure(style='TButton', font='14')  # имя, шрифт
-        root_window.option_add("*Font", font.Font(size=14))
+        self.theme_use('alt')  # одна из стандартных тем, для примера
+        self.configure(style='TButton', font='14')  # шрифт текста в кнопке
+        root.option_add("*Font", font.Font(size=14))  # шрифты остальных виджетов
 
 
-class WindowMixin:
-    """Хранит общие для окон методы"""
+#
 
-    title: Tk.title
-    # атрибуты ниже нужно имплементировать вручную
-    name: str
-    widgets: dict
 
-    # обновление текстов всех виджетов, исходя из языка
-    def update_texts(self):
+class WindowMixin(ABC):
+    """Абстрактный класс.
+    Упрощает конструкторы окон."""
+
+    all_windows: dict = {}  # общий словарь регистрации для всех окон
+
+    title: Tk.title         # эти атрибуты и методы объекта
+    protocol: Tk.protocol   # появятся автоматически при
+    destroy: Tk.destroy     # наследовании от Tk или Toplevel
+
+    name: str               # имя окна для словаря всех окон
+    widgets: dict           # словарь виджетов окна
+
+    # настройка окна, вызывается через super в конце __init__ окна
+    def _default_set_up(self):
+        self.all_windows[self.name] = self  # регистрация окна в словаре
+        self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
+
+        self._init_widgets()  # создание виджетов
+        self.update_texts()   # установка текста нужного языка
+        self._pack_widgets()  # расстановка виджетов
+
+    # закрытие окна
+    def close(self) -> None:
+        try:  # удаляет окно из словаря регистрации
+            self.all_windows.pop(self.name)
+        except KeyError:
+            pass
+        self.destroy()  # закрывает окно
+
+    # обновление текстов всех виджетов окна, исходя из языка
+    def update_texts(self) -> None:
         self.title(Lang.read(f'{self.name}.title'))
         for w_name, widget in self.widgets.items():
             widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+
+    # метод для создания и настройки виджетов
+    @abstractmethod
+    def _init_widgets(self) -> None:
+        ...
+
+    # метод для расположения виджетов
+    @abstractmethod
+    def _pack_widgets(self) -> None:
+        ...
 
 
 #
@@ -97,95 +137,113 @@ class RootWindow(Tk, WindowMixin):
     def __init__(self):
         super().__init__()
         self.name = 'root'
-        self.widgets: dict = {}
+        self.widgets = {}
 
-        self.geometry("600x500")
-        self.minsize(600, 500)
-        self.resizable(False, False)
+        self.geometry("600x500")  # размеры  окна
+        self.resizable(False, False)  # нельзя растягивать
 
-        self._init_widgets()
-        self.update_texts()
-        self._pack_widgets()
         self.styles = Styles(self)
+        super()._default_set_up()
 
-        self.settings_window: Toplevel | None = None
-        self.new_task_window: Toplevel | None = None
+    # при закрытии окна
+    def close(self):
+        print('TODO проверка незавершённых задач')
+        self.destroy()
 
     # создание и настройка виджетов
     def _init_widgets(self):
 
+        # открытие окна с новой задачей
         def open_new_task():
-            if self.new_task_window:
-                print('TODO фокусировка')
-            print('TODO открытие окна')
-        self.widgets['newTask'] = ttk.Button(self, command=open_new_task, style='TButton')
+            if self.all_windows.get('task'):  # если нашёл окно в словаре регистрации
+                return self.all_windows['task'].focus()  # фокусируется на нём
+            self.all_windows['task'] = NewTaskWindow(root=self)  # если не нашёл - создать
 
+        # открытие окна настроек
         def open_settings():
-            if self.settings_window:
-                return self.settings_window.focus()
-            self.settings_window = SettingsWindow(root_window=self)
-        self.widgets['openSets'] = ttk.Button(self, command=open_settings, style='TButton')
+            if self.all_windows.get('sets'):
+                return self.all_windows['sets'].focus()
+            self.all_windows['sets'] = SettingsWindow(root=self)
+
+        # создание виджетов, привязывание функций
+        self.widgets['newTask'] = ttk.Button(self, command=open_new_task)
+        self.widgets['openSets'] = ttk.Button(self, command=open_settings)
 
     # расположение виджетов
     def _pack_widgets(self):
-        # self.widgets['lbl_1'].place()
         self.widgets['newTask'].place(x=15, y=15, width=150, height=30)
         self.widgets['openSets'].place(relx=1.0, x=-165, y=15, width=150, height=30)
-
-
-#
 
 
 class SettingsWindow(Toplevel, WindowMixin):
     """Окно настроек"""
 
-    def __init__(self, root_window: RootWindow):
-        super().__init__(master=root_window)
+    def __init__(self, root: RootWindow):
+        super().__init__(master=root)
         self.name = 'sets'
-        self.widgets: dict = {}
-
-        self.root_window = root_window
-        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.widgets = {}
 
         self.geometry("260x200")
         self.resizable(False, False)
-        self._init_widgets()
-        self.update_texts()
-        self._pack_widgets()
 
-    # закрытие окна
-    def close(self):
-        self.master.settings_window = None
-        self.destroy()
+        super()._default_set_up()
 
     # создание и настройка виджетов
     def _init_widgets(self):
-        self.widgets['lbLang'] = ttk.Label(self, style='TLabel')
-        self.widgets['cmbLang'] = ttk.Combobox(self, values=Lang.get_all(), state='readonly')
 
-        # кнопка применения настроек
+        # применение настроек
         def apply_settings():
-            Lang.set(index=self.widgets['cmbLang'].current())
-            self.update_texts()
-            self.root_window.update_texts()
-        self.widgets['btApply'] = ttk.Button(self, command=apply_settings, style='TButton')
+            Lang.set(index=self.widgets['cmbLang'].current())  # установка языка
+            for w in self.all_windows.values():  # перебирает все окна в словаре регистрации
+                w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
-        # кнопка сохранения настроек (применение + закрытие)
+            ...  # считывание других виджетов настроек, и применение
+
+        # сохранение настроек (применение + закрытие)
         def save_settings():
             apply_settings()
             self.close()
-        self.widgets['btSave'] = ttk.Button(self, command=save_settings, style='TButton')
+
+        # создание виджетов, привязывание функций
+        self.widgets['btApply'] = ttk.Button(self, command=apply_settings)
+        self.widgets['btSave'] = ttk.Button(self, command=save_settings)
+        self.widgets['lbLang'] = ttk.Label(self)
+        self.widgets['cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
+            self,
+            values=Lang.get_all(),  # вытягивает список языков
+            state='readonly'  # запрещает вписывать, только выбирать
+        )
 
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['lbLang'].place(x=15, y=15, width=110, height=30)
         self.widgets['cmbLang'].place(relx=1.0, x=-125, y=15, width=110, height=30)
-        self.widgets['cmbLang'].current(newindex=Lang.current_index)
-
+        self.widgets['cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
         self.widgets['btApply'].place(rely=1.0, x=15, y=-45, width=110, height=30)
         self.widgets['btSave'].place(rely=1.0, relx=1.0, x=-125, y=-45, width=110, height=30)
 
 
+class NewTaskWindow(Toplevel, WindowMixin):
+    """Окно создания новой задачи"""
+
+    def __init__(self, root: RootWindow):
+        super().__init__(master=root)
+        self.name = 'task'
+        self.widgets = {}
+
+        self.geometry("400x300")
+        self.resizable(False, False)
+
+        super()._default_set_up()
+
+    # создание и настройка виджетов
+    def _init_widgets(self):
+        pass
+
+    # расположение виджетов
+    def _pack_widgets(self):
+        pass
+
+
 if __name__ == "__main__":
-    root = RootWindow()
-    root.mainloop()
+    RootWindow().mainloop()
