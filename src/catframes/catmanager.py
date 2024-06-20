@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from tkinter import Tk, Toplevel, ttk
+from tkinter import Tk, Toplevel, ttk, Canvas
 from abc import ABC, abstractmethod
+from sys import platform
 
 
 # временные глобальные переменные
-MAJOR_SCALING: float = 1.0
+MAJOR_SCALING: float = 0.8
 TTK_THEME: str | None = None
 
 
@@ -143,6 +144,72 @@ class WindowMixin(ABC):
 
 #
 
+class ScrollableFrame(ttk.Frame):
+    """Прокручиваемый (умный) фрейм"""
+
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        
+        self.canvas = Canvas(self)  # объект "холста"
+
+        self.scrollbar = ttk.Scrollbar(  # полоса прокрутки
+            self, orient="vertical",     # установка в вертикальное положение
+            command=self.canvas.yview,   # передача управления вертикальной прокруткой холста
+        )  
+
+        self.scrollable_frame = ttk.Frame(self.canvas)  # фрейм для контента (внутренних виджетов)
+        self.scrollable_frame.bind(  # привязка к виджету фрейма 
+            "<Configure>",           # обработчика событий <Configure>, чтобы полоса
+            self._update_scrollbar,  # прокрутки менялась, когда обновляется фрейм 
+        )
+
+        # привязка холста к верхнему левому углу
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # передача управления полосы прокрутки, когда холст движется от колёсика
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # упаковка виджетов
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        # привязка и отвязка событий, когда курсор заходит на холст
+        self.canvas.bind("<Enter>", self._bind_mousewheel)
+        self.canvas.bind("<Leave>", self._unbind_mousewheel)
+
+        # первичное обновление полосы, чтобы сразу её не было видно
+        self._update_scrollbar_visibility()
+
+    # обработка изменений полосы прокрутки
+    def _update_scrollbar(self, event):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    # проверяет, нужна ли полоса прокрутки, и показывает/скрывает её
+    def _update_scrollbar_visibility(self):
+        if self.scrollable_frame.winfo_height() > self.canvas.winfo_height():
+            self.scrollbar.pack(side="right", fill="y")
+        else:
+            self.scrollbar.pack_forget()
+
+    # попытка активировать прокрутку колёсиком (если пройдёт валидацию)
+    def _bind_mousewheel(self, event):
+        self.canvas.bind_all("<MouseWheel>", self._validate_mousewheel)
+        self.canvas.bind_all("<Circulate>", self._validate_mousewheel)
+
+    # отвазать события прокрутки
+    def _unbind_mousewheel(self, event):
+        self.canvas.unbind_all("<MouseWheel>")
+        self.canvas.unbind_all("<Circulate>")
+
+    # возможность прокрутки только если полоса активна, и фрейм переполнен
+    def _validate_mousewheel(self, event):
+        if self.scrollable_frame.winfo_height() > self.canvas.winfo_height():
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+
+#
+
 
 class RootWindow(Tk, WindowMixin):
     """Основное окно"""
@@ -153,6 +220,7 @@ class RootWindow(Tk, WindowMixin):
         
         self.widgets: dict[str, ttk.Widget] = {}
         self.frames:  dict[str, ttk.Frame] = {}
+        self.tasks:   dict[str, ttk.Frame] = {}
 
         self.size = 300, 250
         self.resizable(False, False)  # нельзя растягивать
@@ -180,19 +248,41 @@ class RootWindow(Tk, WindowMixin):
             self.all_windows['sets'].focus()
 
         # создание фреймов
-        self.frames['upperBar'] = upperBar = ttk.Frame(self)
+        self.frames['upperBar'] = upperBar = ttk.Frame(self)  # верхний бар с кнопками
+        self.frames['taskSpace'] = ScrollableFrame(self)  # пространство с прокруткой
+        self.taskList = self.frames['taskSpace'].scrollable_frame  # сокращение пути для читаемости
 
         # создание виджетов, привязывание функций
-        self.widgets['newTask'] = ttk.Button(upperBar, command=open_new_task)
+        self.widgets['newTask'] = ttk.Button(upperBar, command=self.add_task_bar)  ##
+        self._switch = True
+        self._colors = ['#aaaaaa', '#cccccc']
+
+        # self.widgets['newTask'] = ttk.Button(upperBar, command=open_new_task)
         self.widgets['openSets'] = ttk.Button(upperBar, command=open_settings)
 
     # расположение виджетов
     def _pack_widgets(self):
         self.frames['upperBar'].pack(fill='x', padx=15, pady=15)
+        self.frames['taskSpace'].pack(fill='both', expand=True)
 
         self.widgets['newTask'].pack(side='left')
         self.widgets['openSets'].pack(side='right')
+        
+    # добавление виджета задачи
+    def add_task_bar(self, **sets) -> None:
+        self._switch = not self._switch
+        color = self._colors[int(self._switch)]
 
+        test_task_space = ttk.Label(
+            self.taskList, 
+            font='14',
+            padding=20,
+            background=color,
+            text="test task space "*4,
+            
+        )
+        test_task_space.pack(fill='x')
+        ...
 
 #
 
