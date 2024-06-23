@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from tkinter import Tk, Toplevel, ttk, Canvas
 from abc import ABC, abstractmethod
-from sys import platform
 
 
 # временные глобальные переменные
@@ -22,7 +21,7 @@ class Lang:
     current_name = 'english'
     current_index = 0
 
-    data = {  # языковые теги (ключи) имеют вид: "окно.элемент"
+    data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
             'root.title': 'CatFrames',
             'root.lbTest': 'Label 1',
@@ -34,7 +33,13 @@ class Lang:
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
 
-            'task.title': 'New Task'
+            'task.title': 'New Task',
+            'task.btCreate': 'Create',
+
+            'bar.active': 'processing',
+            'bar.inactive': 'complete', 
+            'bar.btInfo': 'Info',
+            'bar.btStop': 'Cancel',
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -47,7 +52,13 @@ class Lang:
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
 
-            'task.title': 'Новая задача'
+            'task.title': 'Новая задача',
+            'task.btCreate': 'Создать',
+
+            'bar.lbActive': 'обработка',
+            'bar.lbInactive': 'завершено', 
+            'bar.btInfo': 'Инфо',
+            'bar.btStop': 'Отмена',
         },
     }
 
@@ -73,6 +84,29 @@ class Lang:
         except KeyError:  # если тег не найден
             return '-----'
 
+
+#
+
+
+class Task:
+    all_tasks: dict = {}  # общий словарь для регистрации всех задач
+    last_task_num: int = 0
+
+    def __init__(self, **params) -> None:
+
+        ...  # логика создания новой задачи
+
+        Task.last_task_num += 1
+        self.number = Task.last_task_num
+        self.info = f'test_task_{self.number}_info'
+        WindowMixin.all_windows['root'].add_task_bar(self, **params)
+
+    def stop(self):
+        
+        ...  # логика остановки задачи
+
+        WindowMixin.all_windows['root'].del_task_bar(self.number)
+        
 
 #
 
@@ -114,7 +148,8 @@ class WindowMixin(ABC):
         self.title(Lang.read(f'{self.name}.title'))
 
         for w_name, widget in self.widgets.items():
-            widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+            if not w_name.startswith('_'):
+                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
 
     # настройка стиля окна, исходя из разрешения экрана
     def _set_style(self) -> None:
@@ -138,11 +173,12 @@ class WindowMixin(ABC):
 
     # метод для расположения виджетов
     @abstractmethod
-    def _pack_widgets(self) -> None:
+    def _pack_widgets(self, ) -> None:
         ...
 
 
 #
+
 
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
@@ -157,7 +193,7 @@ class ScrollableFrame(ttk.Frame):
             command=self.canvas.yview,   # передача управления вертикальной прокруткой холста
         )  
 
-        self.scrollable_frame = ttk.Frame(self.canvas)  # фрейм для контента (внутренних виджетов)
+        self.scrollable_frame = ttk.Frame(self.canvas, padding=[15, 0])  # фрейм для контента (внутренних виджетов)
         self.scrollable_frame.bind(  # привязка к виджету фрейма 
             "<Configure>",           # обработчика событий <Configure>, чтобы полоса
             self._update_scrollbar,  # прокрутки менялась, когда обновляется фрейм 
@@ -195,18 +231,83 @@ class ScrollableFrame(ttk.Frame):
     # попытка активировать прокрутку колёсиком (если пройдёт валидацию)
     def _bind_mousewheel(self, event):
         self.canvas.bind_all("<MouseWheel>", self._validate_mousewheel)
-        self.canvas.bind_all("<Circulate>", self._validate_mousewheel)
 
     # отвазать события прокрутки
     def _unbind_mousewheel(self, event):
         self.canvas.unbind_all("<MouseWheel>")
-        self.canvas.unbind_all("<Circulate>")
 
     # возможность прокрутки только если полоса активна, и фрейм переполнен
     def _validate_mousewheel(self, event):
         if self.scrollable_frame.winfo_height() > self.canvas.winfo_height():
             self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
+
+#
+
+
+class TaskBar(ttk.Frame):
+    """Класс баров задач в основном окне"""
+
+    def __init__(self, master: ttk.Frame, task: Task):
+        super().__init__(master, relief='solid', padding=5)
+        self.widgets = {}
+        self.task = task
+
+        self._init_widgets()
+        self.update_texts()
+        self._pack_widgets()
+
+    # создание и настрйока виджетов
+    def _init_widgets(self):
+
+        # создании левой части бара
+        self.progress_frame = ttk.Frame(self, padding=5)
+
+        # надпись в баре
+        self.widgets['_lbName'] = ttk.Label(  
+            self.progress_frame, 
+            font='14', padding=5,
+            text=f"test task space {self.task.number}", 
+        )
+
+        # полоса прогресса
+        self.widgets['_progressBar'] = ttk.Progressbar(
+            self.progress_frame, 
+            length=320,
+            maximum=1,
+            value=0.5,
+        )
+
+        # создание правой части бара
+        self.button_frame = ttk.Frame(self, padding=5)
+
+        # кнопки "инфо" и "стоп"
+        def show_info():
+            print('TODO окошко с информацией')    
+
+        self.widgets['btInfo'] = ttk.Button(self.button_frame, command=show_info)
+        self.widgets['btStop'] = ttk.Button(self.button_frame, command=lambda: self.task.stop())
+
+
+    # упаковка всех виджетов бара
+    def _pack_widgets(self):
+        self.widgets['_lbName'].pack(side='top')
+        self.widgets['_progressBar'].pack(side='bottom')
+        self.progress_frame.pack(side='left')
+
+        self.widgets['btInfo'].pack(side='top')
+        self.widgets['btStop'].pack(side='bottom')
+        self.button_frame.pack(side='right')
+
+        self.pack(pady=5)
+
+    def delete(self):
+        self.destroy()
+
+    def update_texts(self):
+        for w_name, widget in self.widgets.items():
+            if not w_name.startswith('_'):
+                widget.config(text=Lang.read(f'bar.{w_name}'))
 
 #
 
@@ -218,9 +319,8 @@ class RootWindow(Tk, WindowMixin):
         super().__init__()
         self.name = 'root'
         
-        self.widgets: dict[str, ttk.Widget] = {}
-        self.frames:  dict[str, ttk.Frame] = {}
-        self.tasks:   dict[str, ttk.Frame] = {}
+        self.widgets:   dict[str, ttk.Widget] = {}
+        self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
         self.size = 300, 250
         self.resizable(False, False)  # нельзя растягивать
@@ -248,41 +348,38 @@ class RootWindow(Tk, WindowMixin):
             self.all_windows['sets'].focus()
 
         # создание фреймов
-        self.frames['upperBar'] = upperBar = ttk.Frame(self)  # верхний бар с кнопками
-        self.frames['taskSpace'] = ScrollableFrame(self)  # пространство с прокруткой
-        self.taskList = self.frames['taskSpace'].scrollable_frame  # сокращение пути для читаемости
+        self.upper_bar = upperBar = ttk.Frame(self)  # верхний бар с кнопками
+        self.task_space = ScrollableFrame(self)  # пространство с прокруткой
+        self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 
         # создание виджетов, привязывание функций
-        self.widgets['newTask'] = ttk.Button(upperBar, command=self.add_task_bar)  ##
-        self._switch = True
-        self._colors = ['#aaaaaa', '#cccccc']
-
-        # self.widgets['newTask'] = ttk.Button(upperBar, command=open_new_task)
+        self.widgets['newTask'] = ttk.Button(upperBar, command=open_new_task)
         self.widgets['openSets'] = ttk.Button(upperBar, command=open_settings)
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.frames['upperBar'].pack(fill='x', padx=15, pady=15)
-        self.frames['taskSpace'].pack(fill='both', expand=True)
+        self.upper_bar.pack(fill='x', padx=15, pady=15)
+        self.task_space.pack(fill='both', expand=True)
 
         self.widgets['newTask'].pack(side='left')
         self.widgets['openSets'].pack(side='right')
         
-    # добавление виджета задачи
-    def add_task_bar(self, **sets) -> None:
-        self._switch = not self._switch
-        color = self._colors[int(self._switch)]
+    # добавление строки задачи
+    def add_task_bar(self, task: Task, **params) -> None:
+        task_bar = TaskBar(self.taskList, task, **params)
+        self.task_bars[task.number] = task_bar
 
-        test_task_space = ttk.Label(
-            self.taskList, 
-            font='14',
-            padding=20,
-            background=color,
-            text="test task space "*4,
-            
-        )
-        test_task_space.pack(fill='x')
-        ...
+    # удаление строки задачи
+    def del_task_bar(self, task_number) -> None:
+        self.task_bars[task_number].delete()
+        del self.task_bars[task_number]
+
+    # расширение метода для обновления виджетов бара
+    def update_texts(self) -> None:
+        super().update_texts()
+        for bar in self.task_bars.values():
+            bar.update_texts()
+
 
 #
 
@@ -363,11 +460,19 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
-        pass
+        
+        def add_task():
+            params: dict = {
+                # вытягивание аргументов из виджетов настроек задачи
+            }
+            Task(**params)  # создание задачи
+            self.close()
+
+        self.widgets['btCreate'] = ttk.Button(self, command=add_task)
 
     # расположение виджетов
     def _pack_widgets(self):
-        pass
+        self.widgets['btCreate'].pack(side='bottom', pady=15)
 
 
 if __name__ == "__main__":
