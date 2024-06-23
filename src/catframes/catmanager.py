@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import time
 from tkinter import Tk, Toplevel, ttk, Canvas
 from abc import ABC, abstractmethod
+from typing import Callable
+import threading
+
 
 
 # временные глобальные переменные
@@ -94,18 +98,37 @@ class Task:
 
     def __init__(self, **params) -> None:
 
-        ...  # логика создания новой задачи
-
         Task.last_task_num += 1
-        self.number = Task.last_task_num
-        self.info = f'test_task_{self.number}_info'
-        WindowMixin.all_windows['root'].add_task_bar(self, **params)
+        self.number = Task.last_task_num  # получение уникального номера
+        Task.all_tasks[self.number] = self  # регистрация в словаре
 
+        self.done = False  # флаг завершённости
+        self.stop_flag = False  # требование остановки
+
+        # получение метода обновления полосы прогресса
+        root_window = WindowMixin.all_windows['root']
+        self.update_progress = root_window.add_task_bar(self, **params)
+
+        # запуск фоновой задачи (дальше перепишется через subprocess)
+        self.thread = threading.Thread(target=self.run, daemon=True)        
+        self.thread.start()
+
+    # запуск задачи (тестовый)
+    def run(self):
+        for i in range(101):
+            if self.stop_flag:
+                return
+            self.update_progress(i/100)
+            time.sleep(0.02)
+        self.done = True
+
+    # остановка задачи (тестовая)
     def stop(self):
-        
-        ...  # логика остановки задачи
-
-        WindowMixin.all_windows['root'].del_task_bar(self.number)
+        self.stop_flag = True
+        self.thread.join()
+        root_window = WindowMixin.all_windows['root']
+        root_window.del_task_bar(self.number)
+        del Task.all_tasks[self.number]
         
 
 #
@@ -148,7 +171,7 @@ class WindowMixin(ABC):
         self.title(Lang.read(f'{self.name}.title'))
 
         for w_name, widget in self.widgets.items():
-            if not w_name.startswith('_'):
+            if not w_name.startswith('_'):  # если виджет начинается с "_", его обходит
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
 
     # настройка стиля окна, исходя из разрешения экрана
@@ -250,8 +273,9 @@ class TaskBar(ttk.Frame):
 
     def __init__(self, master: ttk.Frame, task: Task):
         super().__init__(master, relief='solid', padding=5)
-        self.widgets = {}
-        self.task = task
+        self.widgets: dict = {}
+        self.task: Task = task
+        self.progress: float = 0
 
         self._init_widgets()
         self.update_texts()
@@ -275,7 +299,7 @@ class TaskBar(ttk.Frame):
             self.progress_frame, 
             length=320,
             maximum=1,
-            value=0.5,
+            value=0,
         )
 
         # создание правой части бара
@@ -284,7 +308,6 @@ class TaskBar(ttk.Frame):
         # кнопки "инфо" и "стоп"
         def show_info():
             print('TODO окошко с информацией')    
-
         self.widgets['btInfo'] = ttk.Button(self.button_frame, command=show_info)
         self.widgets['btStop'] = ttk.Button(self.button_frame, command=lambda: self.task.stop())
 
@@ -299,11 +322,24 @@ class TaskBar(ttk.Frame):
         self.widgets['btStop'].pack(side='bottom')
         self.button_frame.pack(side='right')
 
-        self.pack(pady=5)
+        self.pack(pady=[0, 10])
 
+    # обновление линии прогресса
+    def update_progress(self, progress: float, delta: bool = False):
+        if delta:  # прогресс будет дополняться на переданное значение
+            self.progress += progress
+        else:  # прогресс будет принимать переданное значение
+            self.progress = progress
+        try:
+            self.widgets['_progressBar'].config(value=self.progress)
+        except:  # после удаления виджета вылетает ошибка из-за большой вложенности
+            pass  # она ни на что не влияет, поэтому отлавливается и гасится
+
+    # удаление бара
     def delete(self):
         self.destroy()
 
+    # обновление текстов виджетов
     def update_texts(self):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
@@ -322,14 +358,16 @@ class RootWindow(Tk, WindowMixin):
         self.widgets:   dict[str, ttk.Widget] = {}
         self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        self.size = 300, 250
+        self.size = 300, 260
         self.resizable(False, False)  # нельзя растягивать
 
         super()._default_set_up()
 
     # при закрытии окна
     def close(self):
-        print('TODO проверка незавершённых задач')
+        for task in Task.all_tasks.values():
+            if not task.done:
+                return print('TODO окно "есть незавершённые задачи"')
         self.destroy()
 
     # создание и настройка виджетов
@@ -365,20 +403,21 @@ class RootWindow(Tk, WindowMixin):
         self.widgets['openSets'].pack(side='right')
         
     # добавление строки задачи
-    def add_task_bar(self, task: Task, **params) -> None:
-        task_bar = TaskBar(self.taskList, task, **params)
-        self.task_bars[task.number] = task_bar
+    def add_task_bar(self, task: Task, **params) -> Callable:
+        task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
+        self.task_bars[task.number] = task_bar  # регистрирует в словаре
+        return task_bar.update_progress  # возвращает ручку полосы прогресса
 
     # удаление строки задачи
     def del_task_bar(self, task_number) -> None:
-        self.task_bars[task_number].delete()
-        del self.task_bars[task_number]
+        self.task_bars[task_number].delete()  # удаляет таскбар
+        del self.task_bars[task_number]  # чистит регистрацию
 
-    # расширение метода для обновления виджетов бара
+    # расширение метода обновления текстов
     def update_texts(self) -> None:
         super().update_texts()
         for bar in self.task_bars.values():
-            bar.update_texts()
+            bar.update_texts()  # обновляет текст в каждом баре
 
 
 #
