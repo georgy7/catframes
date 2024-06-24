@@ -154,6 +154,7 @@ class WindowMixin(ABC):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
         self._set_style()     # настройка внешнего вида окна
+        self._to_center()     # размещение окна в центре экрана
         self._init_widgets()  # создание виджетов
         self.update_texts()   # установка текста нужного языка
         self._pack_widgets()  # расстановка виджетов
@@ -173,6 +174,14 @@ class WindowMixin(ABC):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):  # если виджет начинается с "_", его обходит
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+
+    # размещение окна в центре экрана
+    def _to_center(self) -> None:
+        # размещение окна в центре экрана
+        x = (self.winfo_screenwidth() - self.size[0]) / 2
+        y = (self.winfo_screenheight() - self.size[1]) / 2
+        self.geometry(f'+{int(x)}+{int(y)}')
+
 
     # настройка стиля окна, исходя из разрешения экрана
     def _set_style(self) -> None:
@@ -209,7 +218,7 @@ class ScrollableFrame(ttk.Frame):
     def __init__(self, container, *args, **kwargs):
         super().__init__(container, *args, **kwargs)
         
-        self.canvas = Canvas(self)  # объект "холста"
+        self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
 
         self.scrollbar = ttk.Scrollbar(  # полоса прокрутки
             self, orient="vertical",     # установка в вертикальное положение
