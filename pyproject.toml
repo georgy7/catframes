@@ -10,7 +10,8 @@ license = {file = "LICENSE.txt"}
 requires-python = ">=3.7"
 
 authors = [
-  {name = "Georgy Ustinov", email = "inbox@itustinov.ru" }
+  {name = "Georgy Ustinov", email = "inbox@itustinov.ru" },
+  {name = "Bogdan Syrovatsky", email = "bogdansir1807@gmail.com" },
 ]
 
 classifiers = [
@@ -30,6 +31,7 @@ dependencies = [
 
 [project.scripts]
 catframes = "catframes.catframes:main"
+catmanager = "catframes.catmanager:main"
 
 [build-system]
 requires = ["setuptools>=43.0.0", "wheel"]
