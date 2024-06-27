@@ -3,14 +3,64 @@
 import time
 from tkinter import Tk, Toplevel, ttk, Canvas
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Optional, Tuple, Dict, Callable
 import threading
 
+#  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
+#  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
+#  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
 
+
+    #  из файла task_flows.py:
+
+class Task:
+    all_tasks: dict = {}  # общий словарь для регистрации всех задач
+    last_task_num: int = 0
+
+    def __init__(self, master, **params) -> None:
+        self.master = master
+
+        Task.last_task_num += 1
+        self.number = Task.last_task_num  # получение уникального номера
+        Task.all_tasks[self.number] = self  # регистрация в словаре
+
+        self.done = False  # флаг завершённости
+        self.stop_flag = False  # требование остановки
+
+    # запуск задачи (тестовый)
+    def start(self, update_progress: Callable):
+        # получение метода обновления полосы прогресса
+        self.update_progress = update_progress
+
+        # запуск фоновой задачи (дальше перепишется через subprocess)
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    # поток задачи (тестовый)
+    def run(self):
+        for i in range(101):
+            if self.stop_flag:
+                return
+            self.update_progress(i/100)
+            time.sleep(0.02)
+        self.done = True
+
+    # остановка задачи (тестовая)
+    def stop(self):
+        self.stop_flag = True
+        self.thread.join()
+        self.master.del_task_bar(self.number)
+        del Task.all_tasks[self.number]
+
+
+
+
+
+    #  из файла sets_utils.py:
 
 # временные глобальные переменные
 MAJOR_SCALING: float = 0.8
-TTK_THEME: str | None = None
+TTK_THEME: Optional[str] = None
 
 
 class Lang:
@@ -87,52 +137,12 @@ class Lang:
             return Lang.data[Lang.current_name][tag]
         except KeyError:  # если тег не найден
             return '-----'
+            
 
 
-#
 
 
-class Task:
-    all_tasks: dict = {}  # общий словарь для регистрации всех задач
-    last_task_num: int = 0
-
-    def __init__(self, **params) -> None:
-
-        Task.last_task_num += 1
-        self.number = Task.last_task_num  # получение уникального номера
-        Task.all_tasks[self.number] = self  # регистрация в словаре
-
-        self.done = False  # флаг завершённости
-        self.stop_flag = False  # требование остановки
-
-        # получение метода обновления полосы прогресса
-        root_window = WindowMixin.all_windows['root']
-        self.update_progress = root_window.add_task_bar(self, **params)
-
-        # запуск фоновой задачи (дальше перепишется через subprocess)
-        self.thread = threading.Thread(target=self.run, daemon=True)        
-        self.thread.start()
-
-    # запуск задачи (тестовый)
-    def run(self):
-        for i in range(101):
-            if self.stop_flag:
-                return
-            self.update_progress(i/100)
-            time.sleep(0.02)
-        self.done = True
-
-    # остановка задачи (тестовая)
-    def stop(self):
-        self.stop_flag = True
-        self.thread.join()
-        root_window = WindowMixin.all_windows['root']
-        root_window.del_task_bar(self.number)
-        del Task.all_tasks[self.number]
-        
-
-#
-
+    #  из файла windows_utils.py:
 
 class WindowMixin(ABC):
     """Абстрактный класс.
@@ -144,9 +154,9 @@ class WindowMixin(ABC):
     protocol: Tk.protocol   # появятся автоматически при
     destroy: Tk.destroy     # наследовании от Tk или Toplevel
 
-    size: tuple[int, int]   # размеры (ширина, высота) окна
+    size: Tuple[int, int]   # размеры (ширина, высота) окна
     name: str               # имя окна для словаря всех окон
-    widgets: dict[str, ttk.Widget]  # словарь виджетов окна
+    widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
     # настройка окна, вызывается через super в конце __init__ окна
     def _default_set_up(self):
@@ -209,9 +219,6 @@ class WindowMixin(ABC):
         ...
 
 
-#
-
-
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
 
@@ -272,9 +279,6 @@ class ScrollableFrame(ttk.Frame):
     def _validate_mousewheel(self, event):
         if self.scrollable_frame.winfo_height() > self.canvas.winfo_height():
             self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-
-
-#
 
 
 class TaskBar(ttk.Frame):
@@ -354,7 +358,11 @@ class TaskBar(ttk.Frame):
             if not w_name.startswith('_'):
                 widget.config(text=Lang.read(f'bar.{w_name}'))
 
-#
+
+
+
+
+    #  из файла windows.py:
 
 
 class RootWindow(Tk, WindowMixin):
@@ -429,9 +437,6 @@ class RootWindow(Tk, WindowMixin):
             bar.update_texts()  # обновляет текст в каждом баре
 
 
-#
-
-
 class SettingsWindow(Toplevel, WindowMixin):
     """Окно настроек"""
 
@@ -490,9 +495,6 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets['btSave'].grid(row=4, column=1, sticky='ew', padx=(5, 15), ipadx=30)
 
 
-#
-
-
 class NewTaskWindow(Toplevel, WindowMixin):
     """Окно создания новой задачи"""
 
@@ -513,7 +515,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
             params: dict = {
                 # вытягивание аргументов из виджетов настроек задачи
             }
-            Task(**params)  # создание задачи
+            task = Task(self.master, **params)  # создание задачи
+            callback: Callable = self.master.add_task_bar(task, **params)
+            task.start(callback)
             self.close()
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
@@ -523,5 +527,16 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCreate'].pack(side='bottom', pady=15)
 
 
+
+
+
+    #  из файла main.py:
+
+def main():
+    root = RootWindow()
+    root.mainloop()
+
 if __name__ == "__main__":
-    RootWindow().mainloop()
+    main()
+
+
