@@ -44,11 +44,19 @@ class WindowMixin(ABC):
             if not w_name.startswith('_'):  # если виджет начинается с "_", его обходит
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
 
-    # размещение окна в центре экрана
+    # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-        # размещение окна в центре экрана
-        x = (self.winfo_screenwidth() - self.size[0]) / 2
-        y = (self.winfo_screenheight() - self.size[1]) / 2
+
+        # если это побочное окно
+        if isinstance(self, Toplevel):
+            x = self.master.winfo_x() + self.master.winfo_width()/2 - self.size[0]/2  # размещаем по центру
+            y = self.master.winfo_y() + self.master.winfo_height()/2 - self.size[1]/2  # главного окна
+
+        # а если это главное окно    
+        else:  # размещаем по центру экрана
+            x = (self.winfo_screenwidth() - self.size[0]) / 2
+            y = (self.winfo_screenheight() - self.size[1]) / 2
+
         self.geometry(f'+{int(x)}+{int(y)}')
 
 
@@ -104,8 +112,6 @@ class ScrollableFrame(ttk.Frame):
 
     def __init__(self, root_window, *args, **kwargs):
         super().__init__(root_window, *args, **kwargs)
-
-        
         
         self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
         self.canvas.bind(           # привязка к виджету холста

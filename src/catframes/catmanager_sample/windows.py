@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Lang
 from windows_utils import ScrollableFrame, TaskBar, WindowMixin
-from task_flows import Task
+from task_flows import Task, GuiCallback
 
 
 class RootWindow(ThemedTk, WindowMixin):
@@ -22,9 +22,15 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # при закрытии окна
     def close(self):
+
+        def open_warning():
+            if not self.all_windows.get('warn'):  # если не нашёл окно в словаре
+                WarningWindow(root=self)  # создать окно (само добавится в словарь)
+            self.all_windows['warn'].focus()  # фокусируется на нём
+
         for task in Task.all_tasks.values():
-            if not task.done:
-                print('TODO окно "есть незавершённые задачи"')
+            if not task.done:  # если какая-то из задач не завершена
+                return open_warning()
         self.destroy()
 
     # создание и настройка виджетов
@@ -66,9 +72,14 @@ class RootWindow(ThemedTk, WindowMixin):
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
     # удаление строки задачи
-    def del_task_bar(self, task_number) -> None:
+    def del_task_bar(self, task_number: int) -> None:
         self.task_bars[task_number].delete()  # удаляет таскбар
         del self.task_bars[task_number]  # чистит регистрацию
+        print('''
+TODO обновление статуса окон 
+(если вдруг задачи завершились, 
+а окно предупреждения открыто).
+              ''')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -155,9 +166,17 @@ class NewTaskWindow(Toplevel, WindowMixin):
             params: dict = {
                 # вытягивание аргументов из виджетов настроек задачи
             }
-            task = Task(self.master, **params)  # создание задачи
-            callback: Callable = self.master.add_task_bar(task, **params)
-            task.start(callback)
+            task = Task(**params)  # создание задачи
+
+            # создание бара задачи, получение метода обновления прогресса
+            update_progress: Callable = self.master.add_task_bar(task, **params)
+
+            gui_callback = GuiCallback(  # создание колбека
+                update_function=update_progress,  # передача методов обновления
+                finish_function=self.master.del_task_bar  # и завершения задачи
+            )  
+
+            task.start(gui_callback)  # инъекция колбека для обнволения gui
             self.close()
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
@@ -165,3 +184,47 @@ class NewTaskWindow(Toplevel, WindowMixin):
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['btCreate'].pack(side='bottom', pady=15)
+
+
+class WarningWindow(Toplevel, WindowMixin):
+    """Окно предупреждения при выходе"""
+
+    def __init__(self, root: RootWindow):
+        super().__init__(master=root)
+        self.name = 'warn'
+        self.widgets = {}
+
+        self.size = 260, 120
+        self.resizable(False, False)
+
+        super()._default_set_up()
+
+    # создание и настройка виджетов
+    def _init_widgets(self):
+        
+        def back():
+            self.close()
+
+        def exit():
+            print('TODO остановка всех задач')
+            self.master.destroy()
+
+        _font = font.Font(size=16)
+
+        # два лейбла предупреждения (с крупным текстом, и обычным)
+        self.widgets['lbWarn'] = ttk.Label(self, padding=[0, 20, 0, 5], font=_font)
+        self.widgets['lbText'] = ttk.Label(self, padding=0)
+
+        # кнопки "назад" и "выйти"
+        self.choise_frame = ttk.Frame(self)
+        self.widgets['btBack'] = ttk.Button(self.choise_frame, command=back)
+        self.widgets['btExit'] = ttk.Button(self.choise_frame, command=exit)
+
+    # расположение виджетов
+    def _pack_widgets(self):
+        self.widgets['lbWarn'].pack(side='top')
+        self.widgets['lbText'].pack(side='top')
+
+        self.widgets['btBack'].pack(side='left', anchor='w', padx=5)
+        self.widgets['btExit'].pack(side='left', anchor='w', padx=5)
+        self.choise_frame.pack(side='bottom', pady=10)

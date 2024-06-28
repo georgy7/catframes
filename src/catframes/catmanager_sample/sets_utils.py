@@ -37,6 +37,12 @@ class Lang:
             'bar.inactive': 'complete', 
             'bar.btInfo': 'Info',
             'bar.btStop': 'Cancel',
+
+            'warn.title': 'Warning',
+            'warn.lbWarn': 'Attention!',
+            'warn.lbText': 'Incomplete tasks!',
+            'warn.btBack': 'Back',
+            'warn.btExit': 'Leave',
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -56,6 +62,12 @@ class Lang:
             'bar.lbInactive': 'завершено', 
             'bar.btInfo': 'Инфо',
             'bar.btStop': 'Отмена',
+            
+            'warn.title': 'Внимание',
+            'warn.lbWarn': 'Внимание!',
+            'warn.lbText': 'Задачи не завершены!',
+            'warn.btBack': 'Назад',
+            'warn.btExit': 'Выйти',
         },
     }
 
