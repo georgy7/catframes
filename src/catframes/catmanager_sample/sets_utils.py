@@ -1,9 +1,9 @@
-from typing import Optional
+from _prefix import *
 
 
 # временные глобальные переменные
 MAJOR_SCALING: float = 0.8
-TTK_THEME: Optional[str] = None
+TTK_THEME: Optional[str] = "breeze"
 
 
 class Lang:

@@ -1,12 +1,10 @@
-from tkinter import Tk, Toplevel, ttk
-from typing import Callable
-
+from _prefix import *
 from sets_utils import Lang
 from windows_utils import ScrollableFrame, TaskBar, WindowMixin
 from task_flows import Task
 
 
-class RootWindow(Tk, WindowMixin):
+class RootWindow(ThemedTk, WindowMixin):
     """Основное окно"""
 
     def __init__(self):
@@ -16,8 +14,9 @@ class RootWindow(Tk, WindowMixin):
         self.widgets:   dict[str, ttk.Widget] = {}
         self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        self.size = 300, 260
-        self.resizable(False, False)  # нельзя растягивать
+        self.size = 500, 450
+        self.size_max = 700, 700
+        self.resizable(True, True)  # можно растягивать
 
         super()._default_set_up()
 
@@ -25,7 +24,7 @@ class RootWindow(Tk, WindowMixin):
     def close(self):
         for task in Task.all_tasks.values():
             if not task.done:
-                return print('TODO окно "есть незавершённые задачи"')
+                print('TODO окно "есть незавершённые задачи"')
         self.destroy()
 
     # создание и настройка виджетов
@@ -87,7 +86,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: dict[str, ttk.Widget] = {}
 
-        self.size = 130, 100
+        self.size = 250, 200
         self.resizable(False, False)
 
         super()._default_set_up()
@@ -144,7 +143,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.name = 'task'
         self.widgets = {}
 
-        self.size = 200, 150
+        self.size = 300, 250
         self.resizable(False, False)
 
         super()._default_set_up()

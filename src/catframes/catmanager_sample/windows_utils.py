@@ -1,8 +1,6 @@
-from abc import ABC, abstractmethod
-from tkinter import Tk, ttk, Canvas
-from sets_utils import Lang, TTK_THEME, MAJOR_SCALING
+from _prefix import *
+from sets_utils import TTK_THEME, Lang
 from task_flows import Task
-from typing import Optional, Tuple, Dict
 
 
 class WindowMixin(ABC):
@@ -57,17 +55,38 @@ class WindowMixin(ABC):
     # настройка стиля окна, исходя из разрешения экрана
     def _set_style(self) -> None:
 
-        screen_height = self.winfo_screenheight()  # достаём высоту экрана
-        scale = (screen_height/540)                # индекс масштабирования
-        scale *= MAJOR_SCALING                     # домножаем на глобальную
+        # screen_height = self.winfo_screenheight()  # достаём высоту экрана
+        # scale = (screen_height/540)                # индекс масштабирования
+        # scale *= MAJOR_SCALING                     # домножаем на глобальную
 
         style=ttk.Style()
         if TTK_THEME: style.theme_use(TTK_THEME)   # применение темы, если есть
-        style.tk.call('tk', 'scaling', scale)      # установка масштаба окна
+        _font = font.Font(
+            # family= "helvetica", 
+            size=12, 
+            weight='bold'
+        )
+        style.configure(style='.', font=_font)  # шрифт текста в кнопке
+        self.option_add("*Font", _font)  # шрифты остальных виджетов
+
+        # task_background = '#94d0eb'
+        task_background = '#c4f0ff'
+        style.configure('Task.TFrame', background=task_background)
+        style.configure('Task.TLabel', background=task_background)
+        style.configure('Task.Horizontal.TProgressbar', background=task_background)
 
         x, y = self.size                   # забираем объявленные размеры окна
-        x, y = int(x*scale), int(y*scale)  # масштабируем их
+        # x, y = int(x*scale), int(y*scale)  # масштабируем их
         self.geometry(f'{x}x{y}')          # и присваиваем их окну
+        self.minsize(x, y)                 # и устанавливаем как минимальные
+        try:
+            x, y = self.size_max               # если есть максимальные размеры
+            # x, y = int(x*scale), int(y*scale)  # масштабируем их
+            self.maxsize(x, y)
+        except AttributeError:
+            pass
+
+
 
     # метод для создания и настройки виджетов
     @abstractmethod
@@ -83,10 +102,16 @@ class WindowMixin(ABC):
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
 
-    def __init__(self, container, *args, **kwargs):
-        super().__init__(container, *args, **kwargs)
+    def __init__(self, root_window, *args, **kwargs):
+        super().__init__(root_window, *args, **kwargs)
+
+        
         
         self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
+        self.canvas.bind(           # привязка к виджету холста
+            "<Configure>",          # обработчика событий, чтобы внутренний фрейм
+            self._on_resize_window  # менял размер, если холст растягивается
+            )
 
         self.scrollbar = ttk.Scrollbar(  # полоса прокрутки
             self, orient="vertical",     # установка в вертикальное положение
@@ -99,8 +124,12 @@ class ScrollableFrame(ttk.Frame):
             self._update_scrollbar,  # прокрутки менялась, когда обновляется фрейм 
         )
 
-        # привязка холста к верхнему левому углу
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        # привязка холста к верхнему левому углу, получение id фрейма
+        self.frame_id = self.canvas.create_window(
+            (0, 0), 
+            window=self.scrollable_frame, 
+            anchor="nw"
+        )
 
         # передача управления полосы прокрутки, когда холст движется от колёсика
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
@@ -115,6 +144,12 @@ class ScrollableFrame(ttk.Frame):
 
         # первичное обновление полосы, чтобы сразу её не было видно
         self._update_scrollbar_visibility()
+
+    # изменение размеров фрейма внутри холста
+    def _on_resize_window(self, event):
+        if event.width < 500:  # сюда залетают разные события
+            return  # нас интересут только те, у которых ширина больше окна
+        self.canvas.itemconfig(self.frame_id, width=event.width)  # новые размеры фрейма
 
     # обработка изменений полосы прокрутки
     def _update_scrollbar(self, event):
@@ -146,7 +181,7 @@ class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
     def __init__(self, master: ttk.Frame, task: Task):
-        super().__init__(master, relief='solid', padding=5)
+        super().__init__(master, borderwidth=1, padding=5, style='Task.TFrame')
         self.widgets: dict = {}
         self.task: Task = task
         self.progress: float = 0
@@ -157,44 +192,63 @@ class TaskBar(ttk.Frame):
 
     # создание и настрйока виджетов
     def _init_widgets(self):
+        self.left_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
-        # создании левой части бара
-        self.progress_frame = ttk.Frame(self, padding=5)
+        image = Image.open("src/catframes/catmanager_sample/test_static/img.png")
+        image_size = (80, 60)
+        image = image.resize(image_size, Image.ADAPTIVE)
+        image_tk = ImageTk.PhotoImage(image)
+
+        self.widgets['_picture'] = ttk.Label(self.left_frame, image=image_tk)
+        self.widgets['_picture'].image = image_tk
+
+
+        # создании средней части бара
+        self.mid_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
         # надпись в баре
-        self.widgets['_lbName'] = ttk.Label(  
-            self.progress_frame, 
-            font='14', padding=5,
-            text=f"test task space {self.task.number}", 
+        self.widgets['_lbPath'] = ttk.Label(  
+            self.mid_frame, 
+            font='18', padding=5,
+            text=f"/usr/tester/movies/renger{self.task.number}.mp4", 
+            style='Task.TLabel'
         )
 
-        # полоса прогресса
-        self.widgets['_progressBar'] = ttk.Progressbar(
-            self.progress_frame, 
-            length=320,
-            maximum=1,
-            value=0,
+        self.widgets['_lbData'] = ttk.Label(  
+            self.mid_frame, 
+            font='14', padding=5,
+            text=f"test label for options in task {self.task.number}", 
+            style='Task.TLabel'
         )
+
 
         # создание правой части бара
-        self.button_frame = ttk.Frame(self, padding=5)
-
-        # кнопки "инфо" и "стоп"
-        def show_info():
-            print('TODO окошко с информацией')    
-        self.widgets['btInfo'] = ttk.Button(self.button_frame, command=show_info)
-        self.widgets['btStop'] = ttk.Button(self.button_frame, command=lambda: self.task.stop())
-
+        self.right_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
+       
+        # кнопка "стоп"
+        self.widgets['btStop'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.stop())
+        
+        # полоса прогресса
+        self.widgets['_progressBar'] = ttk.Progressbar(
+            self.right_frame, 
+            # length=320,
+            maximum=1,
+            value=0,
+            style='Task.Horizontal.TProgressbar'
+        )
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
-        self.widgets['_lbName'].pack(side='top')
-        self.widgets['_progressBar'].pack(side='bottom')
-        self.progress_frame.pack(side='left')
+        self.widgets['_picture'].pack(side='left')
+        self.left_frame.pack(side='left')
 
-        self.widgets['btInfo'].pack(side='top')
-        self.widgets['btStop'].pack(side='bottom')
-        self.button_frame.pack(side='right')
+        self.widgets['_lbPath'].pack(side='top', fill='x', expand=True)
+        self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
+        self.mid_frame.pack(side='left')
+
+        self.widgets['btStop'].pack(side='bottom', expand=True)
+        self.widgets['_progressBar'].pack(side='bottom', expand=True)
+        self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
 

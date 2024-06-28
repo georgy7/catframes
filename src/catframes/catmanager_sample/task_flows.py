@@ -1,6 +1,4 @@
-import time
-import threading
-from typing import Callable
+from _prefix import *
 
 
 class Task:
@@ -28,11 +26,11 @@ class Task:
 
     # поток задачи (тестовый)
     def run(self):
-        for i in range(101):
+        for i in range(21):
             if self.stop_flag:
                 return
-            self.update_progress(i/100)
-            time.sleep(0.02)
+            self.update_progress(i/20)
+            time.sleep(0.2)
         self.done = True
 
     # остановка задачи (тестовая)
