@@ -1,13 +1,13 @@
 from _prefix import *
 from sets_utils import Lang, TTK_THEME
-
+from task_flows import TaskManager
 
 class LocalWM:
     """Класс для работы с окнами.
     Позволяет регистрировать окна,
     И управлять ими."""
 
-    _all_windows: dict = {}  # общий словарь регистрации для
+    _all_windows: dict = {}  # общий словарь регистрации для окон
 
     # проверка, зарегистрировано ли окно
     @classmethod
@@ -52,10 +52,20 @@ class LocalWM:
     def all(cls) -> list:
         return list(cls._all_windows.values())
     
+    # переключение фокуса на окно
     @classmethod
     def focus(cls, name: str) -> None:
         if cls.check(name):
             cls._all_windows[name].focus()
+
+    # обновление открытых окон после завершения задачи
+    @classmethod
+    def update_on_task_finish(cls):
+        print('testing update_on_task_finish')
+        if cls.check('warn'): # and not TaskManager.running_list:
+            cls._all_windows['warn'].destroy()
+            cls._all_windows.pop('warn')
+        ...
     
 
 class WindowMixin(ABC):

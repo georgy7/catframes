@@ -112,14 +112,14 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
             font='18', padding=5,
-            text=f"/usr/tester/movies/renger{self.task.number}.mp4", 
+            text=f"/usr/tester/movies/renger{self.task.id}.mp4", 
             style='Task.TLabel'
         )
 
         self.widgets['_lbData'] = ttk.Label(  
             self.mid_frame, 
             font='14', padding=5,
-            text=f"test label for options in task {self.task.number}", 
+            text=f"test label for options in task {self.task.id}", 
             style='Task.TLabel'
         )
 

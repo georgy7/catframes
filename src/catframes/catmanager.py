@@ -35,7 +35,7 @@ class GuiCallback:
         ...
 
     @staticmethod  # метод из RootWindow
-    def finish(task_number: int):
+    def finish(id: int):
         """сигнал о завершении задачи"""
         ...
 
@@ -43,26 +43,19 @@ class GuiCallback:
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
-    all_tasks: dict = {}  # общий словарь для регистрации всех задач
-    last_task_num: int = 0
-
-    def __init__(self, **params) -> None:
-
-        Task.last_task_num += 1
-        self.number = Task.last_task_num  # получение уникального номера
-        Task.all_tasks[self.number] = self  # регистрация в словаре
-
+    def __init__(self, id: int, **params) -> None:
+        self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
 
     # запуск задачи (тестовый)
-    def start(self, gui_callback: GuiCallback):  # инъекция зависимости gui
-
-        self.gui_callback = gui_callback
+    def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
+        self.gui_callback = gui_callback         # для оповещения наблюдателя
 
         # запуск фоновой задачи (дальше перепишется через subprocess)
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
+        TaskManager.reg_start(self)
 
     # поток задачи (тестовый)
     def run(self):
@@ -72,14 +65,72 @@ class Task:
             self.gui_callback.update(i/20)
             time.sleep(0.2)
         self.done = True
+        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
+        TaskManager.reg_finish(self)
 
     # остановка задачи (тестовая)
     def stop(self):
         self.stop_flag = True
         self.thread.join()
-        self.gui_callback.finish(self.number)
-        del Task.all_tasks[self.number]
+        self.gui_callback.finish(self.id)
+        TaskManager.reg_finish(self)
 
+
+class TaskManager:
+    """Менеджер задач.
+    Позволяет регистрировать задачи,
+    и управлять ими."""
+
+    _last_id: int = 0          # последний номер задачи
+    _all_tasks: dict = {}      # словарь всех задач
+    _running_tasks: dict = {}  # словарь активных задач
+
+    @classmethod
+    def create(cls, **params) -> Task:
+        cls._last_id += 1  # увеличение последнего номера задачи
+        unic_id = cls._last_id  # получение уникального номера
+
+        task = Task(unic_id, **params)  # создание задачи
+        cls._reg(task)  # регистрация в менеджере
+        return task
+
+    # регистрация задачи
+    @classmethod
+    def _reg(cls, task: Task) -> None:
+        cls._all_tasks[task.id] = task
+
+    # регистрация запуска задачи
+    @classmethod
+    def reg_start(cls, task: Task) -> None:
+        cls._running_tasks[task.id] = task
+
+    # удаление регистрации запуска задачи
+    @classmethod
+    def reg_finish(cls, task: Task) -> None:
+        if task.id in cls._running_tasks:
+            cls._running_tasks.pop(task.id)
+
+    # получение списка активных задач
+    @classmethod
+    def running_list(cls) -> list:
+        return list(cls._running_tasks.values())
+
+    # удаление задачи   
+    @classmethod
+    def wipe(cls, task: Task) -> None:
+        if task.id in cls._all_tasks:
+            cls._all_tasks.pop(task.id)
+
+    # получение списка всех задач
+    @classmethod
+    def all_list(cls) -> list:
+        return list(cls._all_tasks.values())
+
+    # проверка существования задачи    
+    @classmethod
+    def check(cls, task_id: int) -> bool:
+        return task_id in cls._all_tasks
+    
 
 
 
@@ -183,13 +234,12 @@ class Lang:
 
 
     #  из файла windows_base.py:
-
 class LocalWM:
     """Класс для работы с окнами.
     Позволяет регистрировать окна,
     И управлять ими."""
 
-    _all_windows: dict = {}  # общий словарь регистрации для
+    _all_windows: dict = {}  # общий словарь регистрации для окон
 
     # проверка, зарегистрировано ли окно
     @classmethod
@@ -234,10 +284,20 @@ class LocalWM:
     def all(cls) -> list:
         return list(cls._all_windows.values())
     
+    # переключение фокуса на окно
     @classmethod
     def focus(cls, name: str) -> None:
         if cls.check(name):
             cls._all_windows[name].focus()
+
+    # обновление открытых окон после завершения задачи
+    @classmethod
+    def update_on_task_finish(cls):
+        print('testing update_on_task_finish')
+        if cls.check('warn'): # and not TaskManager.running_list:
+            cls._all_windows['warn'].destroy()
+            cls._all_windows.pop('warn')
+        ...
     
 
 class WindowMixin(ABC):
@@ -453,14 +513,14 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
             font='18', padding=5,
-            text=f"/usr/tester/movies/renger{self.task.number}.mp4", 
+            text=f"/usr/tester/movies/renger{self.task.id}.mp4", 
             style='Task.TLabel'
         )
 
         self.widgets['_lbData'] = ttk.Label(  
             self.mid_frame, 
             font='14', padding=5,
-            text=f"test label for options in task {self.task.number}", 
+            text=f"test label for options in task {self.task.id}", 
             style='Task.TLabel'
         )
 
@@ -540,10 +600,9 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # при закрытии окна
     def close(self):
-        for task in Task.all_tasks.values():
-            if not task.done:  # если какая-то из задач не завершена
-                # открытие окна с новой задачей (и/или переключение на него)
-                return LocalWM.open(WarningWindow, 'warn').focus()
+        if TaskManager.running_list():  # если есть активные задачи
+            # открытие окна с новой задачей (и/или переключение на него)
+            return LocalWM.open(WarningWindow, 'warn').focus()
         self.destroy()
 
     # создание и настройка виджетов
@@ -577,18 +636,22 @@ class RootWindow(ThemedTk, WindowMixin):
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
         task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
-        self.task_bars[task.number] = task_bar  # регистрирует в словаре
+        self.task_bars[task.id] = task_bar  # регистрирует в словаре
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
     # удаление строки задачи
-    def del_task_bar(self, task_number: int) -> None:
-        self.task_bars[task_number].delete()  # удаляет таскбар
-        del self.task_bars[task_number]  # чистит регистрацию
-        print('''
-TODO обновление статуса окон 
-(если вдруг задачи завершились, 
-а окно предупреждения открыто).
-              ''')
+    def del_task_bar(self, task_id: int) -> None:
+        self.task_bars[task_id].delete()  # удаляет таскбар
+        del self.task_bars[task_id]  # чистит регистрацию
+
+    # закрытие задачи, смена виджета
+    def finish_task_bar(self, task_id: int) -> None:
+        print('TODO смена виджета на виджет завершенной задачи')
+        LocalWM.update_on_task_finish()
+
+    # остановка задачи, смена виджета
+    def cancel_task_bar(self, task_id: int) -> None:
+        print('TODO смена виджета на виджет отменённой задачи')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -675,14 +738,14 @@ class NewTaskWindow(Toplevel, WindowMixin):
             params: dict = {
                 # вытягивание аргументов из виджетов настроек задачи
             }
-            task = Task(**params)  # создание задачи
+            task = TaskManager.create(**params)
 
             # создание бара задачи, получение метода обновления прогресса
             update_progress: Callable = self.master.add_task_bar(task, **params)
 
             gui_callback = GuiCallback(  # создание колбека
                 update_function=update_progress,  # передача методов обновления
-                finish_function=self.master.del_task_bar  # и завершения задачи
+                finish_function=self.master.finish_task_bar  # и завершения задачи
             )  
 
             task.start(gui_callback)  # инъекция колбека для обнволения gui

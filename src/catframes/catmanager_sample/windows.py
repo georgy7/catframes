@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Lang
 from windows_utils import ScrollableFrame, TaskBar
-from task_flows import Task, GuiCallback
+from task_flows import Task, GuiCallback, TaskManager
 from windows_base import WindowMixin, LocalWM
 
 
@@ -23,10 +23,9 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # при закрытии окна
     def close(self):
-        for task in Task.all_tasks.values():
-            if not task.done:  # если какая-то из задач не завершена
-                # открытие окна с новой задачей (и/или переключение на него)
-                return LocalWM.open(WarningWindow, 'warn').focus()
+        if TaskManager.running_list():  # если есть активные задачи
+            # открытие окна с новой задачей (и/или переключение на него)
+            return LocalWM.open(WarningWindow, 'warn').focus()
         self.destroy()
 
     # создание и настройка виджетов
@@ -60,18 +59,22 @@ class RootWindow(ThemedTk, WindowMixin):
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
         task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
-        self.task_bars[task.number] = task_bar  # регистрирует в словаре
+        self.task_bars[task.id] = task_bar  # регистрирует в словаре
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
     # удаление строки задачи
-    def del_task_bar(self, task_number: int) -> None:
-        self.task_bars[task_number].delete()  # удаляет таскбар
-        del self.task_bars[task_number]  # чистит регистрацию
-        print('''
-TODO обновление статуса окон 
-(если вдруг задачи завершились, 
-а окно предупреждения открыто).
-              ''')
+    def del_task_bar(self, task_id: int) -> None:
+        self.task_bars[task_id].delete()  # удаляет таскбар
+        del self.task_bars[task_id]  # чистит регистрацию
+
+    # закрытие задачи, смена виджета
+    def finish_task_bar(self, task_id: int) -> None:
+        print('TODO смена виджета на виджет завершенной задачи')
+        LocalWM.update_on_task_finish()
+
+    # остановка задачи, смена виджета
+    def cancel_task_bar(self, task_id: int) -> None:
+        print('TODO смена виджета на виджет отменённой задачи')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -158,14 +161,14 @@ class NewTaskWindow(Toplevel, WindowMixin):
             params: dict = {
                 # вытягивание аргументов из виджетов настроек задачи
             }
-            task = Task(**params)  # создание задачи
+            task = TaskManager.create(**params)
 
             # создание бара задачи, получение метода обновления прогресса
             update_progress: Callable = self.master.add_task_bar(task, **params)
 
             gui_callback = GuiCallback(  # создание колбека
                 update_function=update_progress,  # передача методов обновления
-                finish_function=self.master.del_task_bar  # и завершения задачи
+                finish_function=self.master.finish_task_bar  # и завершения задачи
             )  
 
             task.start(gui_callback)  # инъекция колбека для обнволения gui
