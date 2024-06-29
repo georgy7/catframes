@@ -25,6 +25,7 @@ OUTPUT_FILE = "src/catframes/catmanager.py" # путь к выходному ф�
 FILE_NAMES = [  # порядок файлов для сборки
     'task_flows.py',
     'sets_utils.py',
+    'windows_base.py',
     'windows_utils.py',
     'windows.py',
     'main.py'

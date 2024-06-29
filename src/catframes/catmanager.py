@@ -182,13 +182,67 @@ class Lang:
 
 
 
-    #  из файла windows_utils.py:
+    #  из файла windows_base.py:
+
+class LocalWM:
+    """Класс для работы с окнами.
+    Позволяет регистрировать окна,
+    И управлять ими."""
+
+    _all_windows: dict = {}  # общий словарь регистрации для
+
+    # проверка, зарегистрировано ли окно
+    @classmethod
+    def check(cls, name: str) -> bool:
+        return name in cls._all_windows
+
+    # открытие окна
+    @classmethod
+    def open(cls, window_cls, name: str) -> Tk:    # принимает класс окна, имя окна
+        if not cls.check('root'):                        # проверяем, есть ли корневое окно
+            return cls._reg(window_cls(), 'root')        # регистрируем окно как корневое
+
+        if not cls.check(name):                          # проверяем, зарегистрировано ли окно
+            window = window_cls(root=cls.call('root'))   # создаём окно, передаём корневое окно
+            cls._reg(window, name)                       # регистрируем окно
+        return cls.call(name)
+    
+
+    # регистрация окна
+    @classmethod
+    def _reg(cls, window: Tk, name: str = None) -> None:
+        if not name:  
+            name = window.name
+        if not cls.check(name):
+            cls._all_windows[name] = window
+        return window
+
+    # получение окна
+    @classmethod
+    def call(cls, name: str) -> Optional[Tk]:
+        if cls.check(name):
+            return cls._all_windows[name]
+
+    # удаление окна
+    @classmethod
+    def wipe(cls, name: str) -> None:
+        if cls.check(name):
+            cls._all_windows.pop(name)
+
+    # получение списка всех окон
+    @classmethod
+    def all(cls) -> list:
+        return list(cls._all_windows.values())
+    
+    @classmethod
+    def focus(cls, name: str) -> None:
+        if cls.check(name):
+            cls._all_windows[name].focus()
+    
 
 class WindowMixin(ABC):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
-
-    all_windows: dict = {}  # общий словарь регистрации для всех окон
 
     title: Tk.title         # эти атрибуты и методы объекта
     protocol: Tk.protocol   # появятся автоматически при
@@ -200,7 +254,6 @@ class WindowMixin(ABC):
 
     # настройка окна, вызывается через super в конце __init__ окна
     def _default_set_up(self):
-        self.all_windows[self.name] = self  # регистрация окна в словаре
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
         self._set_style()     # настройка внешнего вида окна
@@ -211,10 +264,8 @@ class WindowMixin(ABC):
 
     # закрытие окна
     def close(self) -> None:
-        try:  # удаляет окно из словаря регистрации
-            self.all_windows.pop(self.name)
-        except KeyError:
-            pass
+        # удаляет регистрацию окна из менеджера
+        LocalWM.wipe(self.name)
         self.destroy()  # закрывает окно
 
     # обновление текстов всех виджетов окна, исходя из языка
@@ -287,6 +338,11 @@ class WindowMixin(ABC):
     def _pack_widgets(self, ) -> None:
         ...
 
+
+
+
+
+    #  из файла windows_utils.py:
 
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
@@ -484,31 +540,22 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # при закрытии окна
     def close(self):
-
-        def open_warning():
-            if not self.all_windows.get('warn'):  # если не нашёл окно в словаре
-                WarningWindow(root=self)  # создать окно (само добавится в словарь)
-            self.all_windows['warn'].focus()  # фокусируется на нём
-
         for task in Task.all_tasks.values():
             if not task.done:  # если какая-то из задач не завершена
-                return open_warning()
+                # открытие окна с новой задачей (и/или переключение на него)
+                return LocalWM.open(WarningWindow, 'warn').focus()
         self.destroy()
 
     # создание и настройка виджетов
     def _init_widgets(self):
 
-        # открытие окна с новой задачей
+        # открытие окна с новой задачей (и/или переключение на него)
         def open_new_task():
-            if not self.all_windows.get('task'):  # если не нашёл окно в словаре
-                NewTaskWindow(root=self)  # создать окно (само добавится в словарь)
-            self.all_windows['task'].focus()  # фокусируется на нём
+            LocalWM.open(NewTaskWindow, 'task').focus()
 
-        # открытие окна настроек
+        # открытие окна настроек (и/или переключение на него)
         def open_settings():
-            if not self.all_windows.get('sets'):
-                SettingsWindow(root=self)
-            self.all_windows['sets'].focus()
+            LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
         self.upper_bar = upperBar = ttk.Frame(self)  # верхний бар с кнопками
@@ -537,9 +584,11 @@ class RootWindow(ThemedTk, WindowMixin):
     def del_task_bar(self, task_number: int) -> None:
         self.task_bars[task_number].delete()  # удаляет таскбар
         del self.task_bars[task_number]  # чистит регистрацию
-        print('''TODO обновление статуса окон 
-              (если вдруг задачи завершились, 
-              а окно предупреждения открыто).''')
+        print('''
+TODO обновление статуса окон 
+(если вдруг задачи завершились, 
+а окно предупреждения открыто).
+              ''')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -568,7 +617,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         # применение настроек
         def apply_settings():
             Lang.set(index=self.widgets['cmbLang'].current())  # установка языка
-            for w in self.all_windows.values():  # перебирает все окна в словаре регистрации
+            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
             ...  # считывание других виджетов настроек, и применение
@@ -696,7 +745,7 @@ class WarningWindow(Toplevel, WindowMixin):
     #  из файла main.py:
 
 def main():
-    root = RootWindow()
+    root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
     root.mainloop()
 
 if __name__ == "__main__":

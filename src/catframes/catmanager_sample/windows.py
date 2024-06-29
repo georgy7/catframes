@@ -1,7 +1,8 @@
 from _prefix import *
 from sets_utils import Lang
-from windows_utils import ScrollableFrame, TaskBar, WindowMixin
+from windows_utils import ScrollableFrame, TaskBar
 from task_flows import Task, GuiCallback
+from windows_base import WindowMixin, LocalWM
 
 
 class RootWindow(ThemedTk, WindowMixin):
@@ -22,31 +23,22 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # при закрытии окна
     def close(self):
-
-        def open_warning():
-            if not self.all_windows.get('warn'):  # если не нашёл окно в словаре
-                WarningWindow(root=self)  # создать окно (само добавится в словарь)
-            self.all_windows['warn'].focus()  # фокусируется на нём
-
         for task in Task.all_tasks.values():
             if not task.done:  # если какая-то из задач не завершена
-                return open_warning()
+                # открытие окна с новой задачей (и/или переключение на него)
+                return LocalWM.open(WarningWindow, 'warn').focus()
         self.destroy()
 
     # создание и настройка виджетов
     def _init_widgets(self):
 
-        # открытие окна с новой задачей
+        # открытие окна с новой задачей (и/или переключение на него)
         def open_new_task():
-            if not self.all_windows.get('task'):  # если не нашёл окно в словаре
-                NewTaskWindow(root=self)  # создать окно (само добавится в словарь)
-            self.all_windows['task'].focus()  # фокусируется на нём
+            LocalWM.open(NewTaskWindow, 'task').focus()
 
-        # открытие окна настроек
+        # открытие окна настроек (и/или переключение на него)
         def open_settings():
-            if not self.all_windows.get('sets'):
-                SettingsWindow(root=self)
-            self.all_windows['sets'].focus()
+            LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
         self.upper_bar = upperBar = ttk.Frame(self)  # верхний бар с кнопками
@@ -108,7 +100,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         # применение настроек
         def apply_settings():
             Lang.set(index=self.widgets['cmbLang'].current())  # установка языка
-            for w in self.all_windows.values():  # перебирает все окна в словаре регистрации
+            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
             ...  # считывание других виджетов настроек, и применение
