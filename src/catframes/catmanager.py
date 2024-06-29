@@ -24,9 +24,11 @@ class GuiCallback:
             self,
             update_function,
             finish_function,
+            delete_function,
             ):
         self.update = update_function
         self.finish = finish_function
+        self.delete = delete_function
         
     
     @staticmethod  # метод из TaskBar
@@ -37,6 +39,11 @@ class GuiCallback:
     @staticmethod  # метод из RootWindow
     def finish(id: int):
         """сигнал о завершении задачи"""
+        ...
+
+    @staticmethod  # метод из RootWindow
+    def delete(id: int):
+        """сигнал об удалении задачи"""
         ...
 
 
@@ -65,15 +72,18 @@ class Task:
             self.gui_callback.update(i/20)
             time.sleep(0.2)
         self.done = True
-        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
         TaskManager.reg_finish(self)
+        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
 
     # остановка задачи (тестовая)
-    def stop(self):
+    def cancel(self):
         self.stop_flag = True
-        self.thread.join()
-        self.gui_callback.finish(self.id)
         TaskManager.reg_finish(self)
+        self.gui_callback.delete(self.id)  # сигнал о завершении задачи
+
+    def delete(self):
+        TaskManager.wipe(self)
+        self.gui_callback.delete(self.id)  # сигнал об удалении задачи
 
 
 class TaskManager:
@@ -118,8 +128,10 @@ class TaskManager:
     # удаление задачи   
     @classmethod
     def wipe(cls, task: Task) -> None:
+        cls.reg_finish(task)
         if task.id in cls._all_tasks:
             cls._all_tasks.pop(task.id)
+
 
     # получение списка всех задач
     @classmethod
@@ -172,10 +184,11 @@ class Lang:
             'bar.active': 'processing',
             'bar.inactive': 'complete', 
             'bar.btInfo': 'Info',
-            'bar.btStop': 'Cancel',
+            'bar.btCancel': 'Cancel',
+            'bar.btDelete': 'Delete',
 
             'warn.title': 'Warning',
-            'warn.lbWarn': 'Attention!',
+            'warn.lbWarn': 'Warning!',
             'warn.lbText': 'Incomplete tasks!',
             'warn.btBack': 'Back',
             'warn.btExit': 'Leave',
@@ -197,7 +210,8 @@ class Lang:
             'bar.lbActive': 'обработка',
             'bar.lbInactive': 'завершено', 
             'bar.btInfo': 'Инфо',
-            'bar.btStop': 'Отмена',
+            'bar.btCancel': 'Отмена',
+            'bar.btDelete': 'Удалить',
             
             'warn.title': 'Внимание',
             'warn.lbWarn': 'Внимание!',
@@ -293,8 +307,7 @@ class LocalWM:
     # обновление открытых окон после завершения задачи
     @classmethod
     def update_on_task_finish(cls):
-        print('testing update_on_task_finish')
-        if cls.check('warn'): # and not TaskManager.running_list:
+        if cls.check('warn') and not TaskManager.running_list():
             cls._all_windows['warn'].destroy()
             cls._all_windows.pop('warn')
         ...
@@ -509,18 +522,20 @@ class TaskBar(ttk.Frame):
         # создании средней части бара
         self.mid_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
+        bigger_font = font.Font(size=16)
+
         # надпись в баре
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
-            font='18', padding=5,
-            text=f"/usr/tester/movies/renger{self.task.id}.mp4", 
+            font=bigger_font, padding=5,
+            text=f"/usr/tester/movies/render{self.task.id}.mp4", 
             style='Task.TLabel'
         )
 
         self.widgets['_lbData'] = ttk.Label(  
             self.mid_frame, 
             font='14', padding=5,
-            text=f"test label for options in task {self.task.id}", 
+            text=f"test label for options description in task {self.task.id}", 
             style='Task.TLabel'
         )
 
@@ -528,8 +543,8 @@ class TaskBar(ttk.Frame):
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
        
-        # кнопка "стоп"
-        self.widgets['btStop'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.stop())
+        # кнопка "отмена"
+        self.widgets['btCancel'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.cancel())
         
         # полоса прогресса
         self.widgets['_progressBar'] = ttk.Progressbar(
@@ -549,11 +564,19 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
         self.mid_frame.pack(side='left')
 
-        self.widgets['btStop'].pack(side='bottom', expand=True)
+        self.widgets['btCancel'].pack(side='bottom', expand=True)
         self.widgets['_progressBar'].pack(side='bottom', expand=True)
         self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
+
+    # обновление кнопки "отмена" после завершения задачи
+    def update_cancel_button(self):
+        self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
+        self.widgets['btDelete'].config(
+            command=lambda: self.task.delete(),  # переопределение поведения кнопки
+        )
+        self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
     def update_progress(self, progress: float, delta: bool = False):
@@ -646,12 +669,9 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # закрытие задачи, смена виджета
     def finish_task_bar(self, task_id: int) -> None:
-        print('TODO смена виджета на виджет завершенной задачи')
+        if task_id in self.task_bars:
+            self.task_bars[task_id].update_cancel_button()
         LocalWM.update_on_task_finish()
-
-    # остановка задачи, смена виджета
-    def cancel_task_bar(self, task_id: int) -> None:
-        print('TODO смена виджета на виджет отменённой задачи')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -744,8 +764,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
             update_progress: Callable = self.master.add_task_bar(task, **params)
 
             gui_callback = GuiCallback(  # создание колбека
-                update_function=update_progress,  # передача методов обновления
-                finish_function=self.master.finish_task_bar  # и завершения задачи
+                update_function=update_progress,  # передача методов обновления,
+                finish_function=self.master.finish_task_bar,  # завершения задачи
+                delete_function=self.master.del_task_bar  # и удаления бара
             )  
 
             task.start(gui_callback)  # инъекция колбека для обнволения gui

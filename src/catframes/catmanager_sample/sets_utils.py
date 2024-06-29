@@ -36,10 +36,11 @@ class Lang:
             'bar.active': 'processing',
             'bar.inactive': 'complete', 
             'bar.btInfo': 'Info',
-            'bar.btStop': 'Cancel',
+            'bar.btCancel': 'Cancel',
+            'bar.btDelete': 'Delete',
 
             'warn.title': 'Warning',
-            'warn.lbWarn': 'Attention!',
+            'warn.lbWarn': 'Warning!',
             'warn.lbText': 'Incomplete tasks!',
             'warn.btBack': 'Back',
             'warn.btExit': 'Leave',
@@ -61,7 +62,8 @@ class Lang:
             'bar.lbActive': 'обработка',
             'bar.lbInactive': 'завершено', 
             'bar.btInfo': 'Инфо',
-            'bar.btStop': 'Отмена',
+            'bar.btCancel': 'Отмена',
+            'bar.btDelete': 'Удалить',
             
             'warn.title': 'Внимание',
             'warn.lbWarn': 'Внимание!',

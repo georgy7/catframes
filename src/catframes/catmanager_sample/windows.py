@@ -69,12 +69,9 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # закрытие задачи, смена виджета
     def finish_task_bar(self, task_id: int) -> None:
-        print('TODO смена виджета на виджет завершенной задачи')
+        if task_id in self.task_bars:
+            self.task_bars[task_id].update_cancel_button()
         LocalWM.update_on_task_finish()
-
-    # остановка задачи, смена виджета
-    def cancel_task_bar(self, task_id: int) -> None:
-        print('TODO смена виджета на виджет отменённой задачи')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -167,8 +164,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
             update_progress: Callable = self.master.add_task_bar(task, **params)
 
             gui_callback = GuiCallback(  # создание колбека
-                update_function=update_progress,  # передача методов обновления
-                finish_function=self.master.finish_task_bar  # и завершения задачи
+                update_function=update_progress,  # передача методов обновления,
+                finish_function=self.master.finish_task_bar,  # завершения задачи
+                delete_function=self.master.del_task_bar  # и удаления бара
             )  
 
             task.start(gui_callback)  # инъекция колбека для обнволения gui

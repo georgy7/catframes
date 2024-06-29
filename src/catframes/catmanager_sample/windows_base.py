@@ -61,8 +61,7 @@ class LocalWM:
     # обновление открытых окон после завершения задачи
     @classmethod
     def update_on_task_finish(cls):
-        print('testing update_on_task_finish')
-        if cls.check('warn'): # and not TaskManager.running_list:
+        if cls.check('warn') and not TaskManager.running_list():
             cls._all_windows['warn'].destroy()
             cls._all_windows.pop('warn')
         ...

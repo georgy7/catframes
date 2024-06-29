@@ -9,9 +9,11 @@ class GuiCallback:
             self,
             update_function,
             finish_function,
+            delete_function,
             ):
         self.update = update_function
         self.finish = finish_function
+        self.delete = delete_function
         
     
     @staticmethod  # метод из TaskBar
@@ -22,6 +24,11 @@ class GuiCallback:
     @staticmethod  # метод из RootWindow
     def finish(id: int):
         """сигнал о завершении задачи"""
+        ...
+
+    @staticmethod  # метод из RootWindow
+    def delete(id: int):
+        """сигнал об удалении задачи"""
         ...
 
 
@@ -50,15 +57,18 @@ class Task:
             self.gui_callback.update(i/20)
             time.sleep(0.2)
         self.done = True
-        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
         TaskManager.reg_finish(self)
+        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
 
     # остановка задачи (тестовая)
-    def stop(self):
+    def cancel(self):
         self.stop_flag = True
-        self.thread.join()
-        self.gui_callback.finish(self.id)
         TaskManager.reg_finish(self)
+        self.gui_callback.delete(self.id)  # сигнал о завершении задачи
+
+    def delete(self):
+        TaskManager.wipe(self)
+        self.gui_callback.delete(self.id)  # сигнал об удалении задачи
 
 
 class TaskManager:
@@ -103,8 +113,10 @@ class TaskManager:
     # удаление задачи   
     @classmethod
     def wipe(cls, task: Task) -> None:
+        cls.reg_finish(task)
         if task.id in cls._all_tasks:
             cls._all_tasks.pop(task.id)
+
 
     # получение списка всех задач
     @classmethod

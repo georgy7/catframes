@@ -108,18 +108,20 @@ class TaskBar(ttk.Frame):
         # создании средней части бара
         self.mid_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
+        bigger_font = font.Font(size=16)
+
         # надпись в баре
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
-            font='18', padding=5,
-            text=f"/usr/tester/movies/renger{self.task.id}.mp4", 
+            font=bigger_font, padding=5,
+            text=f"/usr/tester/movies/render{self.task.id}.mp4", 
             style='Task.TLabel'
         )
 
         self.widgets['_lbData'] = ttk.Label(  
             self.mid_frame, 
             font='14', padding=5,
-            text=f"test label for options in task {self.task.id}", 
+            text=f"test label for options description in task {self.task.id}", 
             style='Task.TLabel'
         )
 
@@ -127,8 +129,8 @@ class TaskBar(ttk.Frame):
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
        
-        # кнопка "стоп"
-        self.widgets['btStop'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.stop())
+        # кнопка "отмена"
+        self.widgets['btCancel'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.cancel())
         
         # полоса прогресса
         self.widgets['_progressBar'] = ttk.Progressbar(
@@ -148,11 +150,19 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
         self.mid_frame.pack(side='left')
 
-        self.widgets['btStop'].pack(side='bottom', expand=True)
+        self.widgets['btCancel'].pack(side='bottom', expand=True)
         self.widgets['_progressBar'].pack(side='bottom', expand=True)
         self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
+
+    # обновление кнопки "отмена" после завершения задачи
+    def update_cancel_button(self):
+        self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
+        self.widgets['btDelete'].config(
+            command=lambda: self.task.delete(),  # переопределение поведения кнопки
+        )
+        self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
     def update_progress(self, progress: float, delta: bool = False):
