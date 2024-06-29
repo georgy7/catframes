@@ -6,7 +6,6 @@ from tkinter import Tk, Toplevel, ttk, Canvas, font
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, Callable
 from PIL import Image, ImageTk
-from ttkthemes import ThemedTk
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.

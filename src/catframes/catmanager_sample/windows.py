@@ -5,7 +5,7 @@ from task_flows import Task, GuiCallback, TaskManager
 from windows_base import WindowMixin, LocalWM
 
 
-class RootWindow(ThemedTk, WindowMixin):
+class RootWindow(Tk, WindowMixin):
     """Основное окно"""
 
     def __init__(self):

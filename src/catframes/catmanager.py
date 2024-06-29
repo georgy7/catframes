@@ -6,7 +6,6 @@ from tkinter import Tk, Toplevel, ttk, Canvas, font
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, Callable
 from PIL import Image, ImageTk
-from ttkthemes import ThemedTk
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
@@ -151,7 +150,7 @@ class TaskManager:
 
 # временные глобальные переменные
 MAJOR_SCALING: float = 0.8
-TTK_THEME: Optional[str] = "breeze"
+TTK_THEME: Optional[str] = None
 
 
 class Lang:
@@ -605,7 +604,7 @@ class TaskBar(ttk.Frame):
 
     #  из файла windows.py:
 
-class RootWindow(ThemedTk, WindowMixin):
+class RootWindow(Tk, WindowMixin):
     """Основное окно"""
 
     def __init__(self):
