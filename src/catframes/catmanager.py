@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 import threading
 import time
-from tkinter import Tk, Toplevel, ttk, Canvas, font
+import os
+import re
+
+from tkinter import *
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, Callable
 from PIL import Image, ImageTk
@@ -14,6 +17,119 @@ from PIL import Image, ImageTk
 
 
     #  из файла task_flows.py:
+
+class TaskConfig:
+    """Хранение конфигурации текущей задачи.
+    Позволяет конвертировать в команду catframes,
+    проверив валидность каждого из параметров."""
+
+    def __init__(self, dir: str) -> None:
+        self.dirs: list = [dir]                      # пути к директориям с изображениями
+        self.sure_flag: bool = False                 # флаг для предотвращения ошибок, если нет директории
+        self.overlays: dict = {}                     # словрь надписей {'--left-top': 'надпись'}
+        self.margin_color: str = '#000'              # цвет отступов и фона
+        self.frame_rate: int = 30                    # частота кадров (от 1 до 60)
+        self.quality: str = 'medium'                 # качество видео (poor, medium, high)
+        self.limit: Optional[int]                    # предел видео в секундах
+        self.force_flag: bool = False                # перезапись конечного файла, если существует
+        self.port_range: Optional[Tuple[int, int]]   # диапазон портов для связи с ffmpeg
+        self.path: str = '.'                         # путь к директории сохранения
+        self.file_name: str = 'unknown'               # имя файла
+        self.extension: str = 'mp4'                  # расширение файла
+
+    # проверка каждого атрибута на валидность
+    def __str__(self) -> str:
+        command = 'catframes'
+        invalid_characters = ('\\', '"', '\'', '$', '(', ')', '[', ']')
+
+        # if self.sure_flag:
+        #     command += ' -s'
+        
+        # проверка текстовых оверлеев
+        for position, text in self.overlays.items():
+            if position not in (
+                'left',
+                'right',
+                'top',
+                'bottom',
+                'left-top',
+                'left-bottom',
+                'right-top',
+                'right-bottom',
+                'top-left',
+                'top-right',
+                'bottom-left',
+                'bottom-right',
+            ): raise AttributeError('overlay_position')
+            if invalid_characters in text:
+                raise AttributeError('overlay_text')
+            command += f" --{position} '{text}'"
+        
+        # проверка корректности строки с rgb
+        rgb_pattern = re.compile(r'^#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$')
+        if not rgb_pattern.match(self.margin_color):
+            raise AttributeError(
+                f'incorrect color: {self.margin_color}'
+            )
+        command += f" --margin-color {self.margin_color}"
+
+        # проверка выбора частоты кадров
+        if self.frame_rate < 1 or self.frame_rate > 60:
+            raise AttributeError('frame_rate')
+        command += f" --frame-rate {self.frame_rate}"
+
+        # проверка выбора качества рендера
+        if self.quality not in ['poor', 'medium', 'high']:
+            raise AttributeError('quality')
+        command += f" --quality {self.quality}"
+
+        # проверка наличия и валидности ограничения времени
+        if hasattr(self, 'limit'):
+            if self.limit < 1:
+                raise AttributeError('limit')
+            command += f" --limit {self.limit}"
+
+        # проверка флага перезаписи
+        if self.force_flag:
+            command += f" --force"
+
+        # проверка наличия и валидности ограничения портов
+        if hasattr(self, 'port_range'):
+            if self.port_range[0] > self.port_range[1]:
+                raise AttributeError('port_range')
+            if self.port_range[1] < 10240 or self.port_range[0] > 65535:
+                raise AttributeError('port_range')
+            command += f" --port-range {self.port_range[0]}:{self.port_range[1]}"
+        
+        # проверка наличия директорий с зображениями
+        for dir in self.dirs:
+            if not os.path.isdir(dir):
+                raise AttributeError('dirs')
+            command += f" {dir}"
+
+        # проверка на наличие запрещённых символов
+        for c in invalid_characters:
+            if c in self.file_name:
+                raise AttributeError('filename')
+
+        # проверка на наличие директории конечного файла
+        if not os.path.isdir(self.path):
+            raise AttributeError('path')
+        
+        # проверка валидности выбора расширения файла
+        if self.extension not in ('mp4', 'webm'):
+            raise AttributeError('extension')
+
+        # сборка полного пути файла        
+        full_file_path = f"{self.path}/{self.file_name}.{self.extension}"
+        command += f" {full_file_path}"
+
+        # проверка, есть ли такой файл, если не установлен флаг перезаписи
+        if os.path.isfile(full_file_path) and not self.force_flag:
+            return AttributeError('exists')
+        
+        return command  # возврат полной собранной команды
+
 
 class GuiCallback:
     """Интерфейс для инъекции внешних методов от gui.

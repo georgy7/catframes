@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 import threading
 import time
-from tkinter import Tk, Toplevel, ttk, Canvas, font
+import os
+import re
+
+from tkinter import *
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, Callable
 from PIL import Image, ImageTk
