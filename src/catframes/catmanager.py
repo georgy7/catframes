@@ -6,6 +6,7 @@ import os
 import re
 
 from tkinter import *
+from tkinter import ttk, font
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, Callable
 from PIL import Image, ImageTk
