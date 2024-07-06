@@ -6,8 +6,8 @@ class TaskConfig:
     Позволяет конвертировать в команду catframes,
     проверив валидность каждого из параметров."""
 
-    def __init__(self, dir: str) -> None:
-        self.dirs: list = [dir]                      # пути к директориям с изображениями
+    def __init__(self) -> None:
+        self.dirs: list = []                      # пути к директориям с изображениями
         self.sure_flag: bool = False                 # флаг для предотвращения ошибок, если нет директории
         self.overlays: dict = {}                     # словрь надписей {'--left-top': 'надпись'}
         self.margin_color: str = '#000'              # цвет отступов и фона
@@ -20,8 +20,8 @@ class TaskConfig:
         self.file_name: str = 'unknown'               # имя файла
         self.extension: str = 'mp4'                  # расширение файла
 
-    # проверка каждого атрибута на валидность
-    def __str__(self) -> str:
+    # проверка каждого атрибута на валидность, создание консольной команды
+    def convert_to_command(self) -> str:
         command = 'catframes'
         invalid_characters = ('\\', '"', '\'', '$', '(', ')', '[', ']')
 
@@ -148,7 +148,8 @@ class GuiCallback:
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
-    def __init__(self, id: int, **params) -> None:
+    def __init__(self, id: int, task_config: TaskConfig) -> None:
+        self.config = task_config
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
@@ -194,11 +195,11 @@ class TaskManager:
     _running_tasks: dict = {}  # словарь активных задач
 
     @classmethod
-    def create(cls, **params) -> Task:
+    def create(cls, task_config: TaskConfig) -> Task:
         cls._last_id += 1  # увеличение последнего номера задачи
         unic_id = cls._last_id  # получение уникального номера
 
-        task = Task(unic_id, **params)  # создание задачи
+        task = Task(unic_id, task_config)  # создание задачи
         cls._reg(task)  # регистрация в менеджере
         return task
 

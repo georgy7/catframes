@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Lang
 from windows_utils import ScrollableFrame, TaskBar
-from task_flows import Task, GuiCallback, TaskManager
+from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
 
 
@@ -145,38 +145,74 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets = {}
+        self.task_config = TaskConfig()
 
         self.size = 300, 250
         self.resizable(False, False)
 
         super()._default_set_up()
 
+    # подсветка виджета цветом предупреждения
+    def mark_error_widget(self, widget_name):
+        print(f'подсветит виджет {widget_name}')
+
+    # валидация текущего конфига
+    def _validate_task_config(self) -> bool:
+        try:                                        # пробует конвертировать конфиг 
+            self.task_config.convert_to_command()   # в команду, проверив каждый атрибут
+            return True
+        except AttributeError as e:                 # если поймает ошибку, то вызовет
+            self.mark_error_widget(str(e))          # метод подсветки виджета с ошибкой
+            return False
+
+    # создание и запуск задачи
+    def _create_task_instance(self):
+
+        # создание задачи через менеджер задач
+        task = TaskManager.create(self.task_config)
+
+        # создание бара задачи, получение метода обновления прогресса
+        update_progress: Callable = self.master.add_task_bar(task)
+
+        gui_callback = GuiCallback(                       # создание колбека
+            update_function=update_progress,              # передача методов обновления,
+            finish_function=self.master.finish_task_bar,  # завершения задачи
+            delete_function=self.master.del_task_bar      # и удаления бара
+        )
+
+        task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
+
     # создание и настройка виджетов
     def _init_widgets(self):
         
-        def add_task():
-            params: dict = {
-                # вытягивание аргументов из виджетов настроек задачи
-            }
-            task = TaskManager.create(**params)
-
-            # создание бара задачи, получение метода обновления прогресса
-            update_progress: Callable = self.master.add_task_bar(task, **params)
-
-            gui_callback = GuiCallback(  # создание колбека
-                update_function=update_progress,  # передача методов обновления,
-                finish_function=self.master.finish_task_bar,  # завершения задачи
-                delete_function=self.master.del_task_bar  # и удаления бара
-            )  
-
-            task.start(gui_callback)  # инъекция колбека для обнволения gui
-            self.close()
+        def add_task():  # обработка кнопки добавления задачи
+            if self._validate_task_config():  # если конфиг корректный
+                self._create_task_instance()  # создаёт и запускает задачу
+                self.close()                  # закрывает окно
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
+
+        def ask_directory():
+            dirpath = filedialog.askdirectory()
+            if dirpath and dirpath not in self.task_config.dirs:
+                self.task_config.dirs.append(dirpath)
+            self.focus()
+
+        def ask_color():
+            color = colorchooser.askcolor()[-1]
+            self.task_config.margin_color = color
+            self.widgets['_btColor'].configure(background=color, text=color)
+            self.focus()
+
+        self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
+        self.widgets['_btColor'] = Button(self, background='#999999', command=ask_color, text='#999999')
+
 
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['btCreate'].pack(side='bottom', pady=15)
+        self.widgets['btAddDir'].pack(side='top', pady=15)
+        self.widgets['_btColor'].pack(side='top')
 
 
 class WarningWindow(Toplevel, WindowMixin):
