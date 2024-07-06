@@ -1450,41 +1450,112 @@ class FrameView(ABC):
 
 
 class Quality(Enum):
-    """Абстракция над бесконечными настройками качества FFmpeg."""
+    """Abstraction over endless FFmpeg quality settings."""
 
-    HIGH = 1, 3, 'yuv444p'
-    """Очень высокое, но всё же с потерями. Подходит для художественных таймлапсов, где важно
-    сохранить текстуру, световые переливы, зернистость камеры. Битрейт — как у JPEG 75.
+    HIGH = 1
+    """Very high, but still lossу. It is suitable for artistic timelaps,
+    where it is important to preserve the texture, light iridescence,
+    and grain of the camera. It has a bitrate like MJPEG with 75% quality.
     """
 
-    MEDIUM = 12, 14, 'yuv422p'
-    """Подойдёт почти для любых задач. Зернистость видео пропадает, градиенты становятся чуть
-    грубее, картинка может быть чуть мутнее, но детали легко узнаваемы.
+    MEDIUM = 2
+    """It is suitable for almost any task. The graininess of the video
+    disappears, the gradients become a little rougher, the picture may be
+    a little murkier, but the details are easily recognizable.
     """
 
-    POOR = 22, 31, 'yuv420p'
-    """Некоторые мелкие детали становятся неразличимыми."""
+    POOR = 3
+    """Some small details become indistinguishable."""
 
-    def get_h264_crf(self, fps: int) -> int:
-        """Constant Rate Factor меняет битрейт для поддержания постоянного уровня качества. Метрика
-        качества в кодеке связана с движением — медленные объекты считаются более заметными.
 
-        При повышении частоты кадров, детали в каждом отдельном кадре становятся всё менее
-        различимыми для зрителей, поэтому кодек при том же CRF порождает меньшие файлы.
+class Encoder(ABC):
+    """FFmpeg options with a certain level of quality."""
+    def fits_hardware(self) -> bool:
+        """Can be used on this computer"""
+    def get_options(self) -> Sequence[str]:
+        """Encoding options"""
 
-        Всё это логично для фильмов, но плохо для видеонаблюдения, где важен каждый кадр. Данный
-        метод корректирует CRF обратно по частоте смены кадров.
-        """
+
+class X264Encoder(Encoder):
+    def __init__(self, quality: Quality, fps: int):
+
         if (fps < 1) or (fps > 60):
             raise ValueError('Unsupported frame rate.')
-        return round(self.value[0] + 2.3 * math.log2(60/fps))
 
-    def get_vp9_crf(self) -> int:
-        """Мои тесты показали, что опция CRF в VP9 не связана с частотой кадров."""
-        return self.value[1]
+        if Quality.HIGH == quality:
+            crf60fps = 1
+            self.pix_fmt = 'yuv444p'
+        elif Quality.MEDIUM == quality:
+            crf60fps = 12
+            self.pix_fmt = 'yuv422p'
+        else:
+            crf60fps = 22
+            self.pix_fmt = 'yuv420p'
 
-    def get_pix_fmt(self) -> str:
-        return self.value[2]
+        self.crf = round(crf60fps + 2.3 * math.log2(60/fps))
+
+    def fits_hardware(self) -> bool:
+        return True
+
+    def get_options(self) -> Sequence[str]:
+        return [
+            '-pix_fmt', self.pix_fmt,
+            '-c:v', 'libx264',
+            '-preset', 'fast', '-tune', 'fastdecode',
+            '-movflags', '+faststart',
+            '-crf', str(self.crf)
+        ]
+
+
+class H264Amf(Encoder):
+    def __init__(self, quality: Quality):
+        if Quality.HIGH == quality:
+            # TODO отрегулировать
+            self.qp = 1
+        elif Quality.MEDIUM == quality:
+            self.qp = 18
+        else:
+            # TODO отрегулировать
+            self.qp = 22
+
+    def fits_hardware(self) -> bool:
+        return True # TODO
+
+    def get_options(self) -> Sequence[str]:
+        return [
+            '-pix_fmt', 'nv12',
+            '-c:v', 'h264_amf',
+            '-usage', 'lowlatency',
+            '-rc', 'cqp',
+            '-qp_i', str(self.qp),
+            '-qp_p', str(self.qp),
+            '-qp_b', str(self.qp)
+        ]
+
+
+class VpxVp9Encoder(Encoder):
+    def __init__(self, quality: Quality):
+        if Quality.HIGH == quality:
+            self.crf = 3
+            self.pix_fmt = 'yuv444p'
+        elif Quality.MEDIUM == quality:
+            self.crf = 14
+            self.pix_fmt = 'yuv422p'
+        else:
+            self.crf = 31
+            self.pix_fmt = 'yuv420p'
+
+    def fits_hardware(self) -> bool:
+        return True
+
+    def get_options(self) -> Sequence[str]:
+        return [
+            '-c:v', 'libvpx-vp9',
+            '-deadline', 'realtime',
+            '-cpu-used', '4',
+            '-pix_fmt', self.pix_fmt,
+            '-crf', str(self.crf), '-b:v', '0'
+        ]
 
 
 class FrameProcessor:
@@ -1553,28 +1624,6 @@ class OutputOptions:
         assert isinstance(self.overwrite, bool)
         if self.limit_seconds is not None:
             assert self.limit_seconds > 0
-
-    def _get_h264_options(self) -> Sequence[str]:
-        # Настраивать промежутки между ключевыми кадрами смысла нет: большинство плееров
-        # умеют точно перематывать, даже если между ними большие промежутки.
-        h264_crf = self.quality.get_h264_crf(self.frame_rate)
-        return [
-            '-pix_fmt', self.quality.get_pix_fmt(),
-            '-c:v', 'libx264',
-            '-preset', 'fast', '-tune', 'fastdecode',
-            '-movflags', '+faststart',
-            '-crf', str(h264_crf)
-        ]
-
-    def _get_vp9_options(self) -> Sequence[str]:
-        vp9_crf = self.quality.get_vp9_crf()
-        return [
-            '-c:v', 'libvpx-vp9',
-            '-deadline', 'realtime',
-            '-cpu-used', '4',
-            '-pix_fmt', self.quality.get_pix_fmt(),
-            '-crf', str(vp9_crf), '-b:v', '0'
-        ]
 
     @staticmethod
     def get_supported_suffixes() -> Sequence[str]:
@@ -1679,9 +1728,10 @@ class OutputOptions:
 
                 suffix = self.destination.suffix
                 if suffix == '.mp4':
-                    ffmpeg_options.extend(self._get_h264_options())
+                    ffmpeg_options.extend(X264Encoder(self.quality, self.frame_rate).get_options())
+                    # ffmpeg_options.extend(H264Amf(self.quality).get_options())
                 elif suffix == '.webm':
-                    ffmpeg_options.extend(self._get_vp9_options())
+                    ffmpeg_options.extend(VpxVp9Encoder(self.quality).get_options())
                 else:
                     raise ValueError('Unsupported file name suffix.')
 
