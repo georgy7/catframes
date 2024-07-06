@@ -6,7 +6,7 @@ import os
 import re
 
 from tkinter import *
-from tkinter import ttk, font
+from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, Callable
 from PIL import Image, ImageTk
@@ -19,13 +19,40 @@ from PIL import Image, ImageTk
 
     #  из файла task_flows.py:
 
+"""
+Слой задач полностью отделён от gui.
+
+Задачи создаются с помощью TaskManager, который
+выдаёт им уникальные номера, и регистрирует их статусы.
+
+При создании задачи, ей передаюётся нужная конфигурация,
+которая представляет собой объект класса TaskConfig.
+Атрибутами этого объекта являются все возможные параметры,
+которые есть у консольной версии приложения catframes.
+Этот объект имеет метод конвертирования в консольную команду,
+которая и будет запущена самим процессом задачи при старте.
+При конвертировании, происходит проверка каждого атрибута
+на валидность данных, и если возникает нарушение, 
+вызывается ошибка с текстом имени некорректного параметра.
+Эти исключения далее будет обрабатывать фронт, понимая,
+какой конкретно параметр не прошёл валидацию.
+
+Чтобы в процессе обработки, задача могла как-то делиться
+своим статусом с интерфейсом, реализован паттерн "наблюдатель".
+При старте задачи, ей передаётся объект класса GuiCallback.
+При инициализации, объект коллбэка принимает внешние зависимости,
+чтобы у задачи была возможность обновлять свои статусы в gui.
+"""
+
+
+
 class TaskConfig:
     """Хранение конфигурации текущей задачи.
     Позволяет конвертировать в команду catframes,
     проверив валидность каждого из параметров."""
 
-    def __init__(self, dir: str) -> None:
-        self.dirs: list = [dir]                      # пути к директориям с изображениями
+    def __init__(self) -> None:
+        self.dirs: list = []                      # пути к директориям с изображениями
         self.sure_flag: bool = False                 # флаг для предотвращения ошибок, если нет директории
         self.overlays: dict = {}                     # словрь надписей {'--left-top': 'надпись'}
         self.margin_color: str = '#000'              # цвет отступов и фона
@@ -38,8 +65,8 @@ class TaskConfig:
         self.file_name: str = 'unknown'               # имя файла
         self.extension: str = 'mp4'                  # расширение файла
 
-    # проверка каждого атрибута на валидность
-    def __str__(self) -> str:
+    # проверка каждого атрибута на валидность, создание консольной команды
+    def convert_to_command(self) -> str:
         command = 'catframes'
         invalid_characters = ('\\', '"', '\'', '$', '(', ')', '[', ']')
 
@@ -166,7 +193,8 @@ class GuiCallback:
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
-    def __init__(self, id: int, **params) -> None:
+    def __init__(self, id: int, task_config: TaskConfig) -> None:
+        self.config = task_config
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
@@ -212,11 +240,11 @@ class TaskManager:
     _running_tasks: dict = {}  # словарь активных задач
 
     @classmethod
-    def create(cls, **params) -> Task:
+    def create(cls, task_config: TaskConfig) -> Task:
         cls._last_id += 1  # увеличение последнего номера задачи
         unic_id = cls._last_id  # получение уникального номера
 
-        task = Task(unic_id, **params)  # создание задачи
+        task = Task(unic_id, task_config)  # создание задачи
         cls._reg(task)  # регистрация в менеджере
         return task
 
@@ -265,9 +293,18 @@ class TaskManager:
 
     #  из файла sets_utils.py:
 
-# временные глобальные переменные
-MAJOR_SCALING: float = 0.8
-TTK_THEME: Optional[str] = None
+"""
+Класс языковых настроек содержит большой словарь, 
+в котором для каждого языка есть соответсвия названия
+виджета, и текста, который в этом виджете расположен.
+
+Добавление нового ключа в этот словарь должно быть с
+добавлением всех внутренних ключей по аналогии с другими.
+
+Если в процессе будет допущена ошибка, или gui запросит
+текст для виджета, который не прописан, в качестве текста
+вернётся строка из прочерков "-----" для быстрого обнаружения. 
+"""
 
 
 class Lang:
@@ -364,6 +401,28 @@ class Lang:
 
 
     #  из файла windows_base.py:
+
+"""
+Управление окнами происходит локальным менеджером окон.
+
+Любое открытие окна происходит именно через него.
+если окно уже прописано в его локальном словаре, 
+оно не будет открыто повторно, будет возвращён его объект.
+
+Если где угодно в коде нужно открыть/закрыть/сфокусировать
+любое другое окно, через LocalWM можно получить его объект.
+Также, можно получить список всех окон, например, для итерации.
+
+WindowMixin - это абстрактный класс, от которого наследуются
+все классы окон. В нём прописана базовая логика поведения окна.
+Также, в нём есть инициализация стилей окна, и должны быть методы,
+касающиеся пользовательских настроек, чтобы итерацией по всем окнам,
+и вызове метода обновления для каждого окна, они применились везде.
+К примеру, метод "update_texts" обновляет текст на всех виджетах окна.
+"""
+
+
+
 class LocalWM:
     """Класс для работы с окнами.
     Позволяет регистрировать окна,
@@ -489,7 +548,7 @@ class WindowMixin(ABC):
         # scale *= MAJOR_SCALING                     # домножаем на глобальную
 
         style=ttk.Style()
-        if TTK_THEME: style.theme_use(TTK_THEME)   # применение темы, если есть
+        # if TTK_THEME: style.theme_use(TTK_THEME)   # применение темы, если есть
         _font = font.Font(
             # family= "helvetica", 
             size=12, 
@@ -532,6 +591,24 @@ class WindowMixin(ABC):
 
 
     #  из файла windows_utils.py:
+
+"""
+Прокручиваемый фрейм это сложная структура, основанная на
+объекте "холста", к которому крепятся полоса прокрутки и фрейм.
+Далее следует большое количество взаимных подвязок, на разные случаи.
+
+- если фрейм переполнен:
+    ^ любые прокрутки невозможны
+
+- полоса может прокручивать объект холста,
+- при наведении мыши на холст, привязка возможностей:
+    ^ колесо мыши может прокручивать холст и полосу прокрутки
+
+Объект бара задачи это фрейм, в котором разные виджеты, относящиеся 
+к описанию параметров задачи (картинка, лейблы для пути и параметров),
+бар прогресса выполнения задачи, и кнопку отмены/удаления.
+"""
+
 
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
@@ -721,6 +798,29 @@ class TaskBar(ttk.Frame):
 
     #  из файла windows.py:
 
+"""
+Любое окно наследуется от Tk/TopLevel и WindowMixin.
+Именно в таком порядке, это важно. Если перепутать, 
+объект инициализируется как WindowMixin.
+
+Вначале конструктора должен быть вызван super().__init__(),
+который инициализирует объект как сущность Tk/TopLevel.
+
+Должны быть объявлены имя окна, и необходимые атрибуты из миксина,
+а в конце должен быть вызван метод super()._default_set_up().
+Интерпретатор не найдёт такой метод в Tk/TopLevel, и будет 
+выполнен метод из миксина.
+
+Также, должны быть имплементированы методы создания и упаковки виджетов,
+они тоже вызываются миксином при стандартной настройке окна. 
+
+Любые виджеты внутри окна должны добавляться в словарь виджетов,
+а тексты для них прописываться в классе языковых настроек Lang.
+Если появляется более сложная композиция, метод update_texts должен
+быть расширен так, чтобы вызывать обновление текста во всех виджетах.
+"""
+
+
 class RootWindow(Tk, WindowMixin):
     """Основное окно"""
 
@@ -861,38 +961,74 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets = {}
+        self.task_config = TaskConfig()
 
         self.size = 300, 250
         self.resizable(False, False)
 
         super()._default_set_up()
 
+    # подсветка виджета цветом предупреждения
+    def mark_error_widget(self, widget_name):
+        print(f'подсветит виджет {widget_name}')
+
+    # валидация текущего конфига
+    def _validate_task_config(self) -> bool:
+        try:                                        # пробует конвертировать конфиг 
+            self.task_config.convert_to_command()   # в команду, проверив каждый атрибут
+            return True
+        except AttributeError as e:                 # если поймает ошибку, то вызовет
+            self.mark_error_widget(str(e))          # метод подсветки виджета с ошибкой
+            return False
+
+    # создание и запуск задачи
+    def _create_task_instance(self):
+
+        # создание задачи через менеджер задач
+        task = TaskManager.create(self.task_config)
+
+        # создание бара задачи, получение метода обновления прогресса
+        update_progress: Callable = self.master.add_task_bar(task)
+
+        gui_callback = GuiCallback(                       # создание колбека
+            update_function=update_progress,              # передача методов обновления,
+            finish_function=self.master.finish_task_bar,  # завершения задачи
+            delete_function=self.master.del_task_bar      # и удаления бара
+        )
+
+        task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
+
     # создание и настройка виджетов
     def _init_widgets(self):
         
-        def add_task():
-            params: dict = {
-                # вытягивание аргументов из виджетов настроек задачи
-            }
-            task = TaskManager.create(**params)
-
-            # создание бара задачи, получение метода обновления прогресса
-            update_progress: Callable = self.master.add_task_bar(task, **params)
-
-            gui_callback = GuiCallback(  # создание колбека
-                update_function=update_progress,  # передача методов обновления,
-                finish_function=self.master.finish_task_bar,  # завершения задачи
-                delete_function=self.master.del_task_bar  # и удаления бара
-            )  
-
-            task.start(gui_callback)  # инъекция колбека для обнволения gui
-            self.close()
+        def add_task():  # обработка кнопки добавления задачи
+            if self._validate_task_config():  # если конфиг корректный
+                self._create_task_instance()  # создаёт и запускает задачу
+                self.close()                  # закрывает окно
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
+
+        def ask_directory():
+            dirpath = filedialog.askdirectory()
+            if dirpath and dirpath not in self.task_config.dirs:
+                self.task_config.dirs.append(dirpath)
+            self.focus()
+
+        def ask_color():
+            color = colorchooser.askcolor()[-1]
+            self.task_config.margin_color = color
+            self.widgets['_btColor'].configure(background=color, text=color)
+            self.focus()
+
+        self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
+        self.widgets['_btColor'] = Button(self, background='#999999', command=ask_color, text='#999999')
+
 
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['btCreate'].pack(side='bottom', pady=15)
+        self.widgets['btAddDir'].pack(side='top', pady=15)
+        self.widgets['_btColor'].pack(side='top')
 
 
 class WarningWindow(Toplevel, WindowMixin):
