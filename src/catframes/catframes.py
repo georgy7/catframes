@@ -1470,7 +1470,7 @@ class Quality(Enum):
 
 class Encoder(ABC):
     """FFmpeg options with a certain level of quality."""
-    def fits_hardware(self) -> bool:
+    def fits(self) -> bool:
         """Can be used on this computer"""
     def get_options(self) -> Sequence[str]:
         """Encoding options"""
@@ -1494,7 +1494,7 @@ class X264Encoder(Encoder):
 
         self.crf = round(crf60fps + 2.3 * math.log2(60/fps))
 
-    def fits_hardware(self) -> bool:
+    def fits(self) -> bool:
         return True
 
     def get_options(self) -> Sequence[str]:
@@ -1508,18 +1508,24 @@ class X264Encoder(Encoder):
 
 
 class H264Amf(Encoder):
+    """H264 encoder for AMD.
+    It has exactly the same performance as x264 on my laptop
+    with AMD A8-6410 APU (AMD Radeon R5 Graphics).
+    However, it gives a cleaner result.
+    The frame rate does not affect it.
+    It does not support 4:4:4 pixel format, so in my opinion
+    it is not suitable for high quality video.
+    """
     def __init__(self, quality: Quality):
         if Quality.HIGH == quality:
-            # TODO отрегулировать
-            self.qp = 1
+            self.qp = -1
         elif Quality.MEDIUM == quality:
             self.qp = 18
         else:
-            # TODO отрегулировать
-            self.qp = 22
+            self.qp = 27
 
-    def fits_hardware(self) -> bool:
-        return True # TODO
+    def fits(self) -> bool:
+        return (self.qp > 0)
 
     def get_options(self) -> Sequence[str]:
         return [
@@ -1545,7 +1551,7 @@ class VpxVp9Encoder(Encoder):
             self.crf = 31
             self.pix_fmt = 'yuv420p'
 
-    def fits_hardware(self) -> bool:
+    def fits(self) -> bool:
         return True
 
     def get_options(self) -> Sequence[str]:
