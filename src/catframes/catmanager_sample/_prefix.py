@@ -8,7 +8,7 @@ import re
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Dict, Callable
+from typing import Optional, Tuple, Dict, List, Callable
 from PIL import Image, ImageTk
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,

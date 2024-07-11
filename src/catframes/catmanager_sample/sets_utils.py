@@ -104,3 +104,27 @@ class Lang:
         except KeyError:  # если тег не найден
             return '-----'
             
+
+class PortSets:
+    """Класс настроек диапазона портов
+    системы для связи с ffmpeg."""
+
+    min_port: int = 10240
+    max_port: int = 65535
+
+    @classmethod
+    def set_range(cls, min_port: int, max_port: int) -> None:
+        if max_port - min_port < 100:
+            raise AttributeError('range')
+        if min_port < 10240:
+            raise AttributeError('min')
+        if max_port > 65535:
+            raise AttributeError('max')
+
+        cls.min_port = min_port
+        cls.max_port = max_port
+
+    @classmethod
+    def get_range(cls) -> Tuple:
+        return cls.min_port, cls.max_port
+    

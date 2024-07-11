@@ -8,286 +8,12 @@ import re
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Dict, Callable
+from typing import Optional, Tuple, Dict, List, Callable
 from PIL import Image, ImageTk
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
-
-
-
-    #  из файла task_flows.py:
-
-"""
-Слой задач полностью отделён от gui.
-
-Задачи создаются с помощью TaskManager, который
-выдаёт им уникальные номера, и регистрирует их статусы.
-
-При создании задачи, ей передаюётся нужная конфигурация,
-которая представляет собой объект класса TaskConfig.
-Атрибутами этого объекта являются все возможные параметры,
-которые есть у консольной версии приложения catframes.
-Этот объект имеет метод конвертирования в консольную команду,
-которая и будет запущена самим процессом задачи при старте.
-При конвертировании, происходит проверка каждого атрибута
-на валидность данных, и если возникает нарушение, 
-вызывается ошибка с текстом имени некорректного параметра.
-Эти исключения далее будет обрабатывать фронт, понимая,
-какой конкретно параметр не прошёл валидацию.
-
-Чтобы в процессе обработки, задача могла как-то делиться
-своим статусом с интерфейсом, реализован паттерн "наблюдатель".
-При старте задачи, ей передаётся объект класса GuiCallback.
-При инициализации, объект коллбэка принимает внешние зависимости,
-чтобы у задачи была возможность обновлять свои статусы в gui.
-"""
-
-
-
-class TaskConfig:
-    """Хранение конфигурации текущей задачи.
-    Позволяет конвертировать в команду catframes,
-    проверив валидность каждого из параметров."""
-
-    def __init__(self) -> None:
-        self.dirs: list = []                      # пути к директориям с изображениями
-        self.sure_flag: bool = False                 # флаг для предотвращения ошибок, если нет директории
-        self.overlays: dict = {}                     # словрь надписей {'--left-top': 'надпись'}
-        self.margin_color: str = '#000'              # цвет отступов и фона
-        self.frame_rate: int = 30                    # частота кадров (от 1 до 60)
-        self.quality: str = 'medium'                 # качество видео (poor, medium, high)
-        self.limit: Optional[int]                    # предел видео в секундах
-        self.force_flag: bool = False                # перезапись конечного файла, если существует
-        self.port_range: Optional[Tuple[int, int]]   # диапазон портов для связи с ffmpeg
-        self.path: str = '.'                         # путь к директории сохранения
-        self.file_name: str = 'unknown'               # имя файла
-        self.extension: str = 'mp4'                  # расширение файла
-
-    # проверка каждого атрибута на валидность, создание консольной команды
-    def convert_to_command(self) -> str:
-        command = 'catframes'
-        invalid_characters = ('\\', '"', '\'', '$', '(', ')', '[', ']')
-
-        # if self.sure_flag:
-        #     command += ' -s'
-        
-        # проверка текстовых оверлеев
-        for position, text in self.overlays.items():
-            if position not in (
-                'left',
-                'right',
-                'top',
-                'bottom',
-                'left-top',
-                'left-bottom',
-                'right-top',
-                'right-bottom',
-                'top-left',
-                'top-right',
-                'bottom-left',
-                'bottom-right',
-            ): raise AttributeError('overlay_position')
-            if invalid_characters in text:
-                raise AttributeError('overlay_text')
-            command += f" --{position} '{text}'"
-        
-        # проверка корректности строки с rgb
-        rgb_pattern = re.compile(r'^#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$')
-        if not rgb_pattern.match(self.margin_color):
-            raise AttributeError(
-                f'incorrect color: {self.margin_color}'
-            )
-        command += f" --margin-color {self.margin_color}"
-
-        # проверка выбора частоты кадров
-        if self.frame_rate < 1 or self.frame_rate > 60:
-            raise AttributeError('frame_rate')
-        command += f" --frame-rate {self.frame_rate}"
-
-        # проверка выбора качества рендера
-        if self.quality not in ['poor', 'medium', 'high']:
-            raise AttributeError('quality')
-        command += f" --quality {self.quality}"
-
-        # проверка наличия и валидности ограничения времени
-        if hasattr(self, 'limit'):
-            if self.limit < 1:
-                raise AttributeError('limit')
-            command += f" --limit {self.limit}"
-
-        # проверка флага перезаписи
-        if self.force_flag:
-            command += f" --force"
-
-        # проверка наличия и валидности ограничения портов
-        if hasattr(self, 'port_range'):
-            if self.port_range[0] > self.port_range[1]:
-                raise AttributeError('port_range')
-            if self.port_range[1] < 10240 or self.port_range[0] > 65535:
-                raise AttributeError('port_range')
-            command += f" --port-range {self.port_range[0]}:{self.port_range[1]}"
-        
-        # проверка наличия директорий с зображениями
-        for dir in self.dirs:
-            if not os.path.isdir(dir):
-                raise AttributeError('dirs')
-            command += f" {dir}"
-
-        # проверка на наличие запрещённых символов
-        for c in invalid_characters:
-            if c in self.file_name:
-                raise AttributeError('filename')
-
-        # проверка на наличие директории конечного файла
-        if not os.path.isdir(self.path):
-            raise AttributeError('path')
-        
-        # проверка валидности выбора расширения файла
-        if self.extension not in ('mp4', 'webm'):
-            raise AttributeError('extension')
-
-        # сборка полного пути файла        
-        full_file_path = f"{self.path}/{self.file_name}.{self.extension}"
-        command += f" {full_file_path}"
-
-        # проверка, есть ли такой файл, если не установлен флаг перезаписи
-        if os.path.isfile(full_file_path) and not self.force_flag:
-            return AttributeError('exists')
-        
-        return command  # возврат полной собранной команды
-
-
-class GuiCallback:
-    """Интерфейс для инъекции внешних методов от gui.
-    Позволяет из задачи обновлять статус на слое gui."""
-
-    def __init__(
-            self,
-            update_function,
-            finish_function,
-            delete_function,
-            ):
-        self.update = update_function
-        self.finish = finish_function
-        self.delete = delete_function
-        
-    
-    @staticmethod  # метод из TaskBar
-    def update(progress: float, delta: bool = False):
-        """обновление полосы прогресса в окне"""
-        ...
-
-    @staticmethod  # метод из RootWindow
-    def finish(id: int):
-        """сигнал о завершении задачи"""
-        ...
-
-    @staticmethod  # метод из RootWindow
-    def delete(id: int):
-        """сигнал об удалении задачи"""
-        ...
-
-
-class Task:
-    """Класс самой задачи, связывающейся с catframes"""
-
-    def __init__(self, id: int, task_config: TaskConfig) -> None:
-        self.config = task_config
-        self.id = id  # получение уникального номера
-        self.done = False  # флаг завершённости
-        self.stop_flag = False  # требование остановки
-
-    # запуск задачи (тестовый)
-    def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
-        self.gui_callback = gui_callback         # для оповещения наблюдателя
-
-        # запуск фоновой задачи (дальше перепишется через subprocess)
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
-        TaskManager.reg_start(self)
-
-    # поток задачи (тестовый)
-    def run(self):
-        for i in range(21):
-            if self.stop_flag:
-                return
-            self.gui_callback.update(i/20)
-            time.sleep(0.2)
-        self.done = True
-        TaskManager.reg_finish(self)
-        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
-
-    # остановка задачи (тестовая)
-    def cancel(self):
-        self.stop_flag = True
-        TaskManager.reg_finish(self)
-        self.gui_callback.delete(self.id)  # сигнал о завершении задачи
-
-    def delete(self):
-        TaskManager.wipe(self)
-        self.gui_callback.delete(self.id)  # сигнал об удалении задачи
-
-
-class TaskManager:
-    """Менеджер задач.
-    Позволяет регистрировать задачи,
-    и управлять ими."""
-
-    _last_id: int = 0          # последний номер задачи
-    _all_tasks: dict = {}      # словарь всех задач
-    _running_tasks: dict = {}  # словарь активных задач
-
-    @classmethod
-    def create(cls, task_config: TaskConfig) -> Task:
-        cls._last_id += 1  # увеличение последнего номера задачи
-        unic_id = cls._last_id  # получение уникального номера
-
-        task = Task(unic_id, task_config)  # создание задачи
-        cls._reg(task)  # регистрация в менеджере
-        return task
-
-    # регистрация задачи
-    @classmethod
-    def _reg(cls, task: Task) -> None:
-        cls._all_tasks[task.id] = task
-
-    # регистрация запуска задачи
-    @classmethod
-    def reg_start(cls, task: Task) -> None:
-        cls._running_tasks[task.id] = task
-
-    # удаление регистрации запуска задачи
-    @classmethod
-    def reg_finish(cls, task: Task) -> None:
-        if task.id in cls._running_tasks:
-            cls._running_tasks.pop(task.id)
-
-    # получение списка активных задач
-    @classmethod
-    def running_list(cls) -> list:
-        return list(cls._running_tasks.values())
-
-    # удаление задачи   
-    @classmethod
-    def wipe(cls, task: Task) -> None:
-        cls.reg_finish(task)
-        if task.id in cls._all_tasks:
-            cls._all_tasks.pop(task.id)
-
-
-    # получение списка всех задач
-    @classmethod
-    def all_list(cls) -> list:
-        return list(cls._all_tasks.values())
-
-    # проверка существования задачи    
-    @classmethod
-    def check(cls, task_id: int) -> bool:
-        return task_id in cls._all_tasks
-    
-
 
 
 
@@ -396,6 +122,274 @@ class Lang:
         except KeyError:  # если тег не найден
             return '-----'
             
+
+class PortSets:
+    """Класс настроек диапазона портов
+    системы для связи с ffmpeg."""
+
+    min_port: int = 10240
+    max_port: int = 65535
+
+    @classmethod
+    def set_range(cls, min_port: int, max_port: int) -> None:
+        if max_port - min_port < 100:
+            raise AttributeError('range')
+        if min_port < 10240:
+            raise AttributeError('min')
+        if max_port > 65535:
+            raise AttributeError('max')
+
+        cls.min_port = min_port
+        cls.max_port = max_port
+
+    @classmethod
+    def get_range(cls) -> Tuple:
+        return cls.min_port, cls.max_port
+    
+
+
+
+
+    #  из файла task_flows.py:
+
+"""
+Слой задач полностью отделён от gui.
+
+Задачи создаются с помощью TaskManager, который
+выдаёт им уникальные номера, и регистрирует их статусы.
+
+При создании задачи, ей передаюётся нужная конфигурация,
+которая представляет собой объект класса TaskConfig.
+Атрибутами этого объекта являются все возможные параметры,
+которые есть у консольной версии приложения catframes.
+Этот объект имеет метод конвертирования в консольную команду,
+которая и будет запущена самим процессом задачи при старте.
+При конвертировании, происходит проверка каждого атрибута
+на валидность данных, и если возникает нарушение, 
+вызывается ошибка с текстом имени некорректного параметра.
+Эти исключения далее будет обрабатывать фронт, понимая,
+какой конкретно параметр не прошёл валидацию.
+
+Чтобы в процессе обработки, задача могла как-то делиться
+своим статусом с интерфейсом, реализован паттерн "наблюдатель".
+При старте задачи, ей передаётся объект класса GuiCallback.
+При инициализации, объект коллбэка принимает внешние зависимости,
+чтобы у задачи была возможность обновлять свои статусы в gui.
+"""
+
+
+
+class TaskConfig:
+    """Настройка и хранение конфигурации задачи.
+    Создаётся и настраивается на слое gui.
+    Позволяет конвертировать в команду catframes."""
+
+    overlays_names = [
+        '--top-left',
+        '--top',
+        '--top-right',
+        '--right',
+        '--bottom-right',
+        '--bottom',
+        '--bottom-left',
+        '--left',
+    ]
+
+    quality_names = ['poor', 'medium', 'high']
+
+    def __init__(self) -> None:
+                
+        self._dirs: List[str]                         # пути к директориям с изображениями
+        self._overlays: Dict[str, str] = {}           # словарь надписей
+        self._color: str = '#000'                     # цвет отступов и фона
+        self._framerate: int                          # частота кадров
+        self._quality: str                            # качество видео
+        self._limit: int                              # предел видео в секундах
+        self._filepath: str                           # путь к итоговому файлу
+        self._rewrite: bool = False                   # перезапись файла, если существует
+        self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
+
+    # установка директорий
+    def set_dirs(self, dirs) -> list:
+        self._dirs = dirs
+
+    # установка оверлеев
+    def set_overlays(self, overlays_texts: List[str]):
+        self._overlays = dict(zip(self.overlays_names, overlays_texts))
+
+    # установка цвета
+    def set_color(self, color: str):
+        self._color = color
+
+    # установка частоты кадров, качества и лимита
+    def set_specs(self, framerate: int, quality: int, limit: int = None):
+        self._framerate = framerate
+        self._quality = self.quality_names[quality]
+        self._limit = limit
+
+    # установка пути файла
+    def set_filepath(self, filepath: str):
+        self._filepath = filepath
+
+    # создание консольной команды
+    def convert_to_command(self) -> str:
+        command = 'catframes'
+    
+        # добавление текстовых оверлеев
+        for position, text in self._overlays.items():
+            if text:
+                command += f' {position} "{text}"'
+        
+        command += f" --margin-color {self._color}"         # параметр цвета
+        command += f" --frame-rate {self._framerate}"       # частота кадров
+        command += f" --quality {self._quality}"            # качество рендера
+
+        if self._limit:                                     # ограничение времени, если есть
+            command += f" --limit {self._limit}"
+
+        if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
+            command += f" --force"
+
+        command += f" --port-range {self._ports[0]}:{self._ports[1]}"  # диапазон портов
+        
+        for dir in self._dirs:                              # добавление директорий с изображениями
+            command += f' "{dir}"'
+        
+        command += f' "{self._filepath}"'                   # добавление полного пути файла    
+        
+        return command                                      # возврат собранной команды
+
+
+class GuiCallback:
+    """Интерфейс для инъекции внешних методов от gui.
+    Позволяет из задачи обновлять статус на слое gui."""
+
+    def __init__(
+            self,
+            update_function,
+            finish_function,
+            delete_function,
+            ):
+        self.update = update_function
+        self.finish = finish_function
+        self.delete = delete_function
+        
+    
+    @staticmethod  # метод из TaskBar
+    def update(progress: float, delta: bool = False):
+        """обновление полосы прогресса в окне"""
+        ...
+
+    @staticmethod  # метод из RootWindow
+    def finish(id: int):
+        """сигнал о завершении задачи"""
+        ...
+
+    @staticmethod  # метод из RootWindow
+    def delete(id: int):
+        """сигнал об удалении задачи"""
+        ...
+
+
+class Task:
+    """Класс самой задачи, связывающейся с catframes"""
+
+    def __init__(self, id: int, task_config: TaskConfig) -> None:
+        self.config = task_config
+        self.command = task_config.convert_to_command()
+        print(self.command)
+        self.id = id  # получение уникального номера
+        self.done = False  # флаг завершённости
+        self.stop_flag = False  # требование остановки
+
+    # запуск задачи (тестовый)
+    def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
+        self.gui_callback = gui_callback         # для оповещения наблюдателя
+
+        # запуск фоновой задачи (дальше перепишется через subprocess)
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+        TaskManager.reg_start(self)
+
+    # поток задачи (тестовый)
+    def run(self):
+        for i in range(21):
+            if self.stop_flag:
+                return
+            self.gui_callback.update(i/20)
+            time.sleep(0.2)
+        self.done = True
+        TaskManager.reg_finish(self)
+        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
+
+    # остановка задачи (тестовая)
+    def cancel(self):
+        self.stop_flag = True
+        TaskManager.reg_finish(self)
+        self.gui_callback.delete(self.id)  # сигнал о завершении задачи
+
+    def delete(self):
+        TaskManager.wipe(self)
+        self.gui_callback.delete(self.id)  # сигнал об удалении задачи
+
+
+class TaskManager:
+    """Менеджер задач.
+    Позволяет регистрировать задачи,
+    и управлять ими."""
+
+    _last_id: int = 0          # последний номер задачи
+    _all_tasks: dict = {}      # словарь всех задач
+    _running_tasks: dict = {}  # словарь активных задач
+
+    @classmethod
+    def create(cls, task_config: TaskConfig) -> Task:
+        cls._last_id += 1  # увеличение последнего номера задачи
+        unic_id = cls._last_id  # получение уникального номера
+
+        task = Task(unic_id, task_config)  # создание задачи
+        cls._reg(task)  # регистрация в менеджере
+        return task
+
+    # регистрация задачи
+    @classmethod
+    def _reg(cls, task: Task) -> None:
+        cls._all_tasks[task.id] = task
+
+    # регистрация запуска задачи
+    @classmethod
+    def reg_start(cls, task: Task) -> None:
+        cls._running_tasks[task.id] = task
+
+    # удаление регистрации запуска задачи
+    @classmethod
+    def reg_finish(cls, task: Task) -> None:
+        if task.id in cls._running_tasks:
+            cls._running_tasks.pop(task.id)
+
+    # получение списка активных задач
+    @classmethod
+    def running_list(cls) -> list:
+        return list(cls._running_tasks.values())
+
+    # удаление задачи   
+    @classmethod
+    def wipe(cls, task: Task) -> None:
+        cls.reg_finish(task)
+        if task.id in cls._all_tasks:
+            cls._all_tasks.pop(task.id)
+
+
+    # получение списка всех задач
+    @classmethod
+    def all_list(cls) -> list:
+        return list(cls._all_tasks.values())
+
+    # проверка существования задачи    
+    @classmethod
+    def check(cls, task_id: int) -> bool:
+        return task_id in cls._all_tasks
+    
 
 
 
@@ -962,24 +956,38 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.name = 'task'
         self.widgets = {}
         self.task_config = TaskConfig()
+        self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
         self.size = 300, 250
         self.resizable(False, False)
 
         super()._default_set_up()
 
-    # подсветка виджета цветом предупреждения
-    def mark_error_widget(self, widget_name):
-        print(f'подсветит виджет {widget_name}')
+    # подсветка виджета пути цветом предупреждения
+    def _highlight_invalid_path(self, path_number: list):
+        print(f'TODO подсветка несуществующего пути {path_number}')
 
-    # валидация текущего конфига
-    def _validate_task_config(self) -> bool:
-        try:                                        # пробует конвертировать конфиг 
-            self.task_config.convert_to_command()   # в команду, проверив каждый атрибут
-            return True
-        except AttributeError as e:                 # если поймает ошибку, то вызовет
-            self.mark_error_widget(str(e))          # метод подсветки виджета с ошибкой
-            return False
+    # сбор данных из виджетов, создание конфигурации
+    def _collect_task_config(self) -> None:
+        self.task_config.set_overlays(['тест tl', 'тест t', 'тест tr'])     # тестовые значения оверлеев,
+        self.task_config.set_specs(framerate=25, quality=1)                 # фреймрейта и качества
+
+    # проверка путей на валидность, передача в конфиг
+    def _validate_dirs(self) -> bool:
+        ok_flag = True
+        for i, dir in enumerate(self.dirlist):
+            if not os.path.isdir(dir):
+                self._highlight_invalid_path(i)
+                ok_flag = False
+        self.task_config.set_dirs(self.dirlist)
+        return ok_flag
+    
+    def _set_filepath(self) -> None:
+        filepath = filedialog.asksaveasfilename(                            # открытие окна сохранения файла
+                filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
+                defaultextension=".mp4"                                     # стандартное расширение
+        )
+        self.task_config.set_filepath(filepath)
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -999,30 +1007,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
-    def _init_widgets(self):
+    def _init_widgets(self):            
         
         def add_task():  # обработка кнопки добавления задачи
-            if self._validate_task_config():  # если конфиг корректный
-                self._create_task_instance()  # создаёт и запускает задачу
-                self.close()                  # закрывает окно
+            self._collect_task_config()   # сбор данных конфигурации с виджетов
+            if not self._validate_dirs(): # если каких-то директорий нет,
+                return                    #     дальнейшие действия не произойдут
+            self._set_filepath()          # выбор пути сохранения файла
+            self._create_task_instance()  # воздание и запуск задачи
+            self.close()                  # закрытие окна задачи
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
 
         def ask_directory():
             dirpath = filedialog.askdirectory()
-            if dirpath and dirpath not in self.task_config.dirs:
-                self.task_config.dirs.append(dirpath)
+            if dirpath:
+                self.dirlist.append(dirpath)
             self.focus()
 
         def ask_color():
             color = colorchooser.askcolor()[-1]
-            self.task_config.margin_color = color
+            self.task_config.set_color(color)
             self.widgets['_btColor'].configure(background=color, text=color)
             self.focus()
 
         self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
         self.widgets['_btColor'] = Button(self, background='#999999', command=ask_color, text='#999999')
-
 
     # расположение виджетов
     def _pack_widgets(self):

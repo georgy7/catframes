@@ -1,4 +1,5 @@
 from _prefix import *
+from sets_utils import PortSets
 
 
 """
@@ -29,116 +30,84 @@ from _prefix import *
 
 
 class TaskConfig:
-    """Хранение конфигурации текущей задачи.
-    Позволяет конвертировать в команду catframes,
-    проверив валидность каждого из параметров."""
+    """Настройка и хранение конфигурации задачи.
+    Создаётся и настраивается на слое gui.
+    Позволяет конвертировать в команду catframes."""
+
+    overlays_names = [
+        '--top-left',
+        '--top',
+        '--top-right',
+        '--right',
+        '--bottom-right',
+        '--bottom',
+        '--bottom-left',
+        '--left',
+    ]
+
+    quality_names = ['poor', 'medium', 'high']
 
     def __init__(self) -> None:
-        self.dirs: list = []                      # пути к директориям с изображениями
-        self.sure_flag: bool = False                 # флаг для предотвращения ошибок, если нет директории
-        self.overlays: dict = {}                     # словрь надписей {'--left-top': 'надпись'}
-        self.margin_color: str = '#000'              # цвет отступов и фона
-        self.frame_rate: int = 30                    # частота кадров (от 1 до 60)
-        self.quality: str = 'medium'                 # качество видео (poor, medium, high)
-        self.limit: Optional[int]                    # предел видео в секундах
-        self.force_flag: bool = False                # перезапись конечного файла, если существует
-        self.port_range: Optional[Tuple[int, int]]   # диапазон портов для связи с ffmpeg
-        self.path: str = '.'                         # путь к директории сохранения
-        self.file_name: str = 'unknown'               # имя файла
-        self.extension: str = 'mp4'                  # расширение файла
+                
+        self._dirs: List[str]                         # пути к директориям с изображениями
+        self._overlays: Dict[str, str] = {}           # словарь надписей
+        self._color: str = '#000'                     # цвет отступов и фона
+        self._framerate: int                          # частота кадров
+        self._quality: str                            # качество видео
+        self._limit: int                              # предел видео в секундах
+        self._filepath: str                           # путь к итоговому файлу
+        self._rewrite: bool = False                   # перезапись файла, если существует
+        self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
-    # проверка каждого атрибута на валидность, создание консольной команды
+    # установка директорий
+    def set_dirs(self, dirs) -> list:
+        self._dirs = dirs
+
+    # установка оверлеев
+    def set_overlays(self, overlays_texts: List[str]):
+        self._overlays = dict(zip(self.overlays_names, overlays_texts))
+
+    # установка цвета
+    def set_color(self, color: str):
+        self._color = color
+
+    # установка частоты кадров, качества и лимита
+    def set_specs(self, framerate: int, quality: int, limit: int = None):
+        self._framerate = framerate
+        self._quality = self.quality_names[quality]
+        self._limit = limit
+
+    # установка пути файла
+    def set_filepath(self, filepath: str):
+        self._filepath = filepath
+
+    # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
-        invalid_characters = ('\\', '"', '\'', '$', '(', ')', '[', ']')
-
-        # if self.sure_flag:
-        #     command += ' -s'
+    
+        # добавление текстовых оверлеев
+        for position, text in self._overlays.items():
+            if text:
+                command += f' {position} "{text}"'
         
-        # проверка текстовых оверлеев
-        for position, text in self.overlays.items():
-            if position not in (
-                'left',
-                'right',
-                'top',
-                'bottom',
-                'left-top',
-                'left-bottom',
-                'right-top',
-                'right-bottom',
-                'top-left',
-                'top-right',
-                'bottom-left',
-                'bottom-right',
-            ): raise AttributeError('overlay_position')
-            if invalid_characters in text:
-                raise AttributeError('overlay_text')
-            command += f" --{position} '{text}'"
-        
-        # проверка корректности строки с rgb
-        rgb_pattern = re.compile(r'^#([a-fA-F0-9]{3}|[a-fA-F0-9]{6})$')
-        if not rgb_pattern.match(self.margin_color):
-            raise AttributeError(
-                f'incorrect color: {self.margin_color}'
-            )
-        command += f" --margin-color {self.margin_color}"
+        command += f" --margin-color {self._color}"         # параметр цвета
+        command += f" --frame-rate {self._framerate}"       # частота кадров
+        command += f" --quality {self._quality}"            # качество рендера
 
-        # проверка выбора частоты кадров
-        if self.frame_rate < 1 or self.frame_rate > 60:
-            raise AttributeError('frame_rate')
-        command += f" --frame-rate {self.frame_rate}"
+        if self._limit:                                     # ограничение времени, если есть
+            command += f" --limit {self._limit}"
 
-        # проверка выбора качества рендера
-        if self.quality not in ['poor', 'medium', 'high']:
-            raise AttributeError('quality')
-        command += f" --quality {self.quality}"
-
-        # проверка наличия и валидности ограничения времени
-        if hasattr(self, 'limit'):
-            if self.limit < 1:
-                raise AttributeError('limit')
-            command += f" --limit {self.limit}"
-
-        # проверка флага перезаписи
-        if self.force_flag:
+        if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command += f" --force"
 
-        # проверка наличия и валидности ограничения портов
-        if hasattr(self, 'port_range'):
-            if self.port_range[0] > self.port_range[1]:
-                raise AttributeError('port_range')
-            if self.port_range[1] < 10240 or self.port_range[0] > 65535:
-                raise AttributeError('port_range')
-            command += f" --port-range {self.port_range[0]}:{self.port_range[1]}"
+        command += f" --port-range {self._ports[0]}:{self._ports[1]}"  # диапазон портов
         
-        # проверка наличия директорий с зображениями
-        for dir in self.dirs:
-            if not os.path.isdir(dir):
-                raise AttributeError('dirs')
-            command += f" {dir}"
-
-        # проверка на наличие запрещённых символов
-        for c in invalid_characters:
-            if c in self.file_name:
-                raise AttributeError('filename')
-
-        # проверка на наличие директории конечного файла
-        if not os.path.isdir(self.path):
-            raise AttributeError('path')
+        for dir in self._dirs:                              # добавление директорий с изображениями
+            command += f' "{dir}"'
         
-        # проверка валидности выбора расширения файла
-        if self.extension not in ('mp4', 'webm'):
-            raise AttributeError('extension')
-
-        # сборка полного пути файла        
-        full_file_path = f"{self.path}/{self.file_name}.{self.extension}"
-        command += f" {full_file_path}"
-
-        # проверка, есть ли такой файл, если не установлен флаг перезаписи
-        if os.path.isfile(full_file_path) and not self.force_flag:
-            return AttributeError('exists')
+        command += f' "{self._filepath}"'                   # добавление полного пути файла    
         
-        return command  # возврат полной собранной команды
+        return command                                      # возврат собранной команды
 
 
 class GuiCallback:
@@ -177,6 +146,8 @@ class Task:
 
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
+        self.command = task_config.convert_to_command()
+        print(self.command)
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки

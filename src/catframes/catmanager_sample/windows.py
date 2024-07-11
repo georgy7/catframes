@@ -169,24 +169,38 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.name = 'task'
         self.widgets = {}
         self.task_config = TaskConfig()
+        self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
         self.size = 300, 250
         self.resizable(False, False)
 
         super()._default_set_up()
 
-    # подсветка виджета цветом предупреждения
-    def mark_error_widget(self, widget_name):
-        print(f'подсветит виджет {widget_name}')
+    # подсветка виджета пути цветом предупреждения
+    def _highlight_invalid_path(self, path_number: list):
+        print(f'TODO подсветка несуществующего пути {path_number}')
 
-    # валидация текущего конфига
-    def _validate_task_config(self) -> bool:
-        try:                                        # пробует конвертировать конфиг 
-            self.task_config.convert_to_command()   # в команду, проверив каждый атрибут
-            return True
-        except AttributeError as e:                 # если поймает ошибку, то вызовет
-            self.mark_error_widget(str(e))          # метод подсветки виджета с ошибкой
-            return False
+    # сбор данных из виджетов, создание конфигурации
+    def _collect_task_config(self) -> None:
+        self.task_config.set_overlays(['тест tl', 'тест t', 'тест tr'])     # тестовые значения оверлеев,
+        self.task_config.set_specs(framerate=25, quality=1)                 # фреймрейта и качества
+
+    # проверка путей на валидность, передача в конфиг
+    def _validate_dirs(self) -> bool:
+        ok_flag = True
+        for i, dir in enumerate(self.dirlist):
+            if not os.path.isdir(dir):
+                self._highlight_invalid_path(i)
+                ok_flag = False
+        self.task_config.set_dirs(self.dirlist)
+        return ok_flag
+    
+    def _set_filepath(self) -> None:
+        filepath = filedialog.asksaveasfilename(                            # открытие окна сохранения файла
+                filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
+                defaultextension=".mp4"                                     # стандартное расширение
+        )
+        self.task_config.set_filepath(filepath)
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -206,30 +220,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
-    def _init_widgets(self):
+    def _init_widgets(self):            
         
         def add_task():  # обработка кнопки добавления задачи
-            if self._validate_task_config():  # если конфиг корректный
-                self._create_task_instance()  # создаёт и запускает задачу
-                self.close()                  # закрывает окно
+            self._collect_task_config()   # сбор данных конфигурации с виджетов
+            if not self._validate_dirs(): # если каких-то директорий нет,
+                return                    #     дальнейшие действия не произойдут
+            self._set_filepath()          # выбор пути сохранения файла
+            self._create_task_instance()  # воздание и запуск задачи
+            self.close()                  # закрытие окна задачи
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
 
         def ask_directory():
             dirpath = filedialog.askdirectory()
-            if dirpath and dirpath not in self.task_config.dirs:
-                self.task_config.dirs.append(dirpath)
+            if dirpath:
+                self.dirlist.append(dirpath)
             self.focus()
 
         def ask_color():
             color = colorchooser.askcolor()[-1]
-            self.task_config.margin_color = color
+            self.task_config.set_color(color)
             self.widgets['_btColor'].configure(background=color, text=color)
             self.focus()
 
         self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
         self.widgets['_btColor'] = Button(self, background='#999999', command=ask_color, text='#999999')
-
 
     # расположение виджетов
     def _pack_widgets(self):
