@@ -172,7 +172,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
         self.size = 800, 600
-        self.resizable(False, False)
+        self.resizable(True, True)
 
         super()._default_set_up()
 
@@ -180,27 +180,40 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def _highlight_invalid_path(self, path_number: list):
         print(f'TODO подсветка несуществующего пути {path_number}')
 
+    # подсветка кнопки добавления пути цветом предупреждения
+    def _highlight_empty_path(self):
+        print(f'TODO подсветка кнопки добавления пути')
+
     # сбор данных из виджетов, создание конфигурации
     def _collect_task_config(self) -> None:
-        self.task_config.set_overlays(['тест tl', 'тест t', 'тест tr'])     # тестовые значения оверлеев,
-        self.task_config.set_specs(framerate=25, quality=1)                 # фреймрейта и качества
+        overlays = self.image_canvas.fetch_entries_text()       # достат тексты оверлеев из виджетов,
+        self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
+        self.task_config.set_specs(framerate=25, quality=1)     # тестовые значения фреймрейта и качества
 
     # проверка путей на валидность, передача в конфиг
     def _validate_dirs(self) -> bool:
-        ok_flag = True
+        if not self.dirlist:
+            self._highlight_empty_path()
+            return False
+        
+        ok_flag = True  # вызовет подсветку несуществующих путей
         for i, dir in enumerate(self.dirlist):
             if not os.path.isdir(dir):
                 self._highlight_invalid_path(i)
                 ok_flag = False
+
         self.task_config.set_dirs(self.dirlist)
         return ok_flag
     
-    def _set_filepath(self) -> None:
-        filepath = filedialog.asksaveasfilename(                            # открытие окна сохранения файла
+    # выбор пути для сохранения файла
+    def _set_filepath(self) -> bool:
+        filepath = filedialog.asksaveasfilename(
+                parent=self,                                                # открытие окна сохранения файла
                 filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
                 defaultextension=".mp4"                                     # стандартное расширение
         )
         self.task_config.set_filepath(filepath)
+        return bool(filepath)  # если путь выбран, вернёт true
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -221,7 +234,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):            
-
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
             width=800, height=400,
@@ -233,38 +245,40 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self._collect_task_config()   # сбор данных конфигурации с виджетов
             if not self._validate_dirs(): # если каких-то директорий нет,
                 return                    #     дальнейшие действия не произойдут
-            self._set_filepath()          # выбор пути сохранения файла
+            if not self._set_filepath():  # если путь сохранения не выбирается,
+                return                    #     дальнейшие действия не произойдут
             self._create_task_instance()  # воздание и запуск задачи
             self.close()                  # закрытие окна задачи
 
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
 
         def ask_directory():
-            self.focus()
-            dirpath = filedialog.askdirectory()
-            if dirpath:
+            dirpath = filedialog.askdirectory(parent=self)
+            if dirpath and dirpath not in self.dirlist:
                 self.dirlist.append(dirpath)
-            self.image_canvas.update_image(
-                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
-            )
-            self.focus()
 
         def ask_color():
-            color = colorchooser.askcolor()[-1]
-            print(self.image_canvas.fetch_entries_text())
+            color = colorchooser.askcolor(parent=self)[-1]
             self.image_canvas.update_background_color(color)
             self.task_config.set_color(color)
             self.widgets['_btColor'].configure(background=color, text=color)
-            self.focus()
+
+        def test():
+            self.image_canvas.update_image(
+                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
+            )
+            print(self.image_canvas.fetch_entries_text())
 
         self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
         self.widgets['_btColor'] = Button(self, background='#888888', command=ask_color, text='#888888')
+        self.widgets['_btTest'] = ttk.Button(self, command=test, text='test')
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.widgets['btCreate'].pack(side='bottom', pady=15)
-        self.widgets['btAddDir'].pack(side='top', pady=15)
+        self.widgets['btAddDir'].pack(side='top')
         self.widgets['_btColor'].pack(side='top')
+        self.widgets['_btTest'].pack(side='top')
+        self.widgets['btCreate'].pack(side='top')
 
 
 class WarningWindow(Toplevel, WindowMixin):
