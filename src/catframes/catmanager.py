@@ -164,11 +164,6 @@ class PortSets:
 которые есть у консольной версии приложения catframes.
 Этот объект имеет метод конвертирования в консольную команду,
 которая и будет запущена самим процессом задачи при старте.
-При конвертировании, происходит проверка каждого атрибута
-на валидность данных, и если возникает нарушение, 
-вызывается ошибка с текстом имени некорректного параметра.
-Эти исключения далее будет обрабатывать фронт, понимая,
-какой конкретно параметр не прошёл валидацию.
 
 Чтобы в процессе обработки, задача могла как-то делиться
 своим статусом с интерфейсом, реализован паттерн "наблюдатель".
@@ -697,7 +692,7 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
-        image = Image.open("src/catframes/catmanager_sample/test_static/img.png")
+        image = Image.open("src/catframes/catmanager_sample/test_static/img.jpg")
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
         image_tk = ImageTk.PhotoImage(image)
@@ -787,6 +782,122 @@ class TaskBar(ttk.Frame):
                 widget.config(text=Lang.read(f'bar.{w_name}'))
 
 
+class ImageCanvas(Canvas):
+    """Объект холста с картинкой в окне создания задачи.
+    на которой отображаются "умные" поля ввода.
+    Если текст не введён - поле будет полупрозрачным."""
+    
+    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#000'):
+
+        # создаёт объект холста
+        super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
+        self.height, self.width = height, width
+        self.pack()
+
+        self.img = None
+        self.img_id = None
+        self._create_image(image_link)
+        self._create_entries()
+
+    # инициализация полупрозрачнях треугольников и полей ввода
+    def _create_entries(self):
+
+        self.rects = []     # список полупрозрачных прямоугольников
+        self.entries = []   # список всех полей ввода
+        self.shown = []     # список отображаемых на холсте полей
+
+        # переменные для расположения полей ввода
+        rect_x_pad = 120
+        rect_y_pad = 50
+        rect_width = 186
+        rect_height = 24
+
+        # позиции прямоугольников и полей ввода на холсте, с левого верхнего по часовой стрелке
+        positions = [
+            (rect_x_pad, rect_y_pad),                            # верхний левый
+            (self.width // 2, rect_y_pad),                            # верхний
+            (self.width - rect_x_pad, rect_y_pad),               # верхний правый
+            (self.width - rect_x_pad, self.height // 2),              # правый
+            (self.width - rect_x_pad, self.height - rect_y_pad), # нижний правый
+            (self.width // 2, self.height - rect_y_pad),              # нижний
+            (rect_x_pad, self.height - rect_y_pad),              # нижний левый
+            (rect_x_pad, self.height // 2),                           # левый
+        ]
+
+        # настройка и расположение прямоугольника и виджета для каждой позиции
+        for pos in positions:
+            rect = self.create_rectangle(            # инициализация прямоугольника
+                pos[0] - (rect_width/2), 
+                pos[1] - (rect_height/2), 
+                pos[0] + (rect_width/2), 
+                pos[1] + (rect_height/2),
+                fill="white",                        # заливка
+                stipple="gray25",                    # прозрачность
+                tags="rect"
+            )
+            entry = Entry(self, font=("Arial", 12))  # инициализация поля ввода
+
+            # наполнение объявленных выше списков
+            self.rects.append(rect)
+            self.entries.append(entry) 
+            self.shown.append(None)
+
+            # привязка события отображения поля ввода при нажатии на прямоугольник
+            self.tag_bind(rect, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
+
+            # привязка события проверки и скрытия поля ввода, когда с него снят фокус
+            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry_if_empty(event, entry))
+
+    # отображает поле ввода
+    def _show_entry(self, event, pos, entry):
+        index = self.entries.index(entry)
+        entry_window = self.create_window(pos, window=entry, anchor=CENTER)
+        self.shown[index] = entry_window
+        entry.focus_set()
+
+    # прячет поле ввода, если в нём пусто
+    def _hide_entry_if_empty(self, event, entry):
+        if entry.get() == '':
+            index = self.entries.index(entry)
+            self.delete(self.shown[index])
+
+    # приобразование ссылки на картинку в объект
+    def _open_image(self, image_link: str):
+        try:
+            img = Image.open(image_link)                        # открытие изображения по пути
+            img_ratio = img.size[0] / img.size[1]               # оценка соотношения сторон картинки
+            img = img.resize(
+                (int(self.height*img_ratio), self.height),      # масштабирование с учётом соотношения
+                Image.LANCZOS
+            )  
+            self.img = ImageTk.PhotoImage(img)                  # загрузка картинки и создание виджета
+
+        except FileNotFoundError:                                                 # если файл не найден
+            self.img = ImageTk.PhotoImage(                                        # создаёт пустое изображение
+                Image.new("RGBA", (self.width, self.height), (255, 255, 255, 0))  # с прозрачным фоном
+            )
+
+    # создание изображения
+    def _create_image(self, image_link: str):
+        self._open_image(image_link)
+        self.img_id = self.create_image((self.width//2)-(self.img.width()//2), 0, anchor=NW, image=self.img)
+
+    # обновление изображения 
+    def update_image(self, image_link: str):
+        self._open_image(image_link)
+        self.itemconfig(self.img_id, image=self.img)                            # замена изображения
+        self.coords(self.img_id, (self.width // 2)-(self.img.width() // 2), 0)  # повторное задание координат
+
+    # формирует список из восьми строк, введённых в полях
+    def fetch_entries_text(self) -> list:
+        entries_text = map(lambda entry: entry.get(), self.entries)
+        return list(entries_text)
+    
+    # обновляет цвета отступов холста
+    def update_background_color(self, color: str):
+        self.config(background=color)
+
+
 
 
 
@@ -825,7 +936,7 @@ class RootWindow(Tk, WindowMixin):
         self.widgets:   dict[str, ttk.Widget] = {}
         self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        self.size = 500, 450
+        self.size = 550, 450
         self.size_max = 700, 700
         self.resizable(True, True)  # можно растягивать
 
@@ -958,7 +1069,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.task_config = TaskConfig()
         self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
-        self.size = 300, 250
+        self.size = 800, 600
         self.resizable(False, False)
 
         super()._default_set_up()
@@ -1008,6 +1119,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):            
+
+        self.image_canvas = ImageCanvas(  # создание холста с изображением
+            self, 
+            width=800, height=400,
+            image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
+            background='#888888'
+        )
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -1020,19 +1138,25 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
 
         def ask_directory():
+            self.focus()
             dirpath = filedialog.askdirectory()
             if dirpath:
                 self.dirlist.append(dirpath)
+            self.image_canvas.update_image(
+                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
+            )
             self.focus()
 
         def ask_color():
             color = colorchooser.askcolor()[-1]
+            print(self.image_canvas.fetch_entries_text())
+            self.image_canvas.update_background_color(color)
             self.task_config.set_color(color)
             self.widgets['_btColor'].configure(background=color, text=color)
             self.focus()
 
         self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
-        self.widgets['_btColor'] = Button(self, background='#999999', command=ask_color, text='#999999')
+        self.widgets['_btColor'] = Button(self, background='#888888', command=ask_color, text='#888888')
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -1049,7 +1173,7 @@ class WarningWindow(Toplevel, WindowMixin):
         self.name = 'warn'
         self.widgets = {}
 
-        self.size = 260, 120
+        self.size = 260, 130
         self.resizable(False, False)
 
         super()._default_set_up()

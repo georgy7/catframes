@@ -114,7 +114,7 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
-        image = Image.open("src/catframes/catmanager_sample/test_static/img.png")
+        image = Image.open("src/catframes/catmanager_sample/test_static/img.jpg")
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
         image_tk = ImageTk.PhotoImage(image)
@@ -202,3 +202,119 @@ class TaskBar(ttk.Frame):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
                 widget.config(text=Lang.read(f'bar.{w_name}'))
+
+
+class ImageCanvas(Canvas):
+    """Объект холста с картинкой в окне создания задачи.
+    на которой отображаются "умные" поля ввода.
+    Если текст не введён - поле будет полупрозрачным."""
+    
+    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#000'):
+
+        # создаёт объект холста
+        super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
+        self.height, self.width = height, width
+        self.pack()
+
+        self.img = None
+        self.img_id = None
+        self._create_image(image_link)
+        self._create_entries()
+
+    # инициализация полупрозрачнях треугольников и полей ввода
+    def _create_entries(self):
+
+        self.rects = []     # список полупрозрачных прямоугольников
+        self.entries = []   # список всех полей ввода
+        self.shown = []     # список отображаемых на холсте полей
+
+        # переменные для расположения полей ввода
+        rect_x_pad = 120
+        rect_y_pad = 50
+        rect_width = 186
+        rect_height = 24
+
+        # позиции прямоугольников и полей ввода на холсте, с левого верхнего по часовой стрелке
+        positions = [
+            (rect_x_pad, rect_y_pad),                            # верхний левый
+            (self.width // 2, rect_y_pad),                            # верхний
+            (self.width - rect_x_pad, rect_y_pad),               # верхний правый
+            (self.width - rect_x_pad, self.height // 2),              # правый
+            (self.width - rect_x_pad, self.height - rect_y_pad), # нижний правый
+            (self.width // 2, self.height - rect_y_pad),              # нижний
+            (rect_x_pad, self.height - rect_y_pad),              # нижний левый
+            (rect_x_pad, self.height // 2),                           # левый
+        ]
+
+        # настройка и расположение прямоугольника и виджета для каждой позиции
+        for pos in positions:
+            rect = self.create_rectangle(            # инициализация прямоугольника
+                pos[0] - (rect_width/2), 
+                pos[1] - (rect_height/2), 
+                pos[0] + (rect_width/2), 
+                pos[1] + (rect_height/2),
+                fill="white",                        # заливка
+                stipple="gray25",                    # прозрачность
+                tags="rect"
+            )
+            entry = Entry(self, font=("Arial", 12))  # инициализация поля ввода
+
+            # наполнение объявленных выше списков
+            self.rects.append(rect)
+            self.entries.append(entry) 
+            self.shown.append(None)
+
+            # привязка события отображения поля ввода при нажатии на прямоугольник
+            self.tag_bind(rect, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
+
+            # привязка события проверки и скрытия поля ввода, когда с него снят фокус
+            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry_if_empty(event, entry))
+
+    # отображает поле ввода
+    def _show_entry(self, event, pos, entry):
+        index = self.entries.index(entry)
+        entry_window = self.create_window(pos, window=entry, anchor=CENTER)
+        self.shown[index] = entry_window
+        entry.focus_set()
+
+    # прячет поле ввода, если в нём пусто
+    def _hide_entry_if_empty(self, event, entry):
+        if entry.get() == '':
+            index = self.entries.index(entry)
+            self.delete(self.shown[index])
+
+    # приобразование ссылки на картинку в объект
+    def _open_image(self, image_link: str):
+        try:
+            img = Image.open(image_link)                        # открытие изображения по пути
+            img_ratio = img.size[0] / img.size[1]               # оценка соотношения сторон картинки
+            img = img.resize(
+                (int(self.height*img_ratio), self.height),      # масштабирование с учётом соотношения
+                Image.LANCZOS
+            )  
+            self.img = ImageTk.PhotoImage(img)                  # загрузка картинки и создание виджета
+
+        except FileNotFoundError:                                                 # если файл не найден
+            self.img = ImageTk.PhotoImage(                                        # создаёт пустое изображение
+                Image.new("RGBA", (self.width, self.height), (255, 255, 255, 0))  # с прозрачным фоном
+            )
+
+    # создание изображения
+    def _create_image(self, image_link: str):
+        self._open_image(image_link)
+        self.img_id = self.create_image((self.width//2)-(self.img.width()//2), 0, anchor=NW, image=self.img)
+
+    # обновление изображения 
+    def update_image(self, image_link: str):
+        self._open_image(image_link)
+        self.itemconfig(self.img_id, image=self.img)                            # замена изображения
+        self.coords(self.img_id, (self.width // 2)-(self.img.width() // 2), 0)  # повторное задание координат
+
+    # формирует список из восьми строк, введённых в полях
+    def fetch_entries_text(self) -> list:
+        entries_text = map(lambda entry: entry.get(), self.entries)
+        return list(entries_text)
+    
+    # обновляет цвета отступов холста
+    def update_background_color(self, color: str):
+        self.config(background=color)

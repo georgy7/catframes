@@ -1,6 +1,6 @@
 from _prefix import *
 from sets_utils import Lang
-from windows_utils import ScrollableFrame, TaskBar
+from windows_utils import ScrollableFrame, TaskBar, ImageCanvas
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
 
@@ -38,7 +38,7 @@ class RootWindow(Tk, WindowMixin):
         self.widgets:   dict[str, ttk.Widget] = {}
         self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        self.size = 500, 450
+        self.size = 550, 450
         self.size_max = 700, 700
         self.resizable(True, True)  # можно растягивать
 
@@ -171,7 +171,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.task_config = TaskConfig()
         self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
-        self.size = 300, 250
+        self.size = 800, 600
         self.resizable(False, False)
 
         super()._default_set_up()
@@ -221,6 +221,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):            
+
+        self.image_canvas = ImageCanvas(  # создание холста с изображением
+            self, 
+            width=800, height=400,
+            image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
+            background='#888888'
+        )
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -233,19 +240,25 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCreate'] = ttk.Button(self, command=add_task)
 
         def ask_directory():
+            self.focus()
             dirpath = filedialog.askdirectory()
             if dirpath:
                 self.dirlist.append(dirpath)
+            self.image_canvas.update_image(
+                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
+            )
             self.focus()
 
         def ask_color():
             color = colorchooser.askcolor()[-1]
+            print(self.image_canvas.fetch_entries_text())
+            self.image_canvas.update_background_color(color)
             self.task_config.set_color(color)
             self.widgets['_btColor'].configure(background=color, text=color)
             self.focus()
 
         self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
-        self.widgets['_btColor'] = Button(self, background='#999999', command=ask_color, text='#999999')
+        self.widgets['_btColor'] = Button(self, background='#888888', command=ask_color, text='#888888')
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -262,7 +275,7 @@ class WarningWindow(Toplevel, WindowMixin):
         self.name = 'warn'
         self.widgets = {}
 
-        self.size = 260, 120
+        self.size = 260, 130
         self.resizable(False, False)
 
         super()._default_set_up()
