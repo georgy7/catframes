@@ -76,6 +76,9 @@ class TaskConfig:
     def set_filepath(self, filepath: str):
         self._filepath = filepath
 
+    def get_filepath(self):
+        return self._filepath
+
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'

@@ -226,6 +226,9 @@ class TaskConfig:
     def set_filepath(self, filepath: str):
         self._filepath = filepath
 
+    def get_filepath(self):
+        return self._filepath
+
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
@@ -599,6 +602,28 @@ class WindowMixin(ABC):
 """
 
 
+# сокращает строку пути, расставляя многоточия внутри
+def shrink_path(path: str, limit: int) -> str:
+    if len(path) < limit:  # если длина и так меньше лимита
+        return path
+
+    # вычисление разделителя, добавление вначало, если нужно
+    s = '/' if '/' in path else '\\'
+    dirs = path.split(s)
+    if path.startswith(s):
+        dirs.pop(0)
+        dirs[0] = s + dirs[0]
+
+    # список укороченного пути, первый и последний элементы
+    shrink = [dirs.pop(0), dirs.pop()] 
+    while dirs and len(s.join(shrink) + dirs[-1]) + 4 < limit:  # если лимит не будет превышен,
+        shrink.insert(1, dirs.pop())                            # добавить элемент с конца
+    
+    # сборка строки нового пути, передача её, если она короче изначальной
+    new_path = f"{shrink[0]}{s}...{s}{s.join(shrink[1:])}"
+    return new_path if len(new_path) < len(path) else path
+
+
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
 
@@ -710,7 +735,7 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
             font=bigger_font, padding=5,
-            text=f"/usr/tester/movies/render{self.task.id}.mp4", 
+            text=shrink_path(self.task.config.get_filepath(), 32), 
             style='Task.TLabel'
         )
 
