@@ -821,57 +821,61 @@ class ImageCanvas(Canvas):
 
         self.img = None
         self.img_id = None
+        self.alpha_square = None
         self._create_image(image_link)
         self._create_entries()
 
     # инициализация полупрозрачнях треугольников и полей ввода
     def _create_entries(self):
 
-        self.rects = []     # список полупрозрачных прямоугольников
-        self.entries = []   # список всех полей ввода
-        self.shown = []     # список отображаемых на холсте полей
+        self.entries = []                      # список всех полей ввода
+        self.shown = [None for i in range(8)]  # список отображаемых на холсте полей
 
-        # переменные для расположения полей ввода
-        rect_x_pad = 120
-        rect_y_pad = 50
-        rect_width = 186
-        rect_height = 24
+        # переменные для расположения виджетов
+        x_pad = 120
+        y_pad = 50
+        sq_size = 24
 
-        # позиции прямоугольников и полей ввода на холсте, с левого верхнего по часовой стрелке
+        # создание полупрозрачного квадрата
+        self.alpha_square = self._create_alpha_square(sq_size, '#ffffff', 0.5)
+
+        # 8 позиций и элементов на холсте, с левого верхнего по часовой стрелке
         positions = [
-            (rect_x_pad, rect_y_pad),                            # верхний левый
-            (self.width // 2, rect_y_pad),                            # верхний
-            (self.width - rect_x_pad, rect_y_pad),               # верхний правый
-            (self.width - rect_x_pad, self.height // 2),              # правый
-            (self.width - rect_x_pad, self.height - rect_y_pad), # нижний правый
-            (self.width // 2, self.height - rect_y_pad),              # нижний
-            (rect_x_pad, self.height - rect_y_pad),              # нижний левый
-            (rect_x_pad, self.height // 2),                           # левый
+            (x_pad, y_pad),                            # верхний левый
+            (self.width // 2, y_pad),                  # верхний
+            (self.width - x_pad, y_pad),               # верхний правый
+            (self.width - x_pad, self.height // 2),    # правый
+            (self.width - x_pad, self.height - y_pad), # нижний правый
+            (self.width // 2, self.height - y_pad),    # нижний
+            (x_pad, self.height - y_pad),              # нижний левый
+            (x_pad, self.height // 2),                 # левый
         ]
 
-        # настройка и расположение прямоугольника и виджета для каждой позиции
+        # настройка и расположение значка "+" и виджета для каждой позиции
         for pos in positions:
-            rect = self.create_rectangle(            # инициализация прямоугольника
-                pos[0] - (rect_width/2), 
-                pos[1] - (rect_height/2), 
-                pos[0] + (rect_width/2), 
-                pos[1] + (rect_height/2),
-                fill="white",                        # заливка
-                stipple="gray25",                    # прозрачность
-                tags="rect"
+            self.create_image(
+                pos[0]-sq_size/2, 
+                pos[1]-sq_size/2, 
+                image=self.alpha_square, 
+                anchor='nw'
             )
+            plus_label = self.create_text(pos[0], pos[1], text='+', font=("Arial", 24))  # добавление плюса
             entry = Entry(self, font=("Arial", 12))  # инициализация поля ввода
-
-            # наполнение объявленных выше списков
-            self.rects.append(rect)
             self.entries.append(entry) 
-            self.shown.append(None)
-
-            # привязка события отображения поля ввода при нажатии на прямоугольник
-            self.tag_bind(rect, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
-
+        
             # привязка события проверки и скрытия поля ввода, когда с него снят фокус
             entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry_if_empty(event, entry))
+
+            # привязка события отображения поля ввода при нажатии на значок плюса
+            self.tag_bind(plus_label, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
+
+    
+    # создаёт картинку прозрачного квадрата
+    def _create_alpha_square(self, size: int, fill: str, alpha: float):
+        alpha = int(alpha * 255)
+        fill = self.winfo_rgb(fill) + (alpha,)
+        image = Image.new('RGBA', (size, size), fill)
+        return ImageTk.PhotoImage(image)
 
     # отображает поле ввода
     def _show_entry(self, event, pos, entry):
@@ -906,6 +910,9 @@ class ImageCanvas(Canvas):
     def _create_image(self, image_link: str):
         self._open_image(image_link)
         self.img_id = self.create_image((self.width//2)-(self.img.width()//2), 0, anchor=NW, image=self.img)
+
+        # привязка фокусировки на холст при нажатие на изображение, чтобы снять фокус с полей ввода
+        self.tag_bind(self.img_id, "<Button-1>", lambda event: self.focus_set())
 
     # обновление изображения 
     def update_image(self, image_link: str):
