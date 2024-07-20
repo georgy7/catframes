@@ -71,7 +71,7 @@ class Lang:
 
             'task.title': 'Новая задача',
             'task.lbColor': 'Цвет фона:',
-            'task.lbFramerate': 'Частота:',
+            'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',

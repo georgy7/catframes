@@ -89,7 +89,7 @@ class Lang:
 
             'task.title': 'Новая задача',
             'task.lbColor': 'Цвет фона:',
-            'task.lbFramerate': 'Частота:',
+            'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
@@ -528,8 +528,6 @@ class WindowMixin(ABC):
             new_text_data = Lang.read(f'{self.name}.{w_name}')
 
             if w_name.startswith('cmb'): # если виджет это комбобокс
-                if new_text_data == '-----':
-                    new_text_data = ('-----',)
                 widget.config(values=new_text_data)   
                 widget.current(newindex=0)   
                 continue    
@@ -1251,7 +1249,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
     # расположение виджетов
     def _pack_widgets(self):
         # упаковка нижнего фрейма для сетки
-        self.bottom_grid.pack(side=BOTTOM, fill=BOTH, expand=True, pady=50, padx=30)
+        self.bottom_grid.pack(side=BOTTOM, fill=BOTH, expand=True, pady=40, padx=30)
 
         # настройка веса столбцов
         self.bottom_grid.columnconfigure(0, weight=2)  # левый будет шире
@@ -1278,7 +1276,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_cmbFramerate'].grid(row=1, column=2, sticky='w', padx=7)
         self.widgets['_cmbFramerate'].current(newindex=3)
         self.widgets['cmbQuality'].grid(row=2, column=2, sticky='w', padx=7)
-        self.widgets['btCreate'].grid(row=3, column=2, sticky='w', padx=10)
+        self.widgets['btCreate'].grid(row=3, column=2, sticky='w', padx=7)
 
 
 class WarningWindow(Toplevel, WindowMixin):

@@ -129,8 +129,6 @@ class WindowMixin(ABC):
             new_text_data = Lang.read(f'{self.name}.{w_name}')
 
             if w_name.startswith('cmb'): # если виджет это комбобокс
-                if new_text_data == '-----':
-                    new_text_data = ('-----',)
                 widget.config(values=new_text_data)   
                 widget.current(newindex=0)   
                 continue    
