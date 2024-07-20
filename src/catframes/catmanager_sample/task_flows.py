@@ -40,7 +40,7 @@ class TaskConfig:
         '--left',
     ]
 
-    quality_names = ['poor', 'medium', 'high']
+    quality_names = ('high', 'medium', 'poor')
 
     def __init__(self) -> None:
                 

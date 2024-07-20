@@ -8,7 +8,7 @@ import re
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Dict, List, Callable
+from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
@@ -58,6 +58,10 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.lbColor': 'Background:',
+            'task.lbFramerate': 'Framerate:',
+            'task.lbQuality': 'Quality:',
+            'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
 
             'bar.active': 'processing',
@@ -84,6 +88,10 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.lbColor': 'Цвет фона:',
+            'task.lbFramerate': 'Частота:',
+            'task.lbQuality': 'Качество:',
+            'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
 
             'bar.lbActive': 'обработка',
@@ -116,7 +124,7 @@ class Lang:
             Lang.current_index = index
 
     @staticmethod  # получение текста по тегу
-    def read(tag) -> str:
+    def read(tag) -> Union[str, tuple]:
         try:
             return Lang.data[Lang.current_name][tag]
         except KeyError:  # если тег не найден
@@ -190,7 +198,7 @@ class TaskConfig:
         '--left',
     ]
 
-    quality_names = ['poor', 'medium', 'high']
+    quality_names = ('high', 'medium', 'poor')
 
     def __init__(self) -> None:
                 
@@ -513,8 +521,20 @@ class WindowMixin(ABC):
         self.title(Lang.read(f'{self.name}.title'))
 
         for w_name, widget in self.widgets.items():
-            if not w_name.startswith('_'):  # если виджет начинается с "_", его обходит
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+
+            if w_name.startswith('_'):  # если виджет начинается с "_", его обходит
+                continue
+
+            new_text_data = Lang.read(f'{self.name}.{w_name}')
+
+            if w_name.startswith('cmb'): # если виджет это комбобокс
+                if new_text_data == '-----':
+                    new_text_data = ('-----',)
+                widget.config(values=new_text_data)   
+                widget.current(newindex=0)   
+                continue    
+            
+            widget.config(text=new_text_data)
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
@@ -832,11 +852,11 @@ class ImageCanvas(Canvas):
         self.shown = [None for i in range(8)]  # список отображаемых на холсте полей
 
         # переменные для расположения виджетов
-        x_pad = 120
-        y_pad = 50
-        sq_size = 24
+        x_pad = 120   # отступы по горизонтали
+        y_pad = 50    # отступы по вертикали
+        sq_size = 24  # размер прозр. квадрата
 
-        # создание полупрозрачного квадрата
+        # создание прозрачного квадрата
         self.alpha_square = self._create_alpha_square(sq_size, '#ffffff', 0.5)
 
         # 8 позиций и элементов на холсте, с левого верхнего по часовой стрелке
@@ -853,7 +873,7 @@ class ImageCanvas(Canvas):
 
         # настройка и расположение значка "+" и виджета для каждой позиции
         for pos in positions:
-            self.create_image(
+            self.create_image(  # расположекние прозр. квадрата
                 pos[0]-sq_size/2, 
                 pos[1]-sq_size/2, 
                 image=self.alpha_square, 
@@ -901,9 +921,9 @@ class ImageCanvas(Canvas):
             )  
             self.img = ImageTk.PhotoImage(img)                  # загрузка картинки и создание виджета
 
-        except FileNotFoundError:                                                 # если файл не найден
-            self.img = ImageTk.PhotoImage(                                        # создаёт пустое изображение
-                Image.new("RGBA", (self.width, self.height), (255, 255, 255, 0))  # с прозрачным фоном
+        except FileNotFoundError:                                           # если файл не найден
+            self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
+                Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
             )
 
     # создание изображения
@@ -1052,7 +1072,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         # применение настроек
         def apply_settings():
-            Lang.set(index=self.widgets['cmbLang'].current())  # установка языка
+            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
@@ -1065,11 +1085,11 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         # создание виджетов, привязывание функций
         self.widgets['lbLang'] = ttk.Label(self)
-        self.widgets['cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
+        self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
             self,
             values=Lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
-            width=7
+            width=7,
         )
         
         self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
@@ -1084,8 +1104,8 @@ class SettingsWindow(Toplevel, WindowMixin):
             self.rowconfigure(index=r, weight=1)
         
         self.widgets['lbLang'].grid(row=0, column=0, sticky='w', padx=20)
-        self.widgets['cmbLang'].grid(row=0, column=1, sticky='ew', padx=(5 ,15))
-        self.widgets['cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=(5 ,15))
+        self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
         self.widgets['btApply'].grid(row=4, column=0, sticky='ew', padx=(15, 5), ipadx=30)
         self.widgets['btSave'].grid(row=4, column=1, sticky='ew', padx=(5, 15), ipadx=30)
@@ -1118,7 +1138,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def _collect_task_config(self) -> None:
         overlays = self.image_canvas.fetch_entries_text()       # достат тексты оверлеев из виджетов,
         self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
-        self.task_config.set_specs(framerate=25, quality=1)     # тестовые значения фреймрейта и качества
+
+        self.task_config.set_specs(
+            framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
+            quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
+        )
 
     # проверка путей на валидность, передача в конфиг
     def _validate_dirs(self) -> bool:
@@ -1170,6 +1194,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
             background='#888888'
         )
+        self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -1180,35 +1205,80 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self._create_task_instance()  # воздание и запуск задачи
             self.close()                  # закрытие окна задачи
 
-        self.widgets['btCreate'] = ttk.Button(self, command=add_task)
-
-        def ask_directory():
+        def ask_directory():  # вызов системного окна по выбору директории
             dirpath = filedialog.askdirectory(parent=self)
             if dirpath and dirpath not in self.dirlist:
-                self.dirlist.append(dirpath)
+                self.dirlist.append(dirpath)  # добавление в список директорий
 
-        def ask_color():
+        def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
             self.image_canvas.update_background_color(color)
-            self.task_config.set_color(color)
-            self.widgets['_btColor'].configure(background=color, text=color)
+            self.task_config.set_color(color)  # установка цвета в конфиге
+            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
-        def test():
+        def test():  # тестовая функция, меняет картинку, и выводит строки с холста
             self.image_canvas.update_image(
                 image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
             )
             print(self.image_canvas.fetch_entries_text())
 
-        self.widgets['btAddDir'] = ttk.Button(self, command=ask_directory)
-        self.widgets['_btColor'] = Button(self, background='#888888', command=ask_color, text='#888888')
-        self.widgets['_btTest'] = ttk.Button(self, command=test, text='test')
+        # виджеты левого столбца (дальше там будет один сложный элемент по управлению директориями)
+        self.widgets['_btTest'] = ttk.Button(self.bottom_grid, command=test, text='test')
+        self.widgets['_btAddDir'] = ttk.Button(self.bottom_grid, command=ask_directory, text='+')
+
+        # виджеты среднего столбца (подписи к интерактивным элементрам справа)
+        self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
+        self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
+        self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
+
+        # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
+        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text='#888888', width=7)
+        self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
+            self.bottom_grid,
+            values=(60, 50, 40, 30, 25, 20, 15, 10, 5), 
+            state='readonly',
+            justify='center',
+            width=8,
+        )
+        self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
+            self.bottom_grid,
+            state='readonly',
+            justify='center',
+            width=8,
+        )
+        self.widgets['btCreate'] = ttk.Button(self.bottom_grid, command=add_task)
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.widgets['btAddDir'].pack(side='top')
-        self.widgets['_btColor'].pack(side='top')
-        self.widgets['_btTest'].pack(side='top')
-        self.widgets['btCreate'].pack(side='top')
+        # упаковка нижнего фрейма для сетки
+        self.bottom_grid.pack(side=BOTTOM, fill=BOTH, expand=True, pady=50, padx=30)
+
+        # настройка веса столбцов
+        self.bottom_grid.columnconfigure(0, weight=2)  # левый будет шире
+        self.bottom_grid.columnconfigure(1, weight=1)
+        self.bottom_grid.columnconfigure(2, weight=1)
+
+        # настройка веса строк
+        for i in range(4):
+            self.bottom_grid.rowconfigure(i, weight=1)
+
+        # заполнение левого столбца
+        Label(self.bottom_grid, text=f'[-]'*10).grid(row=0, column=0)
+        Label(self.bottom_grid, text=f'[-]'*10).grid(row=1, column=0)
+        self.widgets['_btTest'].grid(row=2, column=0)
+        self.widgets['_btAddDir'].grid(row=3, column=0)
+
+        # заполнение среднего столбца (липнет вправо, к правому столбцу)
+        self.widgets['lbColor'].grid(row=0, column=1, sticky='e', padx=10)
+        self.widgets['lbFramerate'].grid(row=1, column=1, sticky='e', padx=10)
+        self.widgets['lbQuality'].grid(row=2, column=1, sticky='e', padx=10)
+
+        # заполнение правого столбца (липнет влево, к среднему столбцу)
+        self.widgets['_btColor'].grid(row=0, column=2, sticky='w', padx=7)
+        self.widgets['_cmbFramerate'].grid(row=1, column=2, sticky='w', padx=7)
+        self.widgets['_cmbFramerate'].current(newindex=3)
+        self.widgets['cmbQuality'].grid(row=2, column=2, sticky='w', padx=7)
+        self.widgets['btCreate'].grid(row=3, column=2, sticky='w', padx=10)
 
 
 class WarningWindow(Toplevel, WindowMixin):

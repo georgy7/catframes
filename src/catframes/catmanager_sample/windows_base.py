@@ -122,8 +122,20 @@ class WindowMixin(ABC):
         self.title(Lang.read(f'{self.name}.title'))
 
         for w_name, widget in self.widgets.items():
-            if not w_name.startswith('_'):  # если виджет начинается с "_", его обходит
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+
+            if w_name.startswith('_'):  # если виджет начинается с "_", его обходит
+                continue
+
+            new_text_data = Lang.read(f'{self.name}.{w_name}')
+
+            if w_name.startswith('cmb'): # если виджет это комбобокс
+                if new_text_data == '-----':
+                    new_text_data = ('-----',)
+                widget.config(values=new_text_data)   
+                widget.current(newindex=0)   
+                continue    
+            
+            widget.config(text=new_text_data)
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:

@@ -40,6 +40,10 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.lbColor': 'Background:',
+            'task.lbFramerate': 'Framerate:',
+            'task.lbQuality': 'Quality:',
+            'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
 
             'bar.active': 'processing',
@@ -66,6 +70,10 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.lbColor': 'Цвет фона:',
+            'task.lbFramerate': 'Частота:',
+            'task.lbQuality': 'Качество:',
+            'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
 
             'bar.lbActive': 'обработка',
@@ -98,7 +106,7 @@ class Lang:
             Lang.current_index = index
 
     @staticmethod  # получение текста по тегу
-    def read(tag) -> str:
+    def read(tag) -> Union[str, tuple]:
         try:
             return Lang.data[Lang.current_name][tag]
         except KeyError:  # если тег не найден
