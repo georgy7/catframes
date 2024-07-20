@@ -2,11 +2,14 @@
 # -*- coding: utf-8 -*-
 import threading
 import time
-from tkinter import Tk, Toplevel, ttk, Canvas, font
+import os
+import re
+
+from tkinter import *
+from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Dict, Callable
+from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
-from ttkthemes import ThemedTk
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.

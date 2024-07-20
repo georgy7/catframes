@@ -1,110 +1,46 @@
 from _prefix import *
-from sets_utils import TTK_THEME, Lang
+from sets_utils import Lang
 from task_flows import Task
 
 
-class WindowMixin(ABC):
-    """Абстрактный класс.
-    Упрощает конструкторы окон."""
+"""
+Прокручиваемый фрейм это сложная структура, основанная на
+объекте "холста", к которому крепятся полоса прокрутки и фрейм.
+Далее следует большое количество взаимных подвязок, на разные случаи.
 
-    all_windows: dict = {}  # общий словарь регистрации для всех окон
+- если фрейм переполнен:
+    ^ любые прокрутки невозможны
 
-    title: Tk.title         # эти атрибуты и методы объекта
-    protocol: Tk.protocol   # появятся автоматически при
-    destroy: Tk.destroy     # наследовании от Tk или Toplevel
+- полоса может прокручивать объект холста,
+- при наведении мыши на холст, привязка возможностей:
+    ^ колесо мыши может прокручивать холст и полосу прокрутки
 
-    size: Tuple[int, int]   # размеры (ширина, высота) окна
-    name: str               # имя окна для словаря всех окон
-    widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
-
-    # настройка окна, вызывается через super в конце __init__ окна
-    def _default_set_up(self):
-        self.all_windows[self.name] = self  # регистрация окна в словаре
-        self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
-
-        self._set_style()     # настройка внешнего вида окна
-        self._to_center()     # размещение окна в центре экрана
-        self._init_widgets()  # создание виджетов
-        self.update_texts()   # установка текста нужного языка
-        self._pack_widgets()  # расстановка виджетов
-
-    # закрытие окна
-    def close(self) -> None:
-        try:  # удаляет окно из словаря регистрации
-            self.all_windows.pop(self.name)
-        except KeyError:
-            pass
-        self.destroy()  # закрывает окно
-
-    # обновление текстов всех виджетов окна, исходя из языка
-    def update_texts(self) -> None:
-        self.title(Lang.read(f'{self.name}.title'))
-
-        for w_name, widget in self.widgets.items():
-            if not w_name.startswith('_'):  # если виджет начинается с "_", его обходит
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
-
-    # размещение окна в центре экрана (или родительского окна)
-    def _to_center(self) -> None:
-
-        # если это побочное окно
-        if isinstance(self, Toplevel):
-            x = self.master.winfo_x() + self.master.winfo_width()/2 - self.size[0]/2  # размещаем по центру
-            y = self.master.winfo_y() + self.master.winfo_height()/2 - self.size[1]/2  # главного окна
-
-        # а если это главное окно    
-        else:  # размещаем по центру экрана
-            x = (self.winfo_screenwidth() - self.size[0]) / 2
-            y = (self.winfo_screenheight() - self.size[1]) / 2
-
-        self.geometry(f'+{int(x)}+{int(y)}')
+Объект бара задачи это фрейм, в котором разные виджеты, относящиеся 
+к описанию параметров задачи (картинка, лейблы для пути и параметров),
+бар прогресса выполнения задачи, и кнопку отмены/удаления.
+"""
 
 
-    # настройка стиля окна, исходя из разрешения экрана
-    def _set_style(self) -> None:
+# сокращает строку пути, расставляя многоточия внутри
+def shrink_path(path: str, limit: int) -> str:
+    if len(path) < limit:  # если длина и так меньше лимита
+        return path
 
-        # screen_height = self.winfo_screenheight()  # достаём высоту экрана
-        # scale = (screen_height/540)                # индекс масштабирования
-        # scale *= MAJOR_SCALING                     # домножаем на глобальную
+    # вычисление разделителя, добавление вначало, если нужно
+    s = '/' if '/' in path else '\\'
+    dirs = path.split(s)
+    if path.startswith(s):
+        dirs.pop(0)
+        dirs[0] = s + dirs[0]
 
-        style=ttk.Style()
-        if TTK_THEME: style.theme_use(TTK_THEME)   # применение темы, если есть
-        _font = font.Font(
-            # family= "helvetica", 
-            size=12, 
-            weight='bold'
-        )
-        style.configure(style='.', font=_font)  # шрифт текста в кнопке
-        self.option_add("*Font", _font)  # шрифты остальных виджетов
-
-        # task_background = '#94d0eb'
-        task_background = '#c4f0ff'
-        style.configure('Task.TFrame', background=task_background)
-        style.configure('Task.TLabel', background=task_background)
-        style.configure('Task.Horizontal.TProgressbar', background=task_background)
-
-        x, y = self.size                   # забираем объявленные размеры окна
-        # x, y = int(x*scale), int(y*scale)  # масштабируем их
-        self.geometry(f'{x}x{y}')          # и присваиваем их окну
-        self.minsize(x, y)                 # и устанавливаем как минимальные
-        try:
-            x, y = self.size_max               # если есть максимальные размеры
-            # x, y = int(x*scale), int(y*scale)  # масштабируем их
-            self.maxsize(x, y)
-        except AttributeError:
-            pass
-
-
-
-    # метод для создания и настройки виджетов
-    @abstractmethod
-    def _init_widgets(self) -> None:
-        ...
-
-    # метод для расположения виджетов
-    @abstractmethod
-    def _pack_widgets(self, ) -> None:
-        ...
+    # список укороченного пути, первый и последний элементы
+    shrink = [dirs.pop(0), dirs.pop()] 
+    while dirs and len(s.join(shrink) + dirs[-1]) + 4 < limit:  # если лимит не будет превышен,
+        shrink.insert(1, dirs.pop())                            # добавить элемент с конца
+    
+    # сборка строки нового пути, передача её, если она короче изначальной
+    new_path = f"{shrink[0]}{s}...{s}{s.join(shrink[1:])}"
+    return new_path if len(new_path) < len(path) else path
 
 
 class ScrollableFrame(ttk.Frame):
@@ -200,7 +136,7 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
-        image = Image.open("src/catframes/catmanager_sample/test_static/img.png")
+        image = Image.open("src/catframes/catmanager_sample/test_static/img.jpg")
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
         image_tk = ImageTk.PhotoImage(image)
@@ -212,18 +148,20 @@ class TaskBar(ttk.Frame):
         # создании средней части бара
         self.mid_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
+        bigger_font = font.Font(size=16)
+
         # надпись в баре
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
-            font='18', padding=5,
-            text=f"/usr/tester/movies/renger{self.task.number}.mp4", 
+            font=bigger_font, padding=5,
+            text=shrink_path(self.task.config.get_filepath(), 32), 
             style='Task.TLabel'
         )
 
         self.widgets['_lbData'] = ttk.Label(  
             self.mid_frame, 
             font='14', padding=5,
-            text=f"test label for options in task {self.task.number}", 
+            text=f"test label for options description in task {self.task.id}", 
             style='Task.TLabel'
         )
 
@@ -231,8 +169,8 @@ class TaskBar(ttk.Frame):
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
        
-        # кнопка "стоп"
-        self.widgets['btStop'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.stop())
+        # кнопка "отмена"
+        self.widgets['btCancel'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.cancel())
         
         # полоса прогресса
         self.widgets['_progressBar'] = ttk.Progressbar(
@@ -252,11 +190,19 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
         self.mid_frame.pack(side='left')
 
-        self.widgets['btStop'].pack(side='bottom', expand=True)
+        self.widgets['btCancel'].pack(side='bottom', expand=True)
         self.widgets['_progressBar'].pack(side='bottom', expand=True)
         self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
+
+    # обновление кнопки "отмена" после завершения задачи
+    def update_cancel_button(self):
+        self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
+        self.widgets['btDelete'].config(
+            command=lambda: self.task.delete(),  # переопределение поведения кнопки
+        )
+        self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
     def update_progress(self, progress: float, delta: bool = False):
@@ -278,3 +224,126 @@ class TaskBar(ttk.Frame):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
                 widget.config(text=Lang.read(f'bar.{w_name}'))
+
+
+class ImageCanvas(Canvas):
+    """Объект холста с картинкой в окне создания задачи.
+    на которой отображаются "умные" поля ввода.
+    Если текст не введён - поле будет полупрозрачным."""
+    
+    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#000'):
+
+        # создаёт объект холста
+        super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
+        self.height, self.width = height, width
+        self.pack()
+
+        self.img = None
+        self.img_id = None
+        self.alpha_square = None
+        self._create_image(image_link)
+        self._create_entries()
+
+    # инициализация полупрозрачнях треугольников и полей ввода
+    def _create_entries(self):
+
+        self.entries = []                      # список всех полей ввода
+        self.shown = [None for i in range(8)]  # список отображаемых на холсте полей
+
+        # переменные для расположения виджетов
+        x_pad = 120   # отступы по горизонтали
+        y_pad = 50    # отступы по вертикали
+        sq_size = 24  # размер прозр. квадрата
+
+        # создание прозрачного квадрата
+        self.alpha_square = self._create_alpha_square(sq_size, '#ffffff', 0.5)
+
+        # 8 позиций и элементов на холсте, с левого верхнего по часовой стрелке
+        positions = [
+            (x_pad, y_pad),                            # верхний левый
+            (self.width // 2, y_pad),                  # верхний
+            (self.width - x_pad, y_pad),               # верхний правый
+            (self.width - x_pad, self.height // 2),    # правый
+            (self.width - x_pad, self.height - y_pad), # нижний правый
+            (self.width // 2, self.height - y_pad),    # нижний
+            (x_pad, self.height - y_pad),              # нижний левый
+            (x_pad, self.height // 2),                 # левый
+        ]
+
+        # настройка и расположение значка "+" и виджета для каждой позиции
+        for pos in positions:
+            self.create_image(  # расположекние прозр. квадрата
+                pos[0]-sq_size/2, 
+                pos[1]-sq_size/2, 
+                image=self.alpha_square, 
+                anchor='nw'
+            )
+            plus_label = self.create_text(pos[0], pos[1], text='+', font=("Arial", 24))  # добавление плюса
+            entry = Entry(self, font=("Arial", 12))  # инициализация поля ввода
+            self.entries.append(entry) 
+        
+            # привязка события проверки и скрытия поля ввода, когда с него снят фокус
+            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry_if_empty(event, entry))
+
+            # привязка события отображения поля ввода при нажатии на значок плюса
+            self.tag_bind(plus_label, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
+
+    
+    # создаёт картинку прозрачного квадрата
+    def _create_alpha_square(self, size: int, fill: str, alpha: float):
+        alpha = int(alpha * 255)
+        fill = self.winfo_rgb(fill) + (alpha,)
+        image = Image.new('RGBA', (size, size), fill)
+        return ImageTk.PhotoImage(image)
+
+    # отображает поле ввода
+    def _show_entry(self, event, pos, entry):
+        index = self.entries.index(entry)
+        entry_window = self.create_window(pos, window=entry, anchor=CENTER)
+        self.shown[index] = entry_window
+        entry.focus_set()
+
+    # прячет поле ввода, если в нём пусто
+    def _hide_entry_if_empty(self, event, entry):
+        if entry.get() == '':
+            index = self.entries.index(entry)
+            self.delete(self.shown[index])
+
+    # приобразование ссылки на картинку в объект
+    def _open_image(self, image_link: str):
+        try:
+            img = Image.open(image_link)                        # открытие изображения по пути
+            img_ratio = img.size[0] / img.size[1]               # оценка соотношения сторон картинки
+            img = img.resize(
+                (int(self.height*img_ratio), self.height),      # масштабирование с учётом соотношения
+                Image.LANCZOS
+            )  
+            self.img = ImageTk.PhotoImage(img)                  # загрузка картинки и создание виджета
+
+        except FileNotFoundError:                                           # если файл не найден
+            self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
+                Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
+            )
+
+    # создание изображения
+    def _create_image(self, image_link: str):
+        self._open_image(image_link)
+        self.img_id = self.create_image((self.width//2)-(self.img.width()//2), 0, anchor=NW, image=self.img)
+
+        # привязка фокусировки на холст при нажатие на изображение, чтобы снять фокус с полей ввода
+        self.tag_bind(self.img_id, "<Button-1>", lambda event: self.focus_set())
+
+    # обновление изображения 
+    def update_image(self, image_link: str):
+        self._open_image(image_link)
+        self.itemconfig(self.img_id, image=self.img)                            # замена изображения
+        self.coords(self.img_id, (self.width // 2)-(self.img.width() // 2), 0)  # повторное задание координат
+
+    # формирует список из восьми строк, введённых в полях
+    def fetch_entries_text(self) -> list:
+        entries_text = map(lambda entry: entry.get(), self.entries)
+        return list(entries_text)
+    
+    # обновляет цвета отступов холста
+    def update_background_color(self, color: str):
+        self.config(background=color)

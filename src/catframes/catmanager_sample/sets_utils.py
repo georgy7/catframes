@@ -1,9 +1,18 @@
 from _prefix import *
 
 
-# временные глобальные переменные
-MAJOR_SCALING: float = 0.8
-TTK_THEME: Optional[str] = "breeze"
+"""
+Класс языковых настроек содержит большой словарь, 
+в котором для каждого языка есть соответсвия названия
+виджета, и текста, который в этом виджете расположен.
+
+Добавление нового ключа в этот словарь должно быть с
+добавлением всех внутренних ключей по аналогии с другими.
+
+Если в процессе будет допущена ошибка, или gui запросит
+текст для виджета, который не прописан, в качестве текста
+вернётся строка из прочерков "-----" для быстрого обнаружения. 
+"""
 
 
 class Lang:
@@ -31,15 +40,20 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.lbColor': 'Background:',
+            'task.lbFramerate': 'Framerate:',
+            'task.lbQuality': 'Quality:',
+            'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
 
             'bar.active': 'processing',
             'bar.inactive': 'complete', 
             'bar.btInfo': 'Info',
-            'bar.btStop': 'Cancel',
+            'bar.btCancel': 'Cancel',
+            'bar.btDelete': 'Delete',
 
             'warn.title': 'Warning',
-            'warn.lbWarn': 'Attention!',
+            'warn.lbWarn': 'Warning!',
             'warn.lbText': 'Incomplete tasks!',
             'warn.btBack': 'Back',
             'warn.btExit': 'Leave',
@@ -56,12 +70,17 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.lbColor': 'Цвет фона:',
+            'task.lbFramerate': 'Частота:',
+            'task.lbQuality': 'Качество:',
+            'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
 
             'bar.lbActive': 'обработка',
             'bar.lbInactive': 'завершено', 
             'bar.btInfo': 'Инфо',
-            'bar.btStop': 'Отмена',
+            'bar.btCancel': 'Отмена',
+            'bar.btDelete': 'Удалить',
             
             'warn.title': 'Внимание',
             'warn.lbWarn': 'Внимание!',
@@ -87,9 +106,33 @@ class Lang:
             Lang.current_index = index
 
     @staticmethod  # получение текста по тегу
-    def read(tag) -> str:
+    def read(tag) -> Union[str, tuple]:
         try:
             return Lang.data[Lang.current_name][tag]
         except KeyError:  # если тег не найден
             return '-----'
             
+
+class PortSets:
+    """Класс настроек диапазона портов
+    системы для связи с ffmpeg."""
+
+    min_port: int = 10240
+    max_port: int = 65535
+
+    @classmethod
+    def set_range(cls, min_port: int, max_port: int) -> None:
+        if max_port - min_port < 100:
+            raise AttributeError('range')
+        if min_port < 10240:
+            raise AttributeError('min')
+        if max_port > 65535:
+            raise AttributeError('max')
+
+        cls.min_port = min_port
+        cls.max_port = max_port
+
+    @classmethod
+    def get_range(cls) -> Tuple:
+        return cls.min_port, cls.max_port
+    

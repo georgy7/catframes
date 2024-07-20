@@ -1,10 +1,34 @@
 from _prefix import *
 from sets_utils import Lang
-from windows_utils import ScrollableFrame, TaskBar, WindowMixin
-from task_flows import Task, GuiCallback
+from windows_utils import ScrollableFrame, TaskBar, ImageCanvas
+from task_flows import Task, GuiCallback, TaskManager, TaskConfig
+from windows_base import WindowMixin, LocalWM
 
 
-class RootWindow(ThemedTk, WindowMixin):
+"""
+Любое окно наследуется от Tk/TopLevel и WindowMixin.
+Именно в таком порядке, это важно. Если перепутать, 
+объект инициализируется как WindowMixin.
+
+Вначале конструктора должен быть вызван super().__init__(),
+который инициализирует объект как сущность Tk/TopLevel.
+
+Должны быть объявлены имя окна, и необходимые атрибуты из миксина,
+а в конце должен быть вызван метод super()._default_set_up().
+Интерпретатор не найдёт такой метод в Tk/TopLevel, и будет 
+выполнен метод из миксина.
+
+Также, должны быть имплементированы методы создания и упаковки виджетов,
+они тоже вызываются миксином при стандартной настройке окна. 
+
+Любые виджеты внутри окна должны добавляться в словарь виджетов,
+а тексты для них прописываться в классе языковых настроек Lang.
+Если появляется более сложная композиция, метод update_texts должен
+быть расширен так, чтобы вызывать обновление текста во всех виджетах.
+"""
+
+
+class RootWindow(Tk, WindowMixin):
     """Основное окно"""
 
     def __init__(self):
@@ -14,7 +38,7 @@ class RootWindow(ThemedTk, WindowMixin):
         self.widgets:   dict[str, ttk.Widget] = {}
         self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        self.size = 500, 450
+        self.size = 550, 450
         self.size_max = 700, 700
         self.resizable(True, True)  # можно растягивать
 
@@ -22,31 +46,21 @@ class RootWindow(ThemedTk, WindowMixin):
 
     # при закрытии окна
     def close(self):
-
-        def open_warning():
-            if not self.all_windows.get('warn'):  # если не нашёл окно в словаре
-                WarningWindow(root=self)  # создать окно (само добавится в словарь)
-            self.all_windows['warn'].focus()  # фокусируется на нём
-
-        for task in Task.all_tasks.values():
-            if not task.done:  # если какая-то из задач не завершена
-                return open_warning()
+        if TaskManager.running_list():  # если есть активные задачи
+            # открытие окна с новой задачей (и/или переключение на него)
+            return LocalWM.open(WarningWindow, 'warn').focus()
         self.destroy()
 
     # создание и настройка виджетов
     def _init_widgets(self):
 
-        # открытие окна с новой задачей
+        # открытие окна с новой задачей (и/или переключение на него)
         def open_new_task():
-            if not self.all_windows.get('task'):  # если не нашёл окно в словаре
-                NewTaskWindow(root=self)  # создать окно (само добавится в словарь)
-            self.all_windows['task'].focus()  # фокусируется на нём
+            LocalWM.open(NewTaskWindow, 'task').focus()
 
-        # открытие окна настроек
+        # открытие окна настроек (и/или переключение на него)
         def open_settings():
-            if not self.all_windows.get('sets'):
-                SettingsWindow(root=self)
-            self.all_windows['sets'].focus()
+            LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
         self.upper_bar = upperBar = ttk.Frame(self)  # верхний бар с кнопками
@@ -68,18 +82,19 @@ class RootWindow(ThemedTk, WindowMixin):
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
         task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
-        self.task_bars[task.number] = task_bar  # регистрирует в словаре
+        self.task_bars[task.id] = task_bar  # регистрирует в словаре
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
     # удаление строки задачи
-    def del_task_bar(self, task_number: int) -> None:
-        self.task_bars[task_number].delete()  # удаляет таскбар
-        del self.task_bars[task_number]  # чистит регистрацию
-        print('''
-TODO обновление статуса окон 
-(если вдруг задачи завершились, 
-а окно предупреждения открыто).
-              ''')
+    def del_task_bar(self, task_id: int) -> None:
+        self.task_bars[task_id].delete()  # удаляет таскбар
+        del self.task_bars[task_id]  # чистит регистрацию
+
+    # закрытие задачи, смена виджета
+    def finish_task_bar(self, task_id: int) -> None:
+        if task_id in self.task_bars:
+            self.task_bars[task_id].update_cancel_button()
+        LocalWM.update_on_task_finish()
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
@@ -107,8 +122,8 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         # применение настроек
         def apply_settings():
-            Lang.set(index=self.widgets['cmbLang'].current())  # установка языка
-            for w in self.all_windows.values():  # перебирает все окна в словаре регистрации
+            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
             ...  # считывание других виджетов настроек, и применение
@@ -120,11 +135,11 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         # создание виджетов, привязывание функций
         self.widgets['lbLang'] = ttk.Label(self)
-        self.widgets['cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
+        self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
             self,
             values=Lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
-            width=7
+            width=7,
         )
         
         self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
@@ -139,8 +154,8 @@ class SettingsWindow(Toplevel, WindowMixin):
             self.rowconfigure(index=r, weight=1)
         
         self.widgets['lbLang'].grid(row=0, column=0, sticky='w', padx=20)
-        self.widgets['cmbLang'].grid(row=0, column=1, sticky='ew', padx=(5 ,15))
-        self.widgets['cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=(5 ,15))
+        self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
         self.widgets['btApply'].grid(row=4, column=0, sticky='ew', padx=(15, 5), ipadx=30)
         self.widgets['btSave'].grid(row=4, column=1, sticky='ew', padx=(5, 15), ipadx=30)
@@ -153,37 +168,167 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets = {}
+        self.task_config = TaskConfig()
+        self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
-        self.size = 300, 250
-        self.resizable(False, False)
+        self.size = 800, 600
+        self.resizable(True, True)
 
         super()._default_set_up()
 
-    # создание и настройка виджетов
-    def _init_widgets(self):
+    # подсветка виджета пути цветом предупреждения
+    def _highlight_invalid_path(self, path_number: list):
+        print(f'TODO подсветка несуществующего пути {path_number}')
+
+    # подсветка кнопки добавления пути цветом предупреждения
+    def _highlight_empty_path(self):
+        print(f'TODO подсветка кнопки добавления пути')
+
+    # сбор данных из виджетов, создание конфигурации
+    def _collect_task_config(self) -> None:
+        overlays = self.image_canvas.fetch_entries_text()       # достат тексты оверлеев из виджетов,
+        self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
+
+        self.task_config.set_specs(
+            framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
+            quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
+        )
+
+    # проверка путей на валидность, передача в конфиг
+    def _validate_dirs(self) -> bool:
+        if not self.dirlist:
+            self._highlight_empty_path()
+            return False
         
-        def add_task():
-            params: dict = {
-                # вытягивание аргументов из виджетов настроек задачи
-            }
-            task = Task(**params)  # создание задачи
+        ok_flag = True  # вызовет подсветку несуществующих путей
+        for i, dir in enumerate(self.dirlist):
+            if not os.path.isdir(dir):
+                self._highlight_invalid_path(i)
+                ok_flag = False
 
-            # создание бара задачи, получение метода обновления прогресса
-            update_progress: Callable = self.master.add_task_bar(task, **params)
+        self.task_config.set_dirs(self.dirlist)
+        return ok_flag
+    
+    # выбор пути для сохранения файла
+    def _set_filepath(self) -> bool:
+        filepath = filedialog.asksaveasfilename(
+                parent=self,                                                # открытие окна сохранения файла
+                filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
+                defaultextension=".mp4"                                     # стандартное расширение
+        )
+        self.task_config.set_filepath(filepath)
+        return bool(filepath)  # если путь выбран, вернёт true
 
-            gui_callback = GuiCallback(  # создание колбека
-                update_function=update_progress,  # передача методов обновления
-                finish_function=self.master.del_task_bar  # и завершения задачи
-            )  
+    # создание и запуск задачи
+    def _create_task_instance(self):
 
-            task.start(gui_callback)  # инъекция колбека для обнволения gui
-            self.close()
+        # создание задачи через менеджер задач
+        task = TaskManager.create(self.task_config)
 
-        self.widgets['btCreate'] = ttk.Button(self, command=add_task)
+        # создание бара задачи, получение метода обновления прогресса
+        update_progress: Callable = self.master.add_task_bar(task)
+
+        gui_callback = GuiCallback(                       # создание колбека
+            update_function=update_progress,              # передача методов обновления,
+            finish_function=self.master.finish_task_bar,  # завершения задачи
+            delete_function=self.master.del_task_bar      # и удаления бара
+        )
+
+        task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
+
+    # создание и настройка виджетов
+    def _init_widgets(self):            
+        self.image_canvas = ImageCanvas(  # создание холста с изображением
+            self, 
+            width=800, height=400,
+            image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
+            background='#888888'
+        )
+        self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
+        
+        def add_task():  # обработка кнопки добавления задачи
+            self._collect_task_config()   # сбор данных конфигурации с виджетов
+            if not self._validate_dirs(): # если каких-то директорий нет,
+                return                    #     дальнейшие действия не произойдут
+            if not self._set_filepath():  # если путь сохранения не выбирается,
+                return                    #     дальнейшие действия не произойдут
+            self._create_task_instance()  # воздание и запуск задачи
+            self.close()                  # закрытие окна задачи
+
+        def ask_directory():  # вызов системного окна по выбору директории
+            dirpath = filedialog.askdirectory(parent=self)
+            if dirpath and dirpath not in self.dirlist:
+                self.dirlist.append(dirpath)  # добавление в список директорий
+
+        def ask_color():  # вызов системного окна по выбору цвета
+            color = colorchooser.askcolor(parent=self)[-1]
+            self.image_canvas.update_background_color(color)
+            self.task_config.set_color(color)  # установка цвета в конфиге
+            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+
+        def test():  # тестовая функция, меняет картинку, и выводит строки с холста
+            self.image_canvas.update_image(
+                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
+            )
+            print(self.image_canvas.fetch_entries_text())
+
+        # виджеты левого столбца (дальше там будет один сложный элемент по управлению директориями)
+        self.widgets['_btTest'] = ttk.Button(self.bottom_grid, command=test, text='test')
+        self.widgets['_btAddDir'] = ttk.Button(self.bottom_grid, command=ask_directory, text='+')
+
+        # виджеты среднего столбца (подписи к интерактивным элементрам справа)
+        self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
+        self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
+        self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
+
+        # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
+        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text='#888888', width=7)
+        self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
+            self.bottom_grid,
+            values=(60, 50, 40, 30, 25, 20, 15, 10, 5), 
+            state='readonly',
+            justify='center',
+            width=8,
+        )
+        self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
+            self.bottom_grid,
+            state='readonly',
+            justify='center',
+            width=8,
+        )
+        self.widgets['btCreate'] = ttk.Button(self.bottom_grid, command=add_task)
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.widgets['btCreate'].pack(side='bottom', pady=15)
+        # упаковка нижнего фрейма для сетки
+        self.bottom_grid.pack(side=BOTTOM, fill=BOTH, expand=True, pady=50, padx=30)
+
+        # настройка веса столбцов
+        self.bottom_grid.columnconfigure(0, weight=2)  # левый будет шире
+        self.bottom_grid.columnconfigure(1, weight=1)
+        self.bottom_grid.columnconfigure(2, weight=1)
+
+        # настройка веса строк
+        for i in range(4):
+            self.bottom_grid.rowconfigure(i, weight=1)
+
+        # заполнение левого столбца
+        Label(self.bottom_grid, text=f'[-]'*10).grid(row=0, column=0)
+        Label(self.bottom_grid, text=f'[-]'*10).grid(row=1, column=0)
+        self.widgets['_btTest'].grid(row=2, column=0)
+        self.widgets['_btAddDir'].grid(row=3, column=0)
+
+        # заполнение среднего столбца (липнет вправо, к правому столбцу)
+        self.widgets['lbColor'].grid(row=0, column=1, sticky='e', padx=10)
+        self.widgets['lbFramerate'].grid(row=1, column=1, sticky='e', padx=10)
+        self.widgets['lbQuality'].grid(row=2, column=1, sticky='e', padx=10)
+
+        # заполнение правого столбца (липнет влево, к среднему столбцу)
+        self.widgets['_btColor'].grid(row=0, column=2, sticky='w', padx=7)
+        self.widgets['_cmbFramerate'].grid(row=1, column=2, sticky='w', padx=7)
+        self.widgets['_cmbFramerate'].current(newindex=3)
+        self.widgets['cmbQuality'].grid(row=2, column=2, sticky='w', padx=7)
+        self.widgets['btCreate'].grid(row=3, column=2, sticky='w', padx=10)
 
 
 class WarningWindow(Toplevel, WindowMixin):
@@ -194,7 +339,7 @@ class WarningWindow(Toplevel, WindowMixin):
         self.name = 'warn'
         self.widgets = {}
 
-        self.size = 260, 120
+        self.size = 260, 130
         self.resizable(False, False)
 
         super()._default_set_up()
