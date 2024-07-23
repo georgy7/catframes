@@ -238,8 +238,10 @@ class ImageCanvas(Canvas):
         self.height, self.width = height, width
         self.pack()
 
+        self.pil_img = None
         self.img = None
         self.img_id = None
+
         self.alpha_square = None
         self._create_image(image_link)
         self._create_entries()
@@ -249,6 +251,8 @@ class ImageCanvas(Canvas):
 
         self.entries = []                      # список всех полей ввода
         self.shown = [None for i in range(8)]  # список отображаемых на холсте полей
+        self.labels = []
+        self.alpha_squares = []
 
         # переменные для расположения виджетов
         x_pad = 120   # отступы по горизонтали
@@ -272,21 +276,24 @@ class ImageCanvas(Canvas):
 
         # настройка и расположение значка "+" и виджета для каждой позиции
         for pos in positions:
-            self.create_image(  # расположекние прозр. квадрата
+            alpha_square = self.create_image(  # расположекние прозр. квадрата
                 pos[0]-sq_size/2, 
                 pos[1]-sq_size/2, 
                 image=self.alpha_square, 
                 anchor='nw'
             )
-            plus_label = self.create_text(pos[0], pos[1], text='+', font=("Arial", 24))  # добавление плюса
-            entry = Entry(self, font=("Arial", 12))  # инициализация поля ввода
-            self.entries.append(entry) 
-        
-            # привязка события проверки и скрытия поля ввода, когда с него снят фокус
-            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry_if_empty(event, entry))
+            label = self.create_text(pos[0], pos[1], text='+', font=("Arial", 24), justify='center')  # добавление текста
+            entry = Entry(self, font=("Arial", 12), justify='center')  # инициализация поля ввода
 
-            # привязка события отображения поля ввода при нажатии на значок плюса
-            self.tag_bind(plus_label, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
+            self.entries.append(entry) 
+            self.labels.append(label)
+            self.alpha_squares.append(alpha_square)
+        
+            # привязка события скрытия поля ввода, когда с него снят фокус
+            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry(event, entry))
+
+            # привязка события отображения поля ввода при нажатии на текст
+            self.tag_bind(label, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
 
     
     # создаёт картинку прозрачного квадрата
@@ -303,22 +310,45 @@ class ImageCanvas(Canvas):
         self.shown[index] = entry_window
         entry.focus_set()
 
-    # прячет поле ввода, если в нём пусто
-    def _hide_entry_if_empty(self, event, entry):
-        if entry.get() == '':
-            index = self.entries.index(entry)
-            self.delete(self.shown[index])
+    # прячет поле ввода, меняет текст в лейбле
+    def _hide_entry(self, event, entry):
+        index = self.entries.index(entry)
+        self.delete(self.shown[index])     # удаляет поле ввода
+        self._update_label(index)
+
+    # обновляет тексты лейблов и видимость квадрата
+    def _update_label(self, index):
+        label = self.labels[index]
+        entry = self.entries[index]
+        square = self.alpha_squares[index]
+
+        text = '+'              # дефолтные значения, когда поле ввода пустое 
+        font = ("Arial", 24)
+        square_state = 'normal'
+        label_color = 'black'
+
+        if entry.get():  # если в поле ввода указан какой-то текст
+            text = entry.get()       # этот текст будет указан в лейбле
+            font = ("Arial", 18)     # шрифт будет поменьше
+            square_state = 'hidden'  # полупрозрачный квадрат будет скрыт
+
+            dark_background = self._is_dark_background(label)      # проверится, тёмный ли фон у тейбла
+            label_color = 'white' if dark_background else 'black'  # если тёмный - шрифт светлый, и наоборот
+
+        self.itemconfig(label, text=text, font=font, fill=label_color)  # придание тексту нужных параметров
+        self.itemconfig(square, state=square_state)                     # скрытие или проявление квадрата
 
     # приобразование ссылки на картинку в объект
     def _open_image(self, image_link: str):
         try:
-            img = Image.open(image_link)                        # открытие изображения по пути
-            img_ratio = img.size[0] / img.size[1]               # оценка соотношения сторон картинки
-            img = img.resize(
-                (int(self.height*img_ratio), self.height),      # масштабирование с учётом соотношения
+            pil_img = Image.open(image_link)               # открытие изображения по пути
+            img_ratio = pil_img.size[0] / pil_img.size[1]  # оценка соотношения сторон картинки
+            pil_img = pil_img.resize(
+                (int(self.height*img_ratio), self.height), # масштабирование с учётом соотношения
                 Image.LANCZOS
             )  
-            self.img = ImageTk.PhotoImage(img)                  # загрузка картинки и создание виджета
+            self.pil_img = pil_img
+            self.img = ImageTk.PhotoImage(pil_img)         # загрузка картинки и создание виджета
 
         except FileNotFoundError:                                           # если файл не найден
             self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
@@ -338,6 +368,20 @@ class ImageCanvas(Canvas):
         self._open_image(image_link)
         self.itemconfig(self.img_id, image=self.img)                            # замена изображения
         self.coords(self.img_id, (self.width // 2)-(self.img.width() // 2), 0)  # повторное задание координат
+        for i in range(8):
+            self._update_label(i)
+
+    # проверка, тёмный ли фон на картинке за элементом канваса
+    def _is_dark_background(self, elem_id: int) -> bool:
+        try:
+            image_shift = self.coords(self.img_id)[0]    # сдвиг картинки от левого края холста
+            x, y = self.coords(elem_id)                  # координаты элемента на холсте
+            x -= int(image_shift)                        # поправка, теперь это коорд. элемента на картинке
+            r, g, b = self.pil_img.getpixel((x, y))      # цвет пикселя картинки на этих координатах
+            brightness = (r*299 + g*587 + b*114) / 1000  # вычисление яркости пикселя по весам
+            return brightness < 128                      # сравнение яркости
+        except Exception:
+            return False
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:
