@@ -169,12 +169,24 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
         self.task_config = TaskConfig()
-        self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
         self.size = 800, 650
         self.resizable(True, True)
 
         super()._default_set_up()
+        self.image_updater_thread = threading.Thread(target=self.image_updater, daemon=True)
+        self.image_updater_thread.start()
+
+    # поток, обновляющий картинку на на холсте
+    def image_updater(self):  
+        try:
+            while True:
+                random_image = self.dir_manager.get_rand_img()
+                if random_image:
+                    self.image_canvas.update_image(image_link=random_image)
+                time.sleep(1)
+        except TclError:
+            return
 
     # сбор данных из виджетов, создание конфигурации
     def _collect_task_config(self) -> None:
@@ -233,21 +245,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config.set_dirs(dirs)
 
             if not self._set_filepath():  # если путь сохранения не выбирается,
-                return                    #     дальнейшие действия не произойдут
-            self._create_task_instance()  # воздание и запуск задачи
-            self.close()                  # закрытие окна задачи
+                return                    # дальнейшие действия не произойдут
+            self._create_task_instance()  # cоздание и запуск задачи
+            self.close()                  # закрытие окна создания задачи
 
         def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
             self.image_canvas.update_background_color(color)
             self.task_config.set_color(color)  # установка цвета в конфиге
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
-
-        def test():  # тестовая функция, меняет картинку, и выводит строки с холста
-            self.image_canvas.update_image(
-                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
-            )
-            print(self.image_canvas.fetch_entries_text())
 
         # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.bottom_grid)

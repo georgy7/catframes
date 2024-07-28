@@ -232,7 +232,7 @@ class ImageCanvas(Canvas):
     на которой отображаются "умные" поля ввода.
     Если текст не введён - поле будет полупрозрачным."""
     
-    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#000'):
+    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#888888'):
 
         # создаёт объект холста
         super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
@@ -243,6 +243,7 @@ class ImageCanvas(Canvas):
         self.img = None
         self.img_id = None
 
+        self.color = background
         self.alpha_square = None
         self._create_image(image_link)
         self._create_entries()
@@ -375,14 +376,22 @@ class ImageCanvas(Canvas):
     # проверка, тёмный ли фон на картинке за элементом канваса
     def _is_dark_background(self, elem_id: int) -> bool:
         try:
-            image_shift = self.coords(self.img_id)[0]    # сдвиг картинки от левого края холста
-            x, y = self.coords(elem_id)                  # координаты элемента на холсте
-            x -= int(image_shift)                        # поправка, теперь это коорд. элемента на картинке
-            r, g, b = self.pil_img.getpixel((x, y))      # цвет пикселя картинки на этих координатах
-            brightness = (r*299 + g*587 + b*114) / 1000  # вычисление яркости пикселя по весам
-            return brightness < 128                      # сравнение яркости
-        except Exception:
-            return False
+            image_shift = self.coords(self.img_id)[0]   # сдвиг картинки от левого края холста
+            x, y = self.coords(elem_id)                 # координаты элемента на холсте
+            x -= int(image_shift)                       # поправка, теперь это коорд. элемента на картинке
+            if x < 0:
+                raise IndexError                        # если координата меньше нуля
+
+            color = self.pil_img.getpixel((x, y))       # цвет пикселя картинки на этих координатах
+            r, g, b = color[0:3]
+        except IndexError:                              # если пиксель за пределами картинки
+            r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
+            r, g, b = r/255, g/255, b/255               # выбранного фона холста
+        except TypeError:                       
+            return color < 128                          # если pillow вернёт не ргб, а яркость пикселя
+        
+        brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
+        return brightness < 128                         # сравнение яркости
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:
@@ -391,6 +400,7 @@ class ImageCanvas(Canvas):
     
     # обновляет цвета отступов холста
     def update_background_color(self, color: str):
+        self.color = color
         self.config(background=color)
 
 
@@ -413,6 +423,15 @@ class DirectoryManager(ttk.Frame):
     # возвращает список директорий
     def get_dirs(self) -> list:
         return self.dirs[:]
+    
+    def get_rand_img(self) -> Optional[str]:
+        if not self.dirs: return
+
+        rand_dir = random.choice(self.dirs)
+        images = [f for f in os.listdir(rand_dir) if f.endswith(('.png', '.jpg'))]
+        if not images: return
+
+        return f'{rand_dir}/{random.choice(images)}'
 
     # подсветка виджета пути цветом предупреждения
     def _highlight_invalid_path(self, path_number: list):
@@ -455,7 +474,7 @@ class DirectoryManager(ttk.Frame):
         def add_directory():
             dir_name = filedialog.askdirectory(parent=self)
             if dir_name and dir_name not in self.dirs:
-                self.listbox.insert(END, shrink_path(dir_name, 40))
+                self.listbox.insert(END, shrink_path(dir_name, 35))
                 self.dirs.append(dir_name)  # добавление в список директорий
 
         # удаление выбранной директории из списка

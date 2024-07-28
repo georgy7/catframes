@@ -4,6 +4,8 @@ import threading
 import time
 import os
 import re
+from os.path import isfile, join
+import random
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
@@ -839,7 +841,7 @@ class ImageCanvas(Canvas):
     на которой отображаются "умные" поля ввода.
     Если текст не введён - поле будет полупрозрачным."""
     
-    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#000'):
+    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#888888'):
 
         # создаёт объект холста
         super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
@@ -850,6 +852,7 @@ class ImageCanvas(Canvas):
         self.img = None
         self.img_id = None
 
+        self.color = background
         self.alpha_square = None
         self._create_image(image_link)
         self._create_entries()
@@ -982,14 +985,22 @@ class ImageCanvas(Canvas):
     # проверка, тёмный ли фон на картинке за элементом канваса
     def _is_dark_background(self, elem_id: int) -> bool:
         try:
-            image_shift = self.coords(self.img_id)[0]    # сдвиг картинки от левого края холста
-            x, y = self.coords(elem_id)                  # координаты элемента на холсте
-            x -= int(image_shift)                        # поправка, теперь это коорд. элемента на картинке
-            r, g, b = self.pil_img.getpixel((x, y))      # цвет пикселя картинки на этих координатах
-            brightness = (r*299 + g*587 + b*114) / 1000  # вычисление яркости пикселя по весам
-            return brightness < 128                      # сравнение яркости
-        except Exception:
-            return False
+            image_shift = self.coords(self.img_id)[0]   # сдвиг картинки от левого края холста
+            x, y = self.coords(elem_id)                 # координаты элемента на холсте
+            x -= int(image_shift)                       # поправка, теперь это коорд. элемента на картинке
+            if x < 0:
+                raise IndexError                        # если координата меньше нуля
+
+            color = self.pil_img.getpixel((x, y))       # цвет пикселя картинки на этих координатах
+            r, g, b = color[0:3]
+        except IndexError:                              # если пиксель за пределами картинки
+            r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
+            r, g, b = r/255, g/255, b/255               # выбранного фона холста
+        except TypeError:                       
+            return color < 128                          # если pillow вернёт не ргб, а яркость пикселя
+        
+        brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
+        return brightness < 128                         # сравнение яркости
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:
@@ -998,6 +1009,7 @@ class ImageCanvas(Canvas):
     
     # обновляет цвета отступов холста
     def update_background_color(self, color: str):
+        self.color = color
         self.config(background=color)
 
 
@@ -1020,6 +1032,15 @@ class DirectoryManager(ttk.Frame):
     # возвращает список директорий
     def get_dirs(self) -> list:
         return self.dirs[:]
+    
+    def get_rand_img(self) -> Optional[str]:
+        if not self.dirs: return
+
+        rand_dir = random.choice(self.dirs)
+        images = [f for f in os.listdir(rand_dir) if f.endswith(('.png', '.jpg'))]
+        if not images: return
+
+        return f'{rand_dir}/{random.choice(images)}'
 
     # подсветка виджета пути цветом предупреждения
     def _highlight_invalid_path(self, path_number: list):
@@ -1062,7 +1083,7 @@ class DirectoryManager(ttk.Frame):
         def add_directory():
             dir_name = filedialog.askdirectory(parent=self)
             if dir_name and dir_name not in self.dirs:
-                self.listbox.insert(END, shrink_path(dir_name, 40))
+                self.listbox.insert(END, shrink_path(dir_name, 35))
                 self.dirs.append(dir_name)  # добавление в список директорий
 
         # удаление выбранной директории из списка
@@ -1130,8 +1151,8 @@ class DirectoryManager(ttk.Frame):
 
         self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
         self.widgets['btRemDir'].pack(side='right')
-        # self.widgets['btUpDir'].pack(side='left')
-        # self.widgets['btDownDir'].pack(side='left')
+        # self.widgets['btUpDir'].pack(side='left')  # кнопки перетаскивания 
+        # self.widgets['btDownDir'].pack(side='left') # вверх и вниз, пока убрал
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():
@@ -1309,12 +1330,24 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
         self.task_config = TaskConfig()
-        self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
         self.size = 800, 650
         self.resizable(True, True)
 
         super()._default_set_up()
+        self.image_updater_thread = threading.Thread(target=self.image_updater, daemon=True)
+        self.image_updater_thread.start()
+
+    # поток, обновляющий картинку на на холсте
+    def image_updater(self):  
+        try:
+            while True:
+                random_image = self.dir_manager.get_rand_img()
+                if random_image:
+                    self.image_canvas.update_image(image_link=random_image)
+                time.sleep(1)
+        except TclError:
+            return
 
     # сбор данных из виджетов, создание конфигурации
     def _collect_task_config(self) -> None:
@@ -1373,9 +1406,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config.set_dirs(dirs)
 
             if not self._set_filepath():  # если путь сохранения не выбирается,
-                return                    #     дальнейшие действия не произойдут
-            self._create_task_instance()  # воздание и запуск задачи
-            self.close()                  # закрытие окна задачи
+                return                    # дальнейшие действия не произойдут
+            self._create_task_instance()  # cоздание и запуск задачи
+            self.close()                  # закрытие окна создания задачи
 
         def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
@@ -1383,13 +1416,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config.set_color(color)  # установка цвета в конфиге
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
-        def test():  # тестовая функция, меняет картинку, и выводит строки с холста
-            self.image_canvas.update_image(
-                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
-            )
-            print(self.image_canvas.fetch_entries_text())
-
-        # виджеты среднего столбца (подписи к интерактивным элементрам справа)
+        # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
         self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
         self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
