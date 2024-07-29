@@ -184,7 +184,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 random_image = self.dir_manager.get_rand_img()
                 if random_image:
                     self.image_canvas.update_image(image_link=random_image)
-                time.sleep(1)
+                time.sleep(2)
         except TclError:
             return
 

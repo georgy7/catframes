@@ -20,6 +20,13 @@ from task_flows import Task
 бар прогресса выполнения задачи, и кнопку отмены/удаления.
 """
 
+# возвращает список всех изображений в директории
+def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
+    img_list = [f for f in os.listdir(dir) if f.endswith(('.png', '.jpg'))]
+    if full_path:
+        img_list = list(map(lambda x: f'{dir}/{x}', img_list))  # добавляет путь к названию
+    return img_list
+
 
 # сокращает строку пути, расставляя многоточия внутри
 def shrink_path(path: str, limit: int) -> str:
@@ -137,7 +144,14 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
 
-        image = Image.open("src/catframes/catmanager_sample/test_static/img.jpg")
+        img_dir = self.task.config.get_dirs()[0]              # достаём первую директорию
+        img_paths = find_img_in_dir(img_dir, full_path=True)  # берём все картинки из неё
+        if len(img_paths) > 1:
+            img_path = img_paths[len(img_paths)//2]           # выбираем центральную
+        else:
+            img_path = img_paths[0]
+
+        image = Image.open(img_path)
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
         image_tk = ImageTk.PhotoImage(image)
@@ -159,13 +173,18 @@ class TaskBar(ttk.Frame):
             style='Task.TLabel'
         )
 
+        # создание локализованых строк "качество: высокое | частота кадров: 50"
+        quality_index = self.task.config.get_quality()
+        quality = Lang.read('task.cmbQuality')[quality_index]
+        quality_text = f"{Lang.read('task.lbQuality')} {quality}  |  "
+        framerate_text = f"{Lang.read('task.lbFramerate')} {self.task.config.get_framerate()}"
+
         self.widgets['_lbData'] = ttk.Label(  
             self.mid_frame, 
             font='14', padding=5,
-            text=f"test label for options description in task {self.task.id}", 
+            text=quality_text+framerate_text, 
             style='Task.TLabel'
         )
-
 
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
@@ -428,10 +447,10 @@ class DirectoryManager(ttk.Frame):
         if not self.dirs: return
 
         rand_dir = random.choice(self.dirs)
-        images = [f for f in os.listdir(rand_dir) if f.endswith(('.png', '.jpg'))]
+        images = find_img_in_dir(rand_dir, full_path=True)
         if not images: return
 
-        return f'{rand_dir}/{random.choice(images)}'
+        return random.choice(images)
 
     # подсветка виджета пути цветом предупреждения
     def _highlight_invalid_path(self, path_number: list):
@@ -473,9 +492,14 @@ class DirectoryManager(ttk.Frame):
         # добавление директории
         def add_directory():
             dir_name = filedialog.askdirectory(parent=self)
-            if dir_name and dir_name not in self.dirs:
-                self.listbox.insert(END, shrink_path(dir_name, 35))
-                self.dirs.append(dir_name)  # добавление в список директорий
+            if not dir_name or dir_name in self.dirs:
+                return
+            
+            if not find_img_in_dir(dir_name):
+                return
+
+            self.listbox.insert(END, shrink_path(dir_name, 35))
+            self.dirs.append(dir_name)  # добавление в список директорий
 
         # удаление выбранной директории из списка
         def remove_directory():

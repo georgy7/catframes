@@ -49,6 +49,7 @@ class TaskConfig:
         self._color: str = '#000'                     # цвет отступов и фона
         self._framerate: int                          # частота кадров
         self._quality: str                            # качество видео
+        self._quality_index: int                      # номер значения качества
         self._limit: int                              # предел видео в секундах
         self._filepath: str                           # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
@@ -69,6 +70,7 @@ class TaskConfig:
     # установка частоты кадров, качества и лимита
     def set_specs(self, framerate: int, quality: int, limit: int = None):
         self._framerate = framerate
+        self._quality_index = quality
         self._quality = self.quality_names[quality]
         self._limit = limit
 
@@ -76,8 +78,17 @@ class TaskConfig:
     def set_filepath(self, filepath: str):
         self._filepath = filepath
 
-    def get_filepath(self):
+    def get_filepath(self) -> str:
         return self._filepath
+    
+    def get_dirs(self) -> list:
+        return self._dirs[:]
+    
+    def get_quality(self) -> int:
+        return self._quality_index
+    
+    def get_framerate(self) -> int:
+        return self._framerate
 
     # создание консольной команды
     def convert_to_command(self) -> str:
@@ -86,7 +97,7 @@ class TaskConfig:
         # добавление текстовых оверлеев
         for position, text in self._overlays.items():
             if text:
-                command += f' {position} "{text}"'
+                command += f' {position}="{text}"'
         
         command += f" --margin-color {self._color}"         # параметр цвета
         command += f" --frame-rate {self._framerate}"       # частота кадров
