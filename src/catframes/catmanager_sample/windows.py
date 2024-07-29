@@ -1,6 +1,6 @@
 from _prefix import *
 from sets_utils import Lang
-from windows_utils import ScrollableFrame, TaskBar, ImageCanvas
+from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
 
@@ -35,8 +35,8 @@ class RootWindow(Tk, WindowMixin):
         super().__init__()
         self.name = 'root'
         
-        self.widgets:   dict[str, ttk.Widget] = {}
-        self.task_bars: dict[int, TaskBar] = {}  # словарь регистрации баров задач
+        self.widgets:   Dict[str, ttk.Widget] = {}
+        self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
         self.size = 550, 450
         self.size_max = 700, 700
@@ -110,7 +110,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'sets'
 
-        self.widgets: dict[str, ttk.Widget] = {}
+        self.widgets: Dict[str, ttk.Widget] = {}
 
         self.size = 250, 200
         self.resizable(False, False)
@@ -167,47 +167,36 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def __init__(self, root: RootWindow):
         super().__init__(master=root)
         self.name = 'task'
-        self.widgets = {}
+        self.widgets: Dict[str, Widget] = {}
         self.task_config = TaskConfig()
-        self.dirlist = []   # временный список директорий. Позже будет структура, аналогичная таскбарам
 
-        self.size = 800, 600
+        self.size = 800, 650
         self.resizable(True, True)
 
         super()._default_set_up()
+        self.image_updater_thread = threading.Thread(target=self.image_updater, daemon=True)
+        self.image_updater_thread.start()
 
-    # подсветка виджета пути цветом предупреждения
-    def _highlight_invalid_path(self, path_number: list):
-        print(f'TODO подсветка несуществующего пути {path_number}')
-
-    # подсветка кнопки добавления пути цветом предупреждения
-    def _highlight_empty_path(self):
-        print(f'TODO подсветка кнопки добавления пути')
+    # поток, обновляющий картинку на на холсте
+    def image_updater(self):  
+        try:
+            while True:
+                random_image = self.dir_manager.get_rand_img()
+                if random_image:
+                    self.image_canvas.update_image(image_link=random_image)
+                time.sleep(2)
+        except TclError:
+            return
 
     # сбор данных из виджетов, создание конфигурации
     def _collect_task_config(self) -> None:
-        overlays = self.image_canvas.fetch_entries_text()       # достат тексты оверлеев из виджетов,
+        overlays = self.image_canvas.fetch_entries_text()       # достаёт тексты оверлеев из виджетов,
         self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
 
         self.task_config.set_specs(
             framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
             quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
         )
-
-    # проверка путей на валидность, передача в конфиг
-    def _validate_dirs(self) -> bool:
-        if not self.dirlist:
-            self._highlight_empty_path()
-            return False
-        
-        ok_flag = True  # вызовет подсветку несуществующих путей
-        for i, dir in enumerate(self.dirlist):
-            if not os.path.isdir(dir):
-                self._highlight_invalid_path(i)
-                ok_flag = False
-
-        self.task_config.set_dirs(self.dirlist)
-        return ok_flag
     
     # выбор пути для сохранения файла
     def _set_filepath(self) -> bool:
@@ -245,20 +234,20 @@ class NewTaskWindow(Toplevel, WindowMixin):
             background='#888888'
         )
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
+        self.dir_manager = DirectoryManager(self.bottom_grid)
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
-            if not self._validate_dirs(): # если каких-то директорий нет,
-                return                    #     дальнейшие действия не произойдут
-            if not self._set_filepath():  # если путь сохранения не выбирается,
-                return                    #     дальнейшие действия не произойдут
-            self._create_task_instance()  # воздание и запуск задачи
-            self.close()                  # закрытие окна задачи
+            if not self.dir_manager.validate_dirs(): # если каких-то директорий нет,
+                return                    # дальнейшие действия не произойдут
+            
+            dirs = self.dir_manager.get_dirs()
+            self.task_config.set_dirs(dirs)
 
-        def ask_directory():  # вызов системного окна по выбору директории
-            dirpath = filedialog.askdirectory(parent=self)
-            if dirpath and dirpath not in self.dirlist:
-                self.dirlist.append(dirpath)  # добавление в список директорий
+            if not self._set_filepath():  # если путь сохранения не выбирается,
+                return                    # дальнейшие действия не произойдут
+            self._create_task_instance()  # cоздание и запуск задачи
+            self.close()                  # закрытие окна создания задачи
 
         def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
@@ -266,17 +255,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config.set_color(color)  # установка цвета в конфиге
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
-        def test():  # тестовая функция, меняет картинку, и выводит строки с холста
-            self.image_canvas.update_image(
-                image_link="src/catframes/catmanager_sample/test_static/img2.jpg"
-            )
-            print(self.image_canvas.fetch_entries_text())
-
-        # виджеты левого столбца (дальше там будет один сложный элемент по управлению директориями)
-        self.widgets['_btTest'] = ttk.Button(self.bottom_grid, command=test, text='test')
-        self.widgets['_btAddDir'] = ttk.Button(self.bottom_grid, command=ask_directory, text='+')
-
-        # виджеты среднего столбца (подписи к интерактивным элементрам справа)
+        # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
         self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
         self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
@@ -301,34 +280,39 @@ class NewTaskWindow(Toplevel, WindowMixin):
     # расположение виджетов
     def _pack_widgets(self):
         # упаковка нижнего фрейма для сетки
-        self.bottom_grid.pack(side=BOTTOM, fill=BOTH, expand=True, pady=50, padx=30)
+        self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=30)
 
         # настройка веса столбцов
-        self.bottom_grid.columnconfigure(0, weight=2)  # левый будет шире
-        self.bottom_grid.columnconfigure(1, weight=1)
-        self.bottom_grid.columnconfigure(2, weight=1)
+        for i in range(4):
+            self.bottom_grid.columnconfigure(i, weight=1)
 
         # настройка веса строк
-        for i in range(4):
+        for i in range(6):
             self.bottom_grid.rowconfigure(i, weight=1)
 
         # заполнение левого столбца
-        Label(self.bottom_grid, text=f'[-]'*10).grid(row=0, column=0)
-        Label(self.bottom_grid, text=f'[-]'*10).grid(row=1, column=0)
-        self.widgets['_btTest'].grid(row=2, column=0)
-        self.widgets['_btAddDir'].grid(row=3, column=0)
+        self.dir_manager.grid(
+            row=0, column=0, rowspan=6, columnspan=2
+        )
 
-        # заполнение среднего столбца (липнет вправо, к правому столбцу)
-        self.widgets['lbColor'].grid(row=0, column=1, sticky='e', padx=10)
-        self.widgets['lbFramerate'].grid(row=1, column=1, sticky='e', padx=10)
-        self.widgets['lbQuality'].grid(row=2, column=1, sticky='e', padx=10)
+        # заполнение столбца описания кнопок (липнет вправо, к правому столбцу)        
+        self.widgets['lbColor'].grid(row=1, column=2, sticky='e', padx=10)
+        self.widgets['lbFramerate'].grid(row=2, column=2, sticky='e', padx=10)
+        self.widgets['lbQuality'].grid(row=3, column=2, sticky='e', padx=10)
 
-        # заполнение правого столбца (липнет влево, к среднему столбцу)
-        self.widgets['_btColor'].grid(row=0, column=2, sticky='w', padx=7)
-        self.widgets['_cmbFramerate'].grid(row=1, column=2, sticky='w', padx=7)
+        # заполнение правого столбца (липнет влево, к столбцу описаний)
+        ttk.Label(self.bottom_grid).grid(row=0, column=3)
+        self.widgets['_btColor'].grid(row=1, column=3, sticky='w', padx=7)
+        self.widgets['_cmbFramerate'].grid(row=2, column=3, sticky='w', padx=7)
         self.widgets['_cmbFramerate'].current(newindex=3)
-        self.widgets['cmbQuality'].grid(row=2, column=2, sticky='w', padx=7)
-        self.widgets['btCreate'].grid(row=3, column=2, sticky='w', padx=10)
+        self.widgets['cmbQuality'].grid(row=3, column=3, sticky='w', padx=7)
+        self.widgets['btCreate'].grid(row=4, column=3, sticky='w', padx=7)
+        ttk.Label(self.bottom_grid).grid(row=5, column=3)
+
+    # расширение метода обновления текстов
+    def update_texts(self) -> None:
+        super().update_texts()
+        self.dir_manager.update_texts()
 
 
 class WarningWindow(Toplevel, WindowMixin):
@@ -337,7 +321,7 @@ class WarningWindow(Toplevel, WindowMixin):
     def __init__(self, root: RootWindow):
         super().__init__(master=root)
         self.name = 'warn'
-        self.widgets = {}
+        self.widgets: Dict[str, Widget] = {}
 
         self.size = 260, 130
         self.resizable(False, False)

@@ -34,6 +34,12 @@ class Lang:
             'root.openSets': 'Settings',
             'root.newTask': 'New task',
 
+            'bar.active': 'processing',
+            'bar.inactive': 'complete', 
+            'bar.btInfo': 'Info',
+            'bar.btCancel': 'Cancel',
+            'bar.btDelete': 'Delete',
+
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
             'sets.btApply': 'Apply',
@@ -46,11 +52,9 @@ class Lang:
             'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
 
-            'bar.active': 'processing',
-            'bar.inactive': 'complete', 
-            'bar.btInfo': 'Info',
-            'bar.btCancel': 'Cancel',
-            'bar.btDelete': 'Delete',
+            'dirs.lbDirList': 'List of source directories:',
+            'dirs.btAddDir': 'Add',
+            'dirs.btRemDir': 'Remove',
 
             'warn.title': 'Warning',
             'warn.lbWarn': 'Warning!',
@@ -64,6 +68,12 @@ class Lang:
             'root.openSets': 'Настройки',
             'root.newTask': 'Новая задача',
 
+            'bar.lbActive': 'обработка',
+            'bar.lbInactive': 'завершено', 
+            'bar.btInfo': 'Инфо',
+            'bar.btCancel': 'Отмена',
+            'bar.btDelete': 'Удалить',
+
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
             'sets.btApply': 'Применить',
@@ -71,16 +81,14 @@ class Lang:
 
             'task.title': 'Новая задача',
             'task.lbColor': 'Цвет фона:',
-            'task.lbFramerate': 'Частота:',
+            'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
 
-            'bar.lbActive': 'обработка',
-            'bar.lbInactive': 'завершено', 
-            'bar.btInfo': 'Инфо',
-            'bar.btCancel': 'Отмена',
-            'bar.btDelete': 'Удалить',
+            'dirs.lbDirList': 'Список директорий источников:',
+            'dirs.btAddDir': 'Добавить',
+            'dirs.btRemDir': 'Удалить',
             
             'warn.title': 'Внимание',
             'warn.lbWarn': 'Внимание!',

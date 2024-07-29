@@ -4,6 +4,8 @@ import threading
 import time
 import os
 import re
+from os.path import isfile, join
+import random
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
