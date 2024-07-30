@@ -61,6 +61,10 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
+        if any(s == "" for s in overlays_texts):
+            empty = overlays_texts.index("")
+            overlays_texts[empty] = "warn"
+
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
     # установка цвета
