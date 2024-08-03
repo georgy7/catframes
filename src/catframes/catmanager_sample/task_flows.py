@@ -154,6 +154,47 @@ class GuiCallback:
         ...
 
 
+class CatframesProcessThread:
+    """ Создаёт подпроцесс с запущенным catframes,
+    который оборачивается в отдельный поток, 
+    чтобы не задерживать обработку gui программы.
+    Узнаёт порт api внутри процесса catframes, 
+    благодаря чему может сообщать данные о прогрессе.
+    """
+
+    def __init__(self, command):
+        self.command = command
+        self.process = None
+        self.thread = None
+        self.port = 0
+        threading.Thread(target=self._run_process).start()  # запуск процесса в потоке
+
+    # запуск процесса catframes, получение порта api процесса
+    def _run_process(self):
+        self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, text=True)
+
+        while not self.port:
+            text = self.process.stdout.readline()
+            if not 'port' in text:
+                continue
+            self.port = int(text.replace('port:', '').strip())
+
+    # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
+    def get_progress(self) -> float:
+        while not self.port:  # ждёт, пока не определится порт api
+            time.sleep(0.2)
+
+        try: # делает запрос на сервер, возвращает прогресс
+            data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
+            return data['framesEncoded'] / data['framesTotal']
+        except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
+            return 1.0
+        
+    # убивает процесс (для экстренной остановки)
+    def kill(self):
+        os.kill(self.process.pid, signal.SIGABRT)
+
+
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
@@ -161,6 +202,12 @@ class Task:
         self.config = task_config
         self.command = task_config.convert_to_command()
         print(self.command)
+
+        # !!! команда тестового api, а не процесса catframes
+        run_dir = os.path.dirname(os.path.abspath(__file__))
+        self.command = f'python {run_dir}/test_api/test_catframes_api.py'
+
+        self._process_thread = None
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
@@ -168,27 +215,32 @@ class Task:
     # запуск задачи (тестовый)
     def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
         self.gui_callback = gui_callback         # для оповещения наблюдателя
+        TaskManager.reg_start(self)              # регистрация запуска
 
-        # запуск фоновой задачи (дальше перепишется через subprocess)
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
-        TaskManager.reg_start(self)
+        # запуск фонового процесса catframes через отдельный поток
+        self._process_thread = CatframesProcessThread(self.command)
 
-    # поток задачи (тестовый)
-    def run(self):
-        for i in range(21):
-            if self.stop_flag:
-                return
-            self.gui_callback.update(i/20)
-            time.sleep(0.2)
-        self.done = True
-        TaskManager.reg_finish(self)
+        # запуск потока слежения за прогрессом
+        threading.Thread(target=self._progress_watcher, daemon=True).start()
+
+
+    # спрашивает о прогрессе, обновляет прогрессбар, обрабатывает завершение
+    def _progress_watcher(self):
+        progress = 0
+        while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
+            time.sleep(0.5)                                     
+            progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
+            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+
+        self.done = True  # ставит флаг завершения задачи
+        TaskManager.reg_finish(self)       # регистрация завершения
         self.gui_callback.finish(self.id)  # сигнал о завершении задачи
 
-    # остановка задачи (тестовая)
+    # остановка задачи
     def cancel(self):
         self.stop_flag = True
         TaskManager.reg_finish(self)
+        self._process_thread.kill()        # убивает процесс
         self.gui_callback.delete(self.id)  # сигнал о завершении задачи
 
     def delete(self):

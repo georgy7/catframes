@@ -6,6 +6,9 @@ import os
 import re
 from os.path import isfile, join
 import random
+import subprocess
+import requests
+import signal
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
