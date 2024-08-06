@@ -14,7 +14,7 @@ progress = {
 def update_progress():
     while progress["framesEncoded"] < progress["framesTotal"]:
         time.sleep(0.5)
-        progress["framesEncoded"] += 50
+        progress["framesEncoded"] += 10
 
 # инициализация приложения
 app = Flask('__main__')

@@ -154,25 +154,20 @@ class GuiCallback:
         ...
 
 
-class CatframesProcessThread:
+class CatframesProcess:
     """ Создаёт подпроцесс с запущенным catframes,
-    который оборачивается в отдельный поток, 
+    создаёт отдельный поток для чтения порта api, 
     чтобы не задерживать обработку gui программы.
-    Узнаёт порт api внутри процесса catframes, 
-    благодаря чему может сообщать данные о прогрессе.
+    По запросу может сообщать данные о прогрессе.
     """
 
     def __init__(self, command):
-        self.command = command
-        self.process = None
-        self.thread = None
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)  # запуск процесса catframes
         self.port = 0
-        threading.Thread(target=self._run_process).start()  # запуск процесса в потоке
+        threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
 
-    # запуск процесса catframes, получение порта api процесса
-    def _run_process(self):
-        self.process = subprocess.Popen(self.command, stdout=subprocess.PIPE, text=True)
-
+    # получение порта api процесса
+    def _recognize_port(self):
         while not self.port:
             text = self.process.stdout.readline()
             if not 'port' in text:
@@ -181,8 +176,8 @@ class CatframesProcessThread:
 
     # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
     def get_progress(self) -> float:
-        while not self.port:  # ждёт, пока не определится порт api
-            time.sleep(0.2)
+        if not self.port:  # если порт ещё не определён
+            return 0.0
 
         try: # делает запрос на сервер, возвращает прогресс
             data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
@@ -207,26 +202,25 @@ class Task:
         run_dir = os.path.dirname(os.path.abspath(__file__))
         self.command = f'python {run_dir}/test_api/test_catframes_api.py'
 
-        self._process_thread = None
+        self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
 
-    # запуск задачи (тестовый)
+    # запуск задачи
     def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
         self.gui_callback = gui_callback         # для оповещения наблюдателя
         TaskManager.reg_start(self)              # регистрация запуска
 
-        # запуск фонового процесса catframes через отдельный поток
-        self._process_thread = CatframesProcessThread(self.command)
+        # запуск фонового процесса catframes
+        self._process_thread = CatframesProcess(self.command)
 
         # запуск потока слежения за прогрессом
         threading.Thread(target=self._progress_watcher, daemon=True).start()
 
-
     # спрашивает о прогрессе, обновляет прогрессбар, обрабатывает завершение
     def _progress_watcher(self):
-        progress = 0
+        progress: float = 0.0
         while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
             time.sleep(0.5)                                     
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
