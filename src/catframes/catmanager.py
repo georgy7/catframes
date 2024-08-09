@@ -6,6 +6,9 @@ import os
 import re
 from os.path import isfile, join
 import random
+import subprocess
+import requests
+import signal
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
@@ -62,6 +65,7 @@ class Lang:
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
+            'sets.lbPortRange': 'System ports range:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
 
@@ -81,6 +85,11 @@ class Lang:
             'warn.lbText': 'Incomplete tasks!',
             'warn.btBack': 'Back',
             'warn.btExit': 'Leave',
+
+            'noti.title': 'Error',
+            'noti.lbWarn': 'Invalid port range!',
+            'noti.lbText': 'The acceptable range is from 10240 to 65025',
+            'noti.lbText2': 'The number of ports is at least 100'
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -96,6 +105,7 @@ class Lang:
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
+            'sets.lbPortRange': 'Диапазон портов системы:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
 
@@ -115,6 +125,11 @@ class Lang:
             'warn.lbText': 'Задачи не завершены!',
             'warn.btBack': 'Назад',
             'warn.btExit': 'Выйти',
+
+            'noti.title': 'Ошибка',
+            'noti.lbWarn': 'Неверный диапазон портов!',
+            'noti.lbText': 'Допустимы значения от 10240 до 65025',
+            'noti.lbText2': 'Количество портов не менее 100'
         },
     }
 
@@ -150,20 +165,12 @@ class PortSets:
 
     @classmethod
     def set_range(cls, min_port: int, max_port: int) -> None:
-        if max_port - min_port < 100:
-            raise AttributeError('range')
-        if min_port < 10240:
-            raise AttributeError('min')
-        if max_port > 65535:
-            raise AttributeError('max')
-
         cls.min_port = min_port
         cls.max_port = max_port
 
     @classmethod
     def get_range(cls) -> Tuple:
         return cls.min_port, cls.max_port
-    
 
 
 
@@ -229,6 +236,10 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
+        if any(s == "" for s in overlays_texts):
+            empty = overlays_texts.index("")
+            overlays_texts[empty] = "warn"
+
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
     # установка цвета
@@ -318,6 +329,42 @@ class GuiCallback:
         ...
 
 
+class CatframesProcess:
+    """ Создаёт подпроцесс с запущенным catframes,
+    создаёт отдельный поток для чтения порта api, 
+    чтобы не задерживать обработку gui программы.
+    По запросу может сообщать данные о прогрессе.
+    """
+
+    def __init__(self, command):
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)  # запуск процесса catframes
+        self.port = 0
+        threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
+
+    # получение порта api процесса
+    def _recognize_port(self):
+        while not self.port:
+            text = self.process.stdout.readline()
+            if not 'port' in text:
+                continue
+            self.port = int(text.replace('port:', '').strip())
+
+    # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
+    def get_progress(self) -> float:
+        if not self.port:  # если порт ещё не определён
+            return 0.0
+
+        try: # делает запрос на сервер, возвращает прогресс
+            data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
+            return data['framesEncoded'] / data['framesTotal']
+        except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
+            return 1.0
+        
+    # убивает процесс (для экстренной остановки)
+    def kill(self):
+        os.kill(self.process.pid, signal.SIGABRT)
+
+
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
@@ -325,34 +372,44 @@ class Task:
         self.config = task_config
         self.command = task_config.convert_to_command()
         print(self.command)
+
+        # !!! команда тестового api, а не процесса catframes
+        run_dir = os.path.dirname(os.path.abspath(__file__))
+        self.command = f'python {run_dir}/test_api/test_catframes_api.py'
+
+        self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
 
-    # запуск задачи (тестовый)
+    # запуск задачи
     def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
         self.gui_callback = gui_callback         # для оповещения наблюдателя
+        TaskManager.reg_start(self)              # регистрация запуска
 
-        # запуск фоновой задачи (дальше перепишется через subprocess)
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
-        TaskManager.reg_start(self)
+        # запуск фонового процесса catframes
+        self._process_thread = CatframesProcess(self.command)
 
-    # поток задачи (тестовый)
-    def run(self):
-        for i in range(21):
-            if self.stop_flag:
-                return
-            self.gui_callback.update(i/20)
-            time.sleep(0.2)
-        self.done = True
-        TaskManager.reg_finish(self)
+        # запуск потока слежения за прогрессом
+        threading.Thread(target=self._progress_watcher, daemon=True).start()
+
+    # спрашивает о прогрессе, обновляет прогрессбар, обрабатывает завершение
+    def _progress_watcher(self):
+        progress: float = 0.0
+        while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
+            time.sleep(0.5)                                     
+            progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
+            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+
+        self.done = True  # ставит флаг завершения задачи
+        TaskManager.reg_finish(self)       # регистрация завершения
         self.gui_callback.finish(self.id)  # сигнал о завершении задачи
 
-    # остановка задачи (тестовая)
+    # остановка задачи
     def cancel(self):
         self.stop_flag = True
         TaskManager.reg_finish(self)
+        self._process_thread.kill()        # убивает процесс
         self.gui_callback.delete(self.id)  # сигнал о завершении задачи
 
     def delete(self):
@@ -458,12 +515,15 @@ class LocalWM:
 
     # открытие окна
     @classmethod
-    def open(cls, window_cls, name: str) -> Tk:    # принимает класс окна, имя окна
-        if not cls.check('root'):                        # проверяем, есть ли корневое окно
+    def open(cls, window_cls, name: str, master: Optional[Tk] = None) -> Tk:    # принимает класс окна, имя окна
+        if not cls.check('root'):                        # проверяем, есть ли или корневое окно
             return cls._reg(window_cls(), 'root')        # регистрируем окно как корневое
 
+        if not master:                                   # если мастер не был передан
+            master = cls.call('root')                    # мастером будет корневое окно
+
         if not cls.check(name):                          # проверяем, зарегистрировано ли окно
-            window = window_cls(root=cls.call('root'))   # создаём окно, передаём корневое окно
+            window = window_cls(root=master)             # создаём окно, передаём мастера
             cls._reg(window, name)                       # регистрируем окно
         return cls.call(name)
     
@@ -513,12 +573,12 @@ class WindowMixin(ABC):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
 
-    title: Tk.title         # эти атрибуты и методы объекта
-    protocol: Tk.protocol   # появятся автоматически при
-    destroy: Tk.destroy     # наследовании от Tk или Toplevel
+    title: Tk.wm_title        # эти атрибуты и методы объекта
+    protocol: Tk.wm_protocol  # появятся автоматически при
+    destroy: Tk.destroy       # наследовании от Tk или Toplevel
 
-    size: Tuple[int, int]   # размеры (ширина, высота) окна
-    name: str               # имя окна для словаря всех окон
+    size: Tuple[int, int]     # размеры (ширина, высота) окна
+    name: str                 # имя окна для словаря всех окон
     widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
     # настройка окна, вызывается через super в конце __init__ окна
@@ -1316,19 +1376,6 @@ class SettingsWindow(Toplevel, WindowMixin):
     # создание и настройка виджетов
     def _init_widgets(self):
 
-        # применение настроек
-        def apply_settings():
-            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
-            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
-                w.update_texts()  # для каждого обновляет текст методом из WindowMixin
-
-            ...  # считывание других виджетов настроек, и применение
-
-        # сохранение настроек (применение + закрытие)
-        def save_settings():
-            apply_settings()
-            self.close()
-
         # создание виджетов, привязывание функций
         self.widgets['lbLang'] = ttk.Label(self)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
@@ -1337,24 +1384,78 @@ class SettingsWindow(Toplevel, WindowMixin):
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
         )
+
+        def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
+            return new_value.isnumeric() or not new_value
         
+        v_numeric = (self.register(validate_numeric), '%P')  # регистрация валидации
+
+        self.widgets['lbPortRange'] = ttk.Label(self)
+        self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
+            self, 
+            justify='center', 
+            validate='key', 
+            validatecommand=v_numeric  # привязка валидации
+        )
+        self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
+            self, 
+            justify='center', 
+            validate='all',
+            validatecommand=v_numeric  # привязка валидации
+        )
+        
+        # применение настроек
+        def apply_settings():
+            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
+                w.update_texts()  # для каждого обновляет текст методом из WindowMixin
+
+            try:  # проверка введённых значений, если всё ок - сохранение
+                port_first = int(self.widgets['_entrPortFirst'].get())
+                port_last = int(self.widgets['_entrPortLast'].get())
+                assert(port_last-port_first >= 100)         # диапазон не меньше 100 портов
+                assert(port_first >= 10240)                 # начальный порт не ниже 10240
+                assert(port_last <= 65025)                  # конечный порт не выше 65025
+                PortSets.set_range(port_first, port_last)   # сохранение настроек
+
+            except:  # если какое-то из условий не выполнено
+                self._set_ports_default()  # возврат предыдущих значений виджетов
+                LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
+
+        # сохранение настроек (применение + закрытие)
+        def save_settings():
+            apply_settings()
+            self.close()
+
         self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
         self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
+
+    # установка полей ввода портов в последнее сохранённое состояние
+    def _set_ports_default(self):
+        self.widgets['_entrPortFirst'].delete(0, 'end')
+        self.widgets['_entrPortFirst'].insert(0, PortSets.get_range()[0])
+        self.widgets['_entrPortLast'].delete(0, 'end')
+        self.widgets['_entrPortLast'].insert(0, PortSets.get_range()[1])
 
     # расположение виджетов
     def _pack_widgets(self):
 
         for c in range(2): 
             self.columnconfigure(index=c, weight=1)
-        for r in range(5): 
+        for r in range(7): 
             self.rowconfigure(index=r, weight=1)
         
-        self.widgets['lbLang'].grid(row=0, column=0, sticky='w', padx=20)
-        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=(5 ,15))
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='ws', padx=15)
+        self.widgets['_cmbLang'].grid(columnspan=1, row=1, column=0, sticky='wne', padx=(15 ,5))
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
-        self.widgets['btApply'].grid(row=4, column=0, sticky='ew', padx=(15, 5), ipadx=30)
-        self.widgets['btSave'].grid(row=4, column=1, sticky='ew', padx=(5, 15), ipadx=30)
+        self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
+        self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))
+        self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
+        self._set_ports_default()  # заполняем поля ввода портов
+
+        self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
+        self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -1553,6 +1654,43 @@ class WarningWindow(Toplevel, WindowMixin):
         self.widgets['btBack'].pack(side='left', anchor='w', padx=5)
         self.widgets['btExit'].pack(side='left', anchor='w', padx=5)
         self.choise_frame.pack(side='bottom', pady=10)
+
+
+class NotifyWindow(Toplevel, WindowMixin):
+    """Окно предупреждения о портах в настройках"""
+
+    def __init__(self, root: Toplevel):
+        super().__init__(master=root)
+        self.name = 'noti'
+        self.widgets: Dict[str, Widget] = {}
+
+        self.size = 350, 160
+        self.resizable(False, False)
+
+        super()._default_set_up()
+
+    # создание и настройка виджетов
+    def _init_widgets(self):
+        
+        _font = font.Font(size=16)
+
+        # три лейбла (один с крупным текстом, два с и обычным)
+        self.widgets['lbWarn'] = ttk.Label(self, padding=[0, 20, 0, 5], font=_font)
+        self.widgets['lbText'] = ttk.Label(self, padding=0)
+        self.widgets['lbText2'] = ttk.Label(self, padding=0)
+
+        # кнопка "ок"
+        self.frame = ttk.Frame(self)
+        self.widgets['_btOk'] = ttk.Button(self.frame, text='OK', command=self.close)
+
+    # расположение виджетов
+    def _pack_widgets(self):
+        self.widgets['lbWarn'].pack(side='top')
+        self.widgets['lbText'].pack(side='top')
+        self.widgets['lbText2'].pack(side='top')
+
+        self.widgets['_btOk'].pack(anchor='w', padx=5)
+        self.frame.pack(side='bottom', pady=10)
 
 
 

@@ -96,12 +96,12 @@ class WindowMixin(ABC):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
 
-    title: Tk.title         # эти атрибуты и методы объекта
-    protocol: Tk.protocol   # появятся автоматически при
-    destroy: Tk.destroy     # наследовании от Tk или Toplevel
+    title: Tk.wm_title        # эти атрибуты и методы объекта
+    protocol: Tk.wm_protocol  # появятся автоматически при
+    destroy: Tk.destroy       # наследовании от Tk или Toplevel
 
-    size: Tuple[int, int]   # размеры (ширина, высота) окна
-    name: str               # имя окна для словаря всех окон
+    size: Tuple[int, int]     # размеры (ширина, высота) окна
+    name: str                 # имя окна для словаря всех окон
     widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
     # настройка окна, вызывается через super в конце __init__ окна
