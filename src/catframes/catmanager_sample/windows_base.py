@@ -37,8 +37,8 @@ class LocalWM:
         return name in cls._all_windows
 
     # открытие окна
-    @classmethod
-    def open(cls, window_cls, name: str, master: Optional[Tk] = None) -> Tk:    # принимает класс окна, имя окна
+    @classmethod                                         # принимает класс окна, имя окна
+    def open(cls, window_cls, name: str, master: Optional[Tk] = None, **kwargs) -> Tk:    
         if not cls.check('root'):                        # проверяем, есть ли или корневое окно
             return cls._reg(window_cls(), 'root')        # регистрируем окно как корневое
 
@@ -46,7 +46,7 @@ class LocalWM:
             master = cls.call('root')                    # мастером будет корневое окно
 
         if not cls.check(name):                          # проверяем, зарегистрировано ли окно
-            window = window_cls(root=master)             # создаём окно, передаём мастера
+            window = window_cls(root=master, **kwargs)   # создаём окно, передаём мастера
             cls._reg(window, name)                       # регистрируем окно
         return cls.call(name)
     

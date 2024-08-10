@@ -99,6 +99,7 @@ class RootWindow(Tk, WindowMixin):
     # расширение метода обновления текстов
     def update_texts(self) -> None:
         super().update_texts()
+        self.task_space.update_texts()  # обновляет текст в основном поле
         for bar in self.task_bars.values():
             bar.update_texts()  # обновляет текст в каждом баре
 
@@ -205,11 +206,18 @@ class SettingsWindow(Toplevel, WindowMixin):
 class NewTaskWindow(Toplevel, WindowMixin):
     """Окно создания новой задачи"""
 
-    def __init__(self, root: RootWindow):
+    def __init__(self, root: RootWindow, **kwargs):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
+
         self.task_config = TaskConfig()
+        self.view_mode: bool = False
+        if kwargs.get('task_config'):  # если передан конфиг, берёт его
+            self.task_config: TaskConfig = kwargs.get('task_config')
+            self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
+
+        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)
 
         self.size = 800, 650
         self.resizable(True, True)
@@ -256,26 +264,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
         task = TaskManager.create(self.task_config)
 
         # создание бара задачи, получение метода обновления прогресса
-        update_progress: Callable = self.master.add_task_bar(task)
+        update_progress: Callable = self.master.add_task_bar(task, view=NewTaskWindow.open_view)
 
         gui_callback = GuiCallback(                       # создание колбека
             update_function=update_progress,              # передача методов обновления,
             finish_function=self.master.finish_task_bar,  # завершения задачи
-            delete_function=self.master.del_task_bar      # и удаления бара
+            delete_function=self.master.del_task_bar,     # и удаления бара
         )
 
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
-    def _init_widgets(self):            
+    def _init_widgets(self):
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
             width=800, height=400,
+            veiw_mode=self.view_mode,
+            overlays=self.task_config.get_overlays(),
             image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
-            background='#888888'
+            background=self.task_config.get_color(),
         )
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
-        self.dir_manager = DirectoryManager(self.bottom_grid)
+        self.dir_manager = DirectoryManager(
+            self.bottom_grid, 
+            veiw_mode=self.view_mode,
+            dirs=self.task_config.get_dirs() 
+        )
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -296,20 +310,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config.set_color(color)  # установка цвета в конфиге
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
+        def copy_to_clip():  # копирование команды в буфер обмена
+            self.clipboard_clear()
+            self.clipboard_append(self.task_config.convert_to_command())
+
         # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
         self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
         self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text='#888888', width=7)
+        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text=DEFAULT_COLOR, width=7)
+        if self.view_mode:
+            color = self.task_config.get_color()
+            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+
         self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
             self.bottom_grid,
-            values=(60, 50, 40, 30, 25, 20, 15, 10, 5), 
+            values=self.framerates, 
             state='readonly',
             justify='center',
             width=8,
         )
+        self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
+            self.task_config.get_framerate() if self.view_mode else 30
+        )
+
         self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
             self.bottom_grid,
             state='readonly',
@@ -317,6 +343,16 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=8,
         )
         self.widgets['btCreate'] = ttk.Button(self.bottom_grid, command=add_task)
+
+        # лейбл и кнопка копирования команды
+        self.widgets['lbCopy'] = ttk.Label(self.bottom_grid)
+        self.widgets['btCopy'] = ttk.Button(self.bottom_grid, command=copy_to_clip)
+
+        if self.view_mode:  # если это режим просмотра, все виджеты, кроме копирования - недоступны
+            for w_name, w in self.widgets.items():
+                if ('lb') in w_name or ('Copy') in w_name:
+                    continue
+                w.configure(state='disabled')
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -340,20 +376,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbColor'].grid(row=1, column=2, sticky='e', padx=10)
         self.widgets['lbFramerate'].grid(row=2, column=2, sticky='e', padx=10)
         self.widgets['lbQuality'].grid(row=3, column=2, sticky='e', padx=10)
+        if self.view_mode:
+            self.widgets['lbCopy'].grid(row=4, column=2, sticky='e', padx=10)
 
         # заполнение правого столбца (липнет влево, к столбцу описаний)
         ttk.Label(self.bottom_grid).grid(row=0, column=3)
         self.widgets['_btColor'].grid(row=1, column=3, sticky='w', padx=7)
         self.widgets['_cmbFramerate'].grid(row=2, column=3, sticky='w', padx=7)
-        self.widgets['_cmbFramerate'].current(newindex=3)
         self.widgets['cmbQuality'].grid(row=3, column=3, sticky='w', padx=7)
-        self.widgets['btCreate'].grid(row=4, column=3, sticky='w', padx=7)
+
+        if self.view_mode:
+            self.widgets['btCopy'].grid(row=4, column=3, sticky='w', padx=7)
+        else:
+            self.widgets['btCreate'].grid(row=4, column=3, sticky='w', padx=7)
         ttk.Label(self.bottom_grid).grid(row=5, column=3)
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
         super().update_texts()
         self.dir_manager.update_texts()
+        # установка начального значения в выборе качества
+        self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
+
+    @staticmethod
+    def open_view(task_config: TaskConfig):
+        print('Залетел таск конфиг')
+        LocalWM.open(NewTaskWindow, 'task', task_config=task_config)
 
 
 class WarningWindow(Toplevel, WindowMixin):

@@ -1,6 +1,7 @@
 from _prefix import *
 from sets_utils import Lang
 from task_flows import Task
+from windows_base import LocalWM
 
 
 """
@@ -56,6 +57,7 @@ class ScrollableFrame(ttk.Frame):
     def __init__(self, root_window, *args, **kwargs):
         super().__init__(root_window, *args, **kwargs)
         
+        self.root = root_window
         self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
         self.canvas.bind(           # привязка к виджету холста
             "<Configure>",          # обработчика событий, чтобы внутренний фрейм
@@ -70,7 +72,7 @@ class ScrollableFrame(ttk.Frame):
         self.scrollable_frame = ttk.Frame(self.canvas, padding=[15, 0])  # фрейм для контента (внутренних виджетов)
         self.scrollable_frame.bind(  # привязка к виджету фрейма 
             "<Configure>",           # обработчика событий <Configure>, чтобы полоса
-            self._update_scrollbar,  # прокрутки менялась, когда обновляется фрейм 
+            self._on_frame_update,   # прокрутки менялась, когда обновляется фрейм 
         )
 
         # привязка холста к верхнему левому углу, получение id фрейма
@@ -91,8 +93,30 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.bind("<Enter>", self._bind_mousewheel)
         self.canvas.bind("<Leave>", self._unbind_mousewheel)
 
+        # создание надписи "здесь появятся Ваши проекты"
+        self._empty_sign = ttk.Label(
+            self.scrollable_frame,
+            justify='center',
+            font=("Arial", 18)
+        )
+
         # первичное обновление полосы, чтобы сразу её не было видно
         self._update_scrollbar_visibility()
+
+    # отрабатываывает при добавлении/удалении таскбаров в фрейм
+    def _on_frame_update(self, event):
+        self._update_scrollbar(event)
+        self._update_empty_sign()
+
+    # обновление видимости надписи "здесь появятся Ваши проекты" 
+    def _update_empty_sign(self):
+        if '!taskbar' in self.scrollable_frame.children.keys():
+            self._empty_sign.pack_forget()  # если есть таскбары, удалить надпись
+        else:
+            self._empty_sign.pack(pady=80)  # если их нет - покажет её
+
+    def update_texts(self):
+        self._empty_sign.config(text=Lang.read('bar.lbEmpty'))
 
     # изменение размеров фрейма внутри холста
     def _on_resize_window(self, event):
@@ -129,12 +153,14 @@ class ScrollableFrame(ttk.Frame):
 class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
-    def __init__(self, master: ttk.Frame, task: Task):
+    def __init__(self, master: ttk.Frame, task: Task, **kwargs):
         super().__init__(master, borderwidth=1, padding=5, style='Task.TFrame')
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
         self.progress: float = 0
+        self.image: Image
+        self.open_view: Callable = kwargs.get('view')  # достаёт ручку для открытия окна просмотра
 
         self._init_widgets()
         self.update_texts()
@@ -179,7 +205,7 @@ class TaskBar(ttk.Frame):
         quality_text = f"{Lang.read('task.lbQuality')} {quality}  |  "
         framerate_text = f"{Lang.read('task.lbFramerate')} {self.task.config.get_framerate()}"
 
-        self.widgets['_lbData'] = ttk.Label(  
+        self.widgets['_lbData'] = ttk.Label(
             self.mid_frame, 
             font='14', padding=5,
             text=quality_text+framerate_text, 
@@ -192,6 +218,9 @@ class TaskBar(ttk.Frame):
         # кнопка "отмена"
         self.widgets['btCancel'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.cancel())
         
+        # кнопка "i"
+        # self.widgets['_btInfo'] = ttk.Button(self.right_frame, width=1, text='i', command=lambda: self.open_view(self.task.config))
+
         # полоса прогресса
         self.widgets['_progressBar'] = ttk.Progressbar(
             self.right_frame, 
@@ -200,6 +229,12 @@ class TaskBar(ttk.Frame):
             value=0,
             style='Task.Horizontal.TProgressbar'
         )
+
+        # каждый элемент таскбара при нажатии будет вызывать окно просмотра задачи
+        self.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
+        for w_name, w in self.widgets.items():
+            if not 'bt' in w_name:
+                w.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
@@ -210,8 +245,9 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
         self.mid_frame.pack(side='left')
 
-        self.widgets['btCancel'].pack(side='bottom', expand=True)
-        self.widgets['_progressBar'].pack(side='bottom', expand=True)
+        self.widgets['_progressBar'].pack(side='top', expand=True)
+        self.widgets['btCancel'].pack(side='bottom')
+        # self.widgets['_btInfo'].pack(side='right')
         self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
@@ -251,12 +287,24 @@ class ImageCanvas(Canvas):
     на которой отображаются "умные" поля ввода.
     Если текст не введён - поле будет полупрозрачным."""
     
-    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#888888'):
+    def __init__(
+            self, 
+            master: Tk, 
+            width: int, 
+            height: int, 
+            veiw_mode: bool,
+            overlays: list,
+            image_link: str = '', 
+            background: str = '#888888'
+        ):
 
         # создаёт объект холста
         super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
         self.height, self.width = height, width
         self.pack()
+        
+        self.view_mode = veiw_mode
+        self.default_overlays = overlays
 
         self.pil_img = None
         self.img = None
@@ -296,15 +344,24 @@ class ImageCanvas(Canvas):
         ]
 
         # настройка и расположение значка "+" и виджета для каждой позиции
-        for pos in positions:
+        for i, pos in enumerate(positions):
             alpha_square = self.create_image(  # расположекние прозр. квадрата
                 pos[0]-sq_size/2, 
                 pos[1]-sq_size/2, 
                 image=self.alpha_square, 
                 anchor='nw'
             )
-            label = self.create_text(pos[0], pos[1], text='+', font=("Arial", 24), justify='center')  # добавление текста
+
+            label = self.create_text(
+                pos[0], pos[1], 
+                text='+', 
+                font=("Arial", 24), 
+                justify='center'
+            )  # добавление текста
+
             entry = Entry(self, font=("Arial", 12), justify='center')  # инициализация поля ввода
+            if self.view_mode:
+                entry.insert(0, self.default_overlays[i])
 
             self.entries.append(entry) 
             self.labels.append(label)
@@ -313,8 +370,12 @@ class ImageCanvas(Canvas):
             # привязка события скрытия поля ввода, когда с него снят фокус
             entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry(event, entry))
 
-            # привязка события отображения поля ввода при нажатии на текст
-            self.tag_bind(label, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
+            if not self.view_mode:
+                # привязка события отображения поля ввода при нажатии на текст
+                self.tag_bind(
+                    label, "<Button-1>", 
+                    lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry)
+                )
 
     
     # создаёт картинку прозрачного квадрата
@@ -348,7 +409,7 @@ class ImageCanvas(Canvas):
         square_state = 'normal'
         label_color = 'black'
 
-        if entry.get():  # если в поле ввода указан какой-то текст
+        if entry.get() or self.view_mode:  # если в поле ввода указан какой-то текст
             text = entry.get()       # этот текст будет указан в лейбле
             font = ("Arial", 16)     # шрифт будет поменьше
             square_state = 'hidden'  # полупрозрачный квадрат будет скрыт
@@ -428,16 +489,20 @@ class DirectoryManager(ttk.Frame):
     Даёт возможность добавлять, удалять директории, 
     и менять порядок кнопками и перетаскиванием"""
 
-    def __init__(self, master: Union[Tk, Frame]):
+    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list):
         super().__init__(master)
         self.name = 'dirs'
 
-        self.dirs = []
         self.widgets: Dict[str, Widget] = {}
         self.drag_data = {"start_index": None, "item": None}
 
+        self.veiw_mode = veiw_mode
         self._init_widgets()
         self._pack_widgets()
+
+        self.dirs = dirs
+        for dir in dirs:
+            self.listbox.insert(END, shrink_path(dir, 35))
 
     # возвращает список директорий
     def get_dirs(self) -> list:
@@ -486,8 +551,9 @@ class DirectoryManager(ttk.Frame):
         self.scrollbar = ttk.Scrollbar(self.top_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.config(yscrollcommand=self.scrollbar.set)
 
-        self.listbox.bind('<Button-1>', self._start_drag)
-        self.listbox.bind('<B1-Motion>', self._do_drag)
+        if not self.veiw_mode:
+            self.listbox.bind('<Button-1>', self._start_drag)
+            self.listbox.bind('<B1-Motion>', self._do_drag)
 
         # добавление директории
         def add_directory():
@@ -564,8 +630,9 @@ class DirectoryManager(ttk.Frame):
 
         self.button_frame.pack(side='top', anchor='w', pady=10)
 
-        self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
-        self.widgets['btRemDir'].pack(side='right')
+        if not self.veiw_mode:
+            self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
+            self.widgets['btRemDir'].pack(side='right')
         # self.widgets['btUpDir'].pack(side='left')  # кнопки перетаскивания 
         # self.widgets['btDownDir'].pack(side='left') # вверх и вниз, пока убрал
 

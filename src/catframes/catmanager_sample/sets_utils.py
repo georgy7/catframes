@@ -39,6 +39,7 @@ class Lang:
             'bar.btInfo': 'Info',
             'bar.btCancel': 'Cancel',
             'bar.btDelete': 'Delete',
+            'bar.lbEmpty': 'Your projects will appear here',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
@@ -52,6 +53,8 @@ class Lang:
             'task.lbQuality': 'Quality:',
             'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
+            'task.lbCopy': 'Copy cli command:',
+            'task.btCopy': 'Copy',
 
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
@@ -79,6 +82,7 @@ class Lang:
             'bar.btInfo': 'Инфо',
             'bar.btCancel': 'Отмена',
             'bar.btDelete': 'Удалить',
+            'bar.lbEmpty': 'Здесь появятся Ваши проекты',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
@@ -92,6 +96,8 @@ class Lang:
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
+            'task.lbCopy': 'Команда терминала:',
+            'task.btCopy': 'Копировать',
 
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
@@ -138,7 +144,7 @@ class PortSets:
     системы для связи с ffmpeg."""
 
     min_port: int = 10240
-    max_port: int = 65535
+    max_port: int = 65000
 
     @classmethod
     def set_range(cls, min_port: int, max_port: int) -> None:

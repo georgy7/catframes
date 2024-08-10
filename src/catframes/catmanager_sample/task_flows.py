@@ -44,12 +44,12 @@ class TaskConfig:
 
     def __init__(self) -> None:
                 
-        self._dirs: List[str]                         # пути к директориям с изображениями
+        self._dirs: List[str] = []                    # пути к директориям с изображениями
         self._overlays: Dict[str, str] = {}           # словарь надписей
-        self._color: str = '#000'                     # цвет отступов и фона
+        self._color: str = DEFAULT_COLOR              # цвет отступов и фона
         self._framerate: int                          # частота кадров
         self._quality: str                            # качество видео
-        self._quality_index: int                      # номер значения качества
+        self._quality_index: int = 0                  # номер значения качества
         self._limit: int                              # предел видео в секундах
         self._filepath: str                           # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
@@ -75,6 +75,7 @@ class TaskConfig:
     def set_specs(self, framerate: int, quality: int, limit: int = None):
         self._framerate = framerate
         self._quality_index = quality
+        print(self._quality_index)
         self._quality = self.quality_names[quality]
         self._limit = limit
 
@@ -93,6 +94,12 @@ class TaskConfig:
     
     def get_framerate(self) -> int:
         return self._framerate
+    
+    def get_overlays(self) -> List[str]:
+        return list(self._overlays.values())
+    
+    def get_color(self) -> str:
+        return self._color
 
     # создание консольной команды
     def convert_to_command(self) -> str:
