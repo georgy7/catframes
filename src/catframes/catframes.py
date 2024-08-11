@@ -1622,15 +1622,10 @@ class OutputOptions:
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
         offset: int = random.randint(0, max(0, sys.maxsize - len(frames)))
 
-        render_results = deque()
-        max_results = 10
+        render_results = deque(maxlen = 10)
 
         # Чтобы случайно не запрашивать по сто раз один и тот же кадр.
-        requested = deque()
-        # Чтобы не делать проверку перед popleft: так в очереди всегда будет 3 элемента.
-        requested.append(-1)
-        requested.append(-1)
-        requested.append(-1)
+        requested = deque(maxlen = 3)
 
         def get_render_result(frame_index):
             while not frame_processor.empty:
@@ -1642,12 +1637,10 @@ class OutputOptions:
             next_index = frame_index + 1
             if (next_index < len(frames)) and not (next_index in requested):
                 requested.append(next_index)
-                requested.popleft()
                 frame_processor.request_frame(next_index, frames[next_index])
 
             if result is None:
                 requested.append(frame_index)
-                requested.popleft()
                 frame_processor.request_frame(frame_index, frames[frame_index])
 
                 while result is None:
@@ -1656,9 +1649,6 @@ class OutputOptions:
                         render_results.append(x)
                         if frame_index == x[0]:
                             result = x[1]
-
-            while len(render_results) > max_results:
-                render_results.popleft()
 
             return result
 
