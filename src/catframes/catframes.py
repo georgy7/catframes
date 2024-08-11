@@ -283,6 +283,18 @@ class FileUtils:
         return path.expanduser().is_symlink()
 
     @staticmethod
+    def tail(file_path, line_count):
+        """Retuns at the most n last lines of a file, or empty string."""
+        result = deque(maxlen = line_count)
+        try:
+            with file_path.open(mode='r') as f:
+                for line in f:
+                    result.append(line)
+        except OSError:
+            pass
+        return '\n'.join([x.rstrip() for x in result])
+
+    @staticmethod
     def list_images(path: Path) -> List[Path]:
         """Набор файлов JPEG и PNG в порядке, предоставляемом pathlib (не определён в документации
         и, скорее всего, зависит от операционной системы). Файлы определяются по расширениям
@@ -1691,7 +1703,28 @@ class OutputOptions:
                     str(self.destination.expanduser())
                 ])
 
-                subprocess.check_call(ffmpeg_options)
+                with tempfile.TemporaryDirectory() as logs_path_string:
+                    logs_path = Path(logs_path_string)
+
+                    output_path = logs_path / 'output.txt'
+                    errors_path = logs_path / 'error.txt'
+                    catched = None
+
+                    with output_path.open(mode='w') as output_file:
+                        with errors_path.open(mode='w') as errors_file:
+                            try:
+                                subprocess.run(
+                                    ffmpeg_options, check=True,
+                                    stdout=output_file,
+                                    stderr=errors_file)
+                            except Exception as exc:
+                                catched = exc
+
+                    if catched:
+                        print('\nFFmpeg output:')
+                        print(FileUtils.tail(output_path, 10))
+                        print('\nFFmpeg errors:')
+                        print(FileUtils.tail(errors_path, 10))
 
         these_guys = TwoFromTheChest(service, client, server_options)
         these_guys.start()
@@ -3062,7 +3095,7 @@ def main():
         with FrameProcessor(view) as frame_processor:
             output_options.make(frames, frame_processor, cli.get_server_options())
 
-        print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
+        print(f'\nFinished in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
         print(f'\n{err}\n', file=sys.stderr)
