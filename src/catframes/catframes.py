@@ -56,7 +56,7 @@ import sys
 import tempfile
 import threading
 import textwrap
-from wsgiref.simple_server import make_server
+from wsgiref.simple_server import make_server, WSGIRequestHandler
 from queue import Queue, Empty
 from collections import deque
 
@@ -167,9 +167,23 @@ class TwoFromTheChest:
             self._options.max_http_port
         )
         print(f"\nPort: {http_port}\n")
-        try:
 
-            httpd = make_server(host='', port=http_port, app=self._giver)
+        server_log = deque(maxlen = 20)
+
+        class ClosureHandler(WSGIRequestHandler):
+            def log_message(self, format, *args):
+                server_log.append("%s - - [%s] %s\n" %
+                     (self.address_string(),
+                      self.log_date_time_string(),
+                      format%args))
+
+        def print_log():
+            print('Web-server log:')
+            print('\n'.join([x.rstrip() for x in server_log]))
+            print()
+
+        try:
+            httpd = make_server(host='', port=http_port, app=self._giver, handler_class=ClosureHandler)
             try:
                 web_thread = threading.Thread(target = httpd.serve_forever)
                 web_thread.daemon = True
@@ -182,6 +196,8 @@ class TwoFromTheChest:
             return True
         except OSError:
             return False
+        finally:
+            print_log()
 
 
 class _TwoFromTheChestTest(TestCase):
