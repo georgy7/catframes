@@ -150,7 +150,7 @@ class TwoFromTheChest:
         :raises Exception: thrown by the eater.
         """
         while not self._was_running():
-            print('Trying different port...')
+            print('Trying different port...', flush=True)
         if self._eater_error:
             raise self._eater_error
 
@@ -167,7 +167,7 @@ class TwoFromTheChest:
             self._options.min_http_port,
             self._options.max_http_port
         )
-        print(f"\nPort: {http_port}\n")
+        print(f"\nPort: {http_port}\n", flush=True)
 
         server_log = deque(maxlen = 20)
 
@@ -179,9 +179,9 @@ class TwoFromTheChest:
                       format%args))
 
         def print_log():
-            print('Web-server log:')
-            print('\n'.join([x.rstrip() for x in server_log]))
-            print()
+            print('Web-server log:', flush=True)
+            print('\n'.join([x.rstrip() for x in server_log]), flush=True)
+            print(flush=True)
 
         try:
             httpd = make_server(host='', port=http_port, app=self._giver, handler_class=ClosureHandler)
@@ -1642,7 +1642,7 @@ class OutputOptions:
             processed_frame_count = count
 
             if last_processed < processed_per_cent:
-                print(f'Progress: {processed_per_cent}%')
+                print(f'Progress: {processed_per_cent}%', flush=True)
 
 
         def get_render_result(frame_index):
@@ -1758,10 +1758,10 @@ class OutputOptions:
                                 catched = exc
 
                     if catched:
-                        print('\nFFmpeg output:')
-                        print(FileUtils.tail(output_path, 10))
-                        print('\nFFmpeg errors:')
-                        print(FileUtils.tail(errors_path, 10))
+                        print('\nFFmpeg output:', flush=True)
+                        print(FileUtils.tail(output_path, 10), flush=True)
+                        print('\nFFmpeg errors:', flush=True)
+                        print(FileUtils.tail(errors_path, 10), flush=True)
 
         these_guys = TwoFromTheChest(service, client, server_options)
         these_guys.start()
@@ -1860,10 +1860,10 @@ class PillowFrameView(FrameView):
         for filename in popular_fonts:
             try:
                 result = ImageFont.truetype(font=filename, size=size)
-                print(f'{filename}: yes')
+                print(f'{filename}: yes', flush=True)
                 return result
             except OSError:
-                print(f'{filename}: no')
+                print(f'{filename}: no', flush=True)
 
         raise ValueError('Could not find any font.')
 
@@ -2943,29 +2943,29 @@ class ConsoleInterface:
 
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
-        print()
+        print(flush=True)
         for key, value in vars(self._args).items():
             if 'paths' == key:
                 continue
 
             if isinstance(value, list):
-                print(f'  {key}:')
+                print(f'  {key}:', flush=True)
                 for item in value:
-                    print(f'    - {item}')
+                    print(f'    - {item}', flush=True)
             elif value:
-                print(f'  {key}: {value}')
+                print(f'  {key}: {value}', flush=True)
 
-        print(f'  source:')
+        print(f'  source:', flush=True)
         for item in self._source:
-            print(f'    - {item}')
+            print(f'    - {item}', flush=True)
         if None != self._destination:
-            print(f'  destination:')
-            print(f'    - {self._destination}')
-        print()
+            print(f'  destination:', flush=True)
+            print(f'    - {self._destination}', flush=True)
+        print(flush=True)
 
     def show_splitter(self):
         """Визуально отделить всё, что было выведено в консоль выше."""
-        print(f"{'-'*42}\n")
+        print(f"{'-'*42}\n", flush=True)
 
     def get_input_sequence(self) -> Sequence[Frame]:
         """Возвращает отсортированную и пронумерованную последовательность кадров.
@@ -2973,7 +2973,7 @@ class ConsoleInterface:
         :raises ValueError: не удалось прочитать список файлов или в указанных директориях нет
             ни одного изображения.
         """
-        print('Scanning for files...')
+        print('Scanning for files...', flush=True)
         frame_groups = []
 
         banner_duration_seconds = 4
@@ -3003,12 +3003,12 @@ class ConsoleInterface:
                 FileUtils.sort_natural(real_images)
                 frame_groups.append([Frame(image) for image in real_images])
 
-        print('Numbering frames...')
+        print('Numbering frames...', flush=True)
         Enumerator.enumerate(frame_groups)
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
 
-        print(f'\nThere are {Enumerator.count(frames)} frames...')
+        print(f'\nThere are {Enumerator.count(frames)} frames...', flush=True)
 
         # Имеется ввиду, что совсем никаких кадров нет, даже кадров-заглушек.
         # Если не только несуществующие, но и пустые папки будут приводить
@@ -3019,7 +3019,7 @@ class ConsoleInterface:
         if not frames:
             raise ValueError('Error: empty frame set.')
 
-        print()
+        print(flush=True)
 
         return frames
 
@@ -3083,12 +3083,12 @@ class ConsoleInterface:
         lines = resolutions.sort_by_count_desc()
         assert limit > 0
 
-        print('Resolutions:')
+        print('Resolutions:', flush=True)
         for resolution, count in lines[:limit]:
-            print(f"{resolution} => {count}")
+            print(f"{resolution} => {count}", flush=True)
 
         if len(lines) > limit:
-            print('...')
+            print('...', flush=True)
 
 
 def main():
@@ -3100,7 +3100,7 @@ def main():
         cli = ConsoleInterface()
         cli.show_options()
         cli.show_splitter()
-        print(f'The number of overlays: {len(cli.layout)}\n')
+        print(f'The number of overlays: {len(cli.layout)}\n', flush=True)
         cli.show_splitter()
 
         if not cli.statistics_only:
@@ -3116,7 +3116,7 @@ def main():
         cli.list_resolutions(resolution_table)
 
         resolution = resolution_table.choose()
-        print(f'\nDecision: {resolution}\n')
+        print(f'\nDecision: {resolution}\n', flush=True)
 
         if cli.statistics_only:
             sys.exit(0)
@@ -3132,10 +3132,10 @@ def main():
         with FrameProcessor(view) as frame_processor:
             output_options.make(frames, frame_processor, cli.get_server_options())
 
-        print(f'\nFinished in {int(monotonic() - processing_start)} seconds.')
+        print(f'\nFinished in {int(monotonic() - processing_start)} seconds.', flush=True)
 
     except ValueError as err:
-        print(f'\n{err}\n', file=sys.stderr)
+        print(f'\n{err}\n', file=sys.stderr, flush=True)
         sys.exit(1)
 
 
