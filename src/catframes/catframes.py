@@ -43,6 +43,7 @@ import gc
 import hashlib
 import itertools
 import io
+import json
 import math
 import os
 from operator import itemgetter
@@ -1627,6 +1628,23 @@ class OutputOptions:
         # Чтобы случайно не запрашивать по сто раз один и тот же кадр.
         requested = deque(maxlen = 3)
 
+        processed_frame_count = 0
+        processed_per_cent = -1
+
+
+        def set_processed(count):
+            nonlocal processed_frame_count
+            nonlocal processed_per_cent
+
+            last_processed = processed_per_cent
+
+            processed_per_cent = math.floor(count / len(frames) * 100)
+            processed_frame_count = count
+
+            if last_processed < processed_per_cent:
+                print(f'Progress: {processed_per_cent}%')
+
+
         def get_render_result(frame_index):
             while not frame_processor.empty:
                 render_results.append(frame_processor.get_next())
@@ -1664,9 +1682,20 @@ class OutputOptions:
                 if frame_index in range(len(frames)):
                     status = '200 OK'
                     render_result = get_render_result(frame_index)
+                    set_processed(1 + frame_index)
                     headers = [('Content-type', render_result.content_type)]
                     start_response(status, headers)
                     return [render_result.data]
+            elif http_get and ('/progress' == pathname):
+                status = '200 OK'
+                headers = [('Content-type', 'application/json')]
+                start_response(status, headers)
+                return [json.dumps({
+                    "phase": "encoding",
+                    "framesTotal": len(frames),
+                    "framesEncoded": processed_frame_count,
+                    "percentage": processed_per_cent
+                }, sort_keys=True).encode('utf-8')]
 
             status = '404 Not Found'
             headers = [('Content-type', 'text/plain; charset=utf-8')]
@@ -1708,6 +1737,8 @@ class OutputOptions:
                     ('-y' if self.overwrite else '-n'),
                     str(self.destination.expanduser())
                 ])
+
+                set_processed(0)
 
                 with tempfile.TemporaryDirectory() as logs_path_string:
                     logs_path = Path(logs_path_string)
