@@ -1645,6 +1645,9 @@ class OutputOptions:
         processed_frame_count = 0
         processed_per_cent = -1
 
+        last_preview = None
+        last_preview_time = monotonic()
+
 
         def set_processed(count):
             nonlocal processed_frame_count
@@ -1685,6 +1688,9 @@ class OutputOptions:
             return result
 
         def service(environ, start_response):
+            nonlocal last_preview
+            nonlocal last_preview_time
+
             method: str = environ['REQUEST_METHOD']
             pathname: str = environ['PATH_INFO']
 
@@ -1710,14 +1716,19 @@ class OutputOptions:
                     "percentage": processed_per_cent
                 }, sort_keys=True).encode('utf-8')]
             elif http_get and ('/livePreview' == pathname):
-                live_preview = preview_provider.get_image()
-                if live_preview:
-                    preview_jpeg = io.BytesIO()
-                    live_preview.save(preview_jpeg, 'JPEG', quality=98, subsampling=0)
+                if (None == last_preview) or (monotonic() - last_preview_time >= 0.33):
+                    preview = preview_provider.get_image()
+                    if preview:
+                        preview_jpeg = io.BytesIO()
+                        preview.save(preview_jpeg, 'JPEG', quality=98, subsampling=0)
+                        last_preview_time = monotonic()
+                        last_preview = preview_jpeg.getvalue()
+
+                if last_preview:
                     status = '200 OK'
                     headers = [('Content-type', 'image/jpeg')]
                     start_response(status, headers)
-                    return [preview_jpeg.getvalue()]
+                    return [last_preview]
                 else:
                     status = '202 Accepted'
                     headers = [('Content-type', 'text/plain; charset=utf-8')]
