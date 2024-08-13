@@ -1562,6 +1562,12 @@ class FrameProcessor:
         self._alive = False
 
 
+class ImageProvider(ABC):
+    @abstractmethod
+    def get_image(self) -> Optional[Image.Image]:
+        """Do you want some?"""
+
+
 @dataclass(frozen=True)
 class OutputOptions:
     """Это опции сохранения видеозаписи. Грубо говоря, опции FFmpeg. Они не влияют ни на выбор
@@ -1617,7 +1623,8 @@ class OutputOptions:
 
     def make(self, frames: Sequence[Frame], \
              frame_processor: FrameProcessor, \
-             server_options: TheChestParameterSet):
+             server_options: TheChestParameterSet, \
+             preview_provider: ImageProvider):
 
         # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
@@ -1696,6 +1703,20 @@ class OutputOptions:
                     "framesEncoded": processed_frame_count,
                     "percentage": processed_per_cent
                 }, sort_keys=True).encode('utf-8')]
+            elif http_get and ('/livePreview' == pathname):
+                live_preview = preview_provider.get_image()
+                if live_preview:
+                    preview_jpeg = io.BytesIO()
+                    live_preview.save(preview_jpeg, 'JPEG', quality=98, subsampling=0)
+                    status = '200 OK'
+                    headers = [('Content-type', 'image/jpeg')]
+                    start_response(status, headers)
+                    return [preview_jpeg.getvalue()]
+                else:
+                    status = '202 Accepted'
+                    headers = [('Content-type', 'text/plain; charset=utf-8')]
+                    start_response(status, headers)
+                    return ['Not ready yet.'.encode("utf-8")]
 
             status = '404 Not Found'
             headers = [('Content-type', 'text/plain; charset=utf-8')]
@@ -1973,7 +1994,7 @@ class Layout:
         return len([x for x in self._cells if x])
 
 
-class DefaultFrameView(PillowFrameView):
+class DefaultFrameView(PillowFrameView, ImageProvider):
     """Масштабирует, добавляет поля при необходимости, накладывает текстовые индикаторы, а если
     файл внезапно стал недоступен, создаёт красный кадр-заглушку с названием ошибки по центру.
 
@@ -1996,6 +2017,8 @@ class DefaultFrameView(PillowFrameView):
         self.machine = platform.machine()
         self.network_name = platform.node()
         self.message_text_wrapper = textwrap.TextWrapper(width=70)
+
+        self._live_preview: Union[Image.Image, None] = None
 
     def _make_overlay_model(self, frame: Frame, source_size: Tuple[int, int]) -> OverlayModel:
         file_checksum = FileUtils.get_checksum(frame.path)
@@ -2109,13 +2132,15 @@ class DefaultFrameView(PillowFrameView):
                 math.ceil(self.resolution.width / self.LINE_HEIGHT), \
                 math.ceil(self.resolution.height / self.LINE_HEIGHT)
 
-            thumbnail = self._image.resize(
+            thumbnail: Image.Image = self._image.resize(
                 thumbnail_size,
                 resample=Image.Resampling.BICUBIC,
                 reducing_gap=2.0)
 
             bg_rgb = thumbnail.convert('RGB').load()
             bg_brightness = thumbnail.convert('L').load()
+
+            self._live_preview = thumbnail
 
             def get_text_stroke_color(line_position):
                 bg_x = min(thumbnail_size[0]-1, line_position[0] // self.LINE_HEIGHT)
@@ -2138,6 +2163,9 @@ class DefaultFrameView(PillowFrameView):
                         template(overlay_model),
                         get_text_stroke_color,
                         get_text_fill_color)
+
+    def get_image(self) -> Optional[Image.Image]:
+        return self._live_preview
 
 
 class _DefaultFrameViewTest(TestCase):
@@ -3126,11 +3154,11 @@ def main():
 
         processing_start = monotonic()
 
-        view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
+        view: DefaultFrameView = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         frames = output_options.limit_frames(frames)
-        
+
         with FrameProcessor(view) as frame_processor:
-            output_options.make(frames, frame_processor, cli.get_server_options())
+            output_options.make(frames, frame_processor, cli.get_server_options(), view)
 
         print(f'\nFinished in {int(monotonic() - processing_start)} seconds.', flush=True)
 
