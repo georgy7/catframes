@@ -2138,15 +2138,13 @@ class DefaultFrameView(PillowFrameView, ImageProvider):
                 math.ceil(self.resolution.width / self.LINE_HEIGHT), \
                 math.ceil(self.resolution.height / self.LINE_HEIGHT)
 
-            thumbnail: Image.Image = self._image.resize(
+            thumbnail = self._image.resize(
                 thumbnail_size,
                 resample=Image.Resampling.BICUBIC,
                 reducing_gap=2.0)
 
             bg_rgb = thumbnail.convert('RGB').load()
             bg_brightness = thumbnail.convert('L').load()
-
-            self._live_preview = thumbnail
 
             def get_text_stroke_color(line_position):
                 bg_x = min(thumbnail_size[0]-1, line_position[0] // self.LINE_HEIGHT)
@@ -2169,6 +2167,11 @@ class DefaultFrameView(PillowFrameView, ImageProvider):
                         template(overlay_model),
                         get_text_stroke_color,
                         get_text_fill_color)
+
+            self._live_preview = self._image.resize(
+                thumbnail_size,
+                resample=Image.Resampling.BICUBIC,
+                reducing_gap=2.0)
 
     def get_image(self) -> Optional[Image.Image]:
         return self._live_preview
