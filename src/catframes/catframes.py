@@ -2894,7 +2894,7 @@ class ConsoleInterface:
             add_overlay(h_pos[1], v_pos[1], f'{v_pos[0]}_{h_pos[0]}')
 
         if not has_warning:
-            raise ValueError('At least one WARN overlay required.')
+            print("\nBy the way: You didn't specify any WARN overlays.", flush=True)
 
         return result
 
