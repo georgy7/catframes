@@ -57,9 +57,11 @@ import sys
 import tempfile
 import threading
 import textwrap
-from wsgiref.simple_server import make_server, WSGIRequestHandler
 from queue import Queue, Empty
 from collections import deque
+
+from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
+from socketserver import ThreadingMixIn
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -169,14 +171,17 @@ class TwoFromTheChest:
         )
         print(f"\nPort: {http_port}\n", flush=True)
 
-        server_log = deque(maxlen = 20)
+        server_log = deque(maxlen=20)
 
         class ClosureHandler(WSGIRequestHandler):
             def log_message(self, format, *args):
                 server_log.append("%s - - [%s] %s\n" %
-                     (self.address_string(),
-                      self.log_date_time_string(),
-                      format%args))
+                                  (self.address_string(),
+                                   self.log_date_time_string(),
+                                   format % args))
+
+        class ThreadedServer(ThreadingMixIn, WSGIServer):
+            daemon_threads = True
 
         def print_log():
             print('Web-server log:', flush=True)
@@ -184,9 +189,11 @@ class TwoFromTheChest:
             print(flush=True)
 
         try:
-            httpd = make_server(host='', port=http_port, app=self._giver, handler_class=ClosureHandler)
+            httpd = make_server(host='', port=http_port, app=self._giver,
+                                handler_class=ClosureHandler, server_class=ThreadedServer)
+
             try:
-                web_thread = threading.Thread(target = httpd.serve_forever)
+                web_thread = threading.Thread(target=httpd.serve_forever)
                 web_thread.daemon = True
                 web_thread.start()
                 self._eat(http_port)
@@ -1698,7 +1705,6 @@ class OutputOptions:
                 headers = [('Content-type', 'application/json')]
                 start_response(status, headers)
                 return [json.dumps({
-                    "phase": "encoding",
                     "framesTotal": len(frames),
                     "framesEncoded": processed_frame_count,
                     "percentage": processed_per_cent
