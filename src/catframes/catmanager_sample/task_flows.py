@@ -61,9 +61,9 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
-        if any(s == "" for s in overlays_texts):
-            empty = overlays_texts.index("")
-            overlays_texts[empty] = "warn"
+        # if any(s == "" for s in overlays_texts):
+        #     empty = overlays_texts.index("")
+        #     overlays_texts[empty] = "warn"
 
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
@@ -75,7 +75,6 @@ class TaskConfig:
     def set_specs(self, framerate: int, quality: int, limit: int = None):
         self._framerate = framerate
         self._quality_index = quality
-        print(self._quality_index)
         self._quality = self.quality_names[quality]
         self._limit = limit
 
@@ -104,6 +103,8 @@ class TaskConfig:
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
     
         # добавление текстовых оверлеев
         for position, text in self._overlays.items():
@@ -169,32 +170,45 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)  # запуск процесса catframes
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
         self.port = 0
-        threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
+        self._progress = 0.0
+        # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
+        threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
 
-    # получение порта api процесса
-    def _recognize_port(self):
-        while not self.port:
-            text = self.process.stdout.readline()
-            if not 'port' in text:
-                continue
-            self.port = int(text.replace('port:', '').strip())
+    def _update_progress(self):  # обновление прогресса, чтением вывода stdout
+        pattern = re.compile(r'Progress: +[0-9]+')
+        for line in io.TextIOWrapper(self.process.stdout):
+            data = re.search(pattern, line)
+            if data:
+                progress_percent = data.group().split()[1]
+                self._progress = int(progress_percent)/100
 
-    # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
-    def get_progress(self) -> float:
-        if not self.port:  # если порт ещё не определён
-            return 0.0
+    def get_progress(self):
+        return self._progress
 
-        try: # делает запрос на сервер, возвращает прогресс
-            data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
-            return data['framesEncoded'] / data['framesTotal']
-        except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
-            return 1.0
+    # # получение порта api процесса
+    # def _recognize_port(self):
+    #     while not self.port:
+    #         text = self.process.stdout.readline()
+    #         if not 'port' in text:
+    #             continue
+    #         self.port = int(text.replace('port:', '').strip())
+
+    # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
+    # def get_progress(self) -> float:
+    #     if not self.port:  # если порт ещё не определён
+    #         return 0.0
+
+    #     try: # делает запрос на сервер, возвращает прогресс
+    #         data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
+    #         return data['framesEncoded'] / data['framesTotal']
+    #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
+    #         return 1.0
         
-    # убивает процесс (для экстренной остановки)
-    def kill(self):
-        os.kill(self.process.pid, signal.SIGABRT)
+    # # убивает процесс (для экстренной остановки)
+    # def kill(self):
+    #     os.kill(self.process.pid, signal.SIGABRT)
 
 
 class Task:
@@ -205,9 +219,9 @@ class Task:
         self.command = task_config.convert_to_command()
         print(self.command)
 
-        # !!! команда тестового api, а не процесса catframes
-        run_dir = os.path.dirname(os.path.abspath(__file__))
-        self.command = f'python {run_dir}/test_api/test_catframes_api.py'
+        # # !!! команда тестового api, а не процесса catframes
+        # run_dir = os.path.dirname(os.path.abspath(__file__))
+        # self.command = f'python {run_dir}/test_api/test_catframes_api.py'
 
         self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
@@ -229,7 +243,7 @@ class Task:
     def _progress_watcher(self):
         progress: float = 0.0
         while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
-            time.sleep(0.5)                                     
+            time.sleep(0.2)
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
             self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
 

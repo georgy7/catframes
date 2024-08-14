@@ -400,7 +400,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     @staticmethod
     def open_view(task_config: TaskConfig):
-        print('Залетел таск конфиг')
         LocalWM.open(NewTaskWindow, 'task', task_config=task_config)
 
 
@@ -424,7 +423,8 @@ class WarningWindow(Toplevel, WindowMixin):
             self.close()
 
         def exit():
-            print('TODO остановка всех задач')
+            for task in TaskManager.running_list():
+                task.cancel()
             self.master.destroy()
 
         _font = font.Font(size=16)

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import threading
-import time
-import os
-import re
-from os.path import isfile, join
-import random
 import subprocess
-import requests
+import threading
+import random
+import time
 import signal
+import sys
+import os
+import io
+import re
+# import requests
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
