@@ -217,7 +217,7 @@ class Task:
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
         self.command = task_config.convert_to_command()
-        print(self.command)
+        # print(self.command)
 
         # # !!! команда тестового api, а не процесса catframes
         # run_dir = os.path.dirname(os.path.abspath(__file__))

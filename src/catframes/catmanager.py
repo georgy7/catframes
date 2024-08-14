@@ -295,7 +295,7 @@ class TaskConfig:
             if text:
                 command += f' {position}="{text}"'
         
-        command += f" --margin-color {self._color}"         # параметр цвета
+        command += f' --margin-color "{self._color}"'         # параметр цвета
         command += f" --frame-rate {self._framerate}"       # частота кадров
         command += f" --quality {self._quality}"            # качество рендера
 
@@ -354,7 +354,7 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
+        self.process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
         self.port = 0
         self._progress = 0.0
         # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
@@ -390,9 +390,9 @@ class CatframesProcess:
     #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
     #         return 1.0
         
-    # # убивает процесс (для экстренной остановки)
-    # def kill(self):
-    #     os.kill(self.process.pid, signal.SIGABRT)
+    # убивает процесс (для экстренной остановки)
+    def kill(self):
+        os.kill(self.process.pid, signal.SIGABRT)
 
 
 class Task:
@@ -401,7 +401,7 @@ class Task:
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
         self.command = task_config.convert_to_command()
-        print(self.command)
+        # print(self.command)
 
         # # !!! команда тестового api, а не процесса catframes
         # run_dir = os.path.dirname(os.path.abspath(__file__))
