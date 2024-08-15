@@ -100,6 +100,17 @@ class TaskConfig:
     def get_color(self) -> str:
         return self._color
 
+    def convert_to_resolution_command(self) -> str:
+        command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
+
+        for dir in self._dirs:                              # добавление директорий с изображениями
+            command += f' "{dir}"'
+
+        command += ' --resolutions'
+        return command
+
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
@@ -262,6 +273,21 @@ class Task:
         TaskManager.wipe(self)
         self.gui_callback.delete(self.id)  # сигнал об удалении задачи
 
+
+# выясняет у catframes, какого разрешения будет рендер
+def find_resolution(task_config: TaskConfig) -> Tuple[int]:
+    command = task_config.convert_to_resolution_command()
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+
+    # поиск нужной строки в stdout процесса
+    pattern = r'Decision: [x0-9]+'
+    for line in io.TextIOWrapper(process.stdout):
+        data = re.search(pattern, line)
+
+        if data:  # когда нашёл, превращает "Decision: 123x234" в (123, 234)
+            resolution = data.group().split()[1].split('x')
+            return tuple(map(int, resolution))
+    
 
 class TaskManager:
     """Менеджер задач.

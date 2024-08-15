@@ -56,7 +56,6 @@ class Lang:
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Label 1',
             'root.openSets': 'Settings',
             'root.newTask': 'New task',
 
@@ -74,6 +73,7 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.initText': 'Add a directory of images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
             'task.lbQuality': 'Quality:',
@@ -99,7 +99,6 @@ class Lang:
         },
         'русский': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Строка 1',
             'root.openSets': 'Настройки',
             'root.newTask': 'Новая задача',
 
@@ -117,6 +116,7 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.initText': 'Добавьте папку изображений',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
@@ -284,6 +284,17 @@ class TaskConfig:
     def get_color(self) -> str:
         return self._color
 
+    def convert_to_resolution_command(self) -> str:
+        command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
+
+        for dir in self._dirs:                              # добавление директорий с изображениями
+            command += f' "{dir}"'
+
+        command += ' --resolutions'
+        return command
+
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
@@ -446,6 +457,21 @@ class Task:
         TaskManager.wipe(self)
         self.gui_callback.delete(self.id)  # сигнал об удалении задачи
 
+
+# выясняет у catframes, какого разрешения будет рендер
+def find_resolution(task_config: TaskConfig) -> Tuple[int]:
+    command = task_config.convert_to_resolution_command()
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+
+    # поиск нужной строки в stdout процесса
+    pattern = r'Decision: [x0-9]+'
+    for line in io.TextIOWrapper(process.stdout):
+        data = re.search(pattern, line)
+
+        if data:  # когда нашёл, превращает "Decision: 123x234" в (123, 234)
+            resolution = data.group().split()[1].split('x')
+            return tuple(map(int, resolution))
+    
 
 class TaskManager:
     """Менеджер задач.
@@ -1015,77 +1041,95 @@ class ImageCanvas(Canvas):
         self.view_mode = veiw_mode
         self.default_overlays = overlays
 
+        # переменные для расположения виджетов
+        self.x_pad = 120   # отступы по горизонтали
+        self.y_pad = 50    # отступы по вертикали
+        self.sq_size = 24  # размер прозр. квадрата
+
         self.pil_img = None
         self.img = None
         self.img_id = None
+        self.init_text = None
 
         self.color = background
         self.alpha_square = None
         self._create_image(image_link)
         self._create_entries()
+        self._setup_entries()
+
+    # обновляет разрешение холста
+    def update_resolution(self, resolution) -> int:
+        ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
+        last_height = self.height            # запоминает предыдущую высоту
+        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+
+        self.config(height=self.height)      # установка новой высоты
+        self._setup_entries()                # обновляет позиции и настройки всех виджетов
+        return self.height-last_height       # возвращает изменение высоты
+
+    # позиционирует и привязывает обработчики позиций
+    def _setup_entries(self):
+        positions = [
+            (self.x_pad, self.y_pad),                            # верхний левый
+            (self.width // 2, self.y_pad),                       # верхний
+            (self.width - self.x_pad, self.y_pad),               # верхний правый
+            (self.width - self.x_pad, self.height // 2),         # правый
+            (self.width - self.x_pad, self.height - self.y_pad), # нижний правый
+            (self.width // 2, self.height - self.y_pad),         # нижний
+            (self.x_pad, self.height - self.y_pad),              # нижний левый
+            (self.x_pad, self.height // 2),                      # левый
+        ]
+
+        # позиционирует каждый виджет, привязывает обработчик
+        for i, pos in enumerate(positions):
+            self.coords(self.alpha_squares[i], pos[0]-self.sq_size/2, pos[1]-self.sq_size/2) 
+            self.coords(self.labels[i], pos[0], pos[1])
+
+            if not self.view_mode:
+                # привязка события отображения поля ввода при нажатии на текст
+                self.tag_bind(
+                    self.labels[i], "<Button-1>", 
+                    lambda event, pos=pos, entry=self.entries[i]: self._show_entry(event, pos, entry)
+                )
+
+            # привязка события скрытия поля ввода, когда с него снят фокус
+            self.entries[i].bind(
+                "<FocusOut>", 
+                lambda event, entry=self.entries[i]: self._hide_entry(event, entry)
+            )
 
     # инициализация полупрозрачнях треугольников и полей ввода
     def _create_entries(self):
 
         self.entries = []                      # список всех полей ввода
         self.shown = [None for i in range(8)]  # список отображаемых на холсте полей
-        self.labels = []
-        self.alpha_squares = []
-
-        # переменные для расположения виджетов
-        x_pad = 120   # отступы по горизонтали
-        y_pad = 50    # отступы по вертикали
-        sq_size = 24  # размер прозр. квадрата
+        self.labels = []                       # надписи, отражающие "+" или текст
+        self.alpha_squares = []                # полупрозрачные квадраты
 
         # создание прозрачного квадрата
-        self.alpha_square = self._create_alpha_square(sq_size, '#ffffff', 0.5)
+        self.alpha_square = self._create_alpha_square(self.sq_size, '#ffffff', 0.5)
 
-        # 8 позиций и элементов на холсте, с левого верхнего по часовой стрелке
-        positions = [
-            (x_pad, y_pad),                            # верхний левый
-            (self.width // 2, y_pad),                  # верхний
-            (self.width - x_pad, y_pad),               # верхний правый
-            (self.width - x_pad, self.height // 2),    # правый
-            (self.width - x_pad, self.height - y_pad), # нижний правый
-            (self.width // 2, self.height - y_pad),    # нижний
-            (x_pad, self.height - y_pad),              # нижний левый
-            (x_pad, self.height // 2),                 # левый
-        ]
+        # создание значка "+" и виджетов
+        for i in range(8):
+            """У всех объектов здесь нулевые координаты. 
+            Позже их позиции обновит метод sefl._setup_entries"""
 
-        # настройка и расположение значка "+" и виджета для каждой позиции
-        for i, pos in enumerate(positions):
-            alpha_square = self.create_image(  # расположекние прозр. квадрата
-                pos[0]-sq_size/2, 
-                pos[1]-sq_size/2, 
-                image=self.alpha_square, 
-                anchor='nw'
-            )
+            # добавление полупрозрачного квадрата
+            square = self.create_image(0, 0, image=self.alpha_square, anchor='nw')
 
-            label = self.create_text(
-                pos[0], pos[1], 
-                text='+', 
-                font=("Arial", 24), 
-                justify='center'
-            )  # добавление текста
+            # добавление текста
+            label = self.create_text(0, 0, text='+', font=("Arial", 24), justify='center')  
 
-            entry = Entry(self, font=("Arial", 12), justify='center')  # инициализация поля ввода
-            if self.view_mode:
+            # инициализация поля ввода
+            entry = Entry(self, font=("Arial", 12), justify='center')  
+            
+            if self.view_mode:  # если это режим просмотра, заполняет поля ввода текстом
                 entry.insert(0, self.default_overlays[i])
 
+            # записывает сущности в их словари
+            self.alpha_squares.append(square)
             self.entries.append(entry) 
             self.labels.append(label)
-            self.alpha_squares.append(alpha_square)
-        
-            # привязка события скрытия поля ввода, когда с него снят фокус
-            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry(event, entry))
-
-            if not self.view_mode:
-                # привязка события отображения поля ввода при нажатии на текст
-                self.tag_bind(
-                    label, "<Button-1>", 
-                    lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry)
-                )
-
     
     # создаёт картинку прозрачного квадрата
     def _create_alpha_square(self, size: int, fill: str, alpha: float):
@@ -1140,11 +1184,25 @@ class ImageCanvas(Canvas):
             )  
             self.pil_img = pil_img
             self.img = ImageTk.PhotoImage(pil_img)         # загрузка картинки и создание виджета
+            
+            if self.init_text:                             # если есть надпись "добавьте картинку"
+                self.delete(self.init_text)                # то удаляет её
+                self.init_text = None
 
-        except FileNotFoundError:                                           # если файл не найден
-            self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
-                Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
+        except (FileNotFoundError, AttributeError):        # если файл не найден
+            self.set_empty()                               # создаёт пустую картинку
+
+    # создание пустого изображения, и надписи "добавьте картинки"
+    def set_empty(self):
+        self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
+            Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
+        )
+        if not self.init_text:                             # если нет надписи добавьте картинку
+            self.init_text = self.create_text(             # то добавляет её 
+                self.width/2, self.height/2,               # по центру холста
+                font=("Arial", 24), justify='center'
             )
+            self.update_texts()                            # и обновляет тексты
 
     # создание изображения
     def _create_image(self, image_link: str):
@@ -1173,12 +1231,12 @@ class ImageCanvas(Canvas):
 
             color = self.pil_img.getpixel((x, y))       # цвет пикселя картинки на этих координатах
             r, g, b = color[0:3]
-        except IndexError:                              # если пиксель за пределами картинки
+        except TypeError:                               # если pillow вернёт не ргб, а яркость пикселя
+            return color < 128
+        except Exception:                               # если пиксель за пределами картинки
             r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
             r, g, b = r/255, g/255, b/255               # выбранного фона холста
-        except TypeError:                       
-            return color < 128                          # если pillow вернёт не ргб, а яркость пикселя
-        
+            
         brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
         return brightness < 128                         # сравнение яркости
 
@@ -1191,6 +1249,11 @@ class ImageCanvas(Canvas):
     def update_background_color(self, color: str):
         self.color = color
         self.config(background=color)
+
+    # обновление
+    def update_texts(self):
+        if self.init_text:
+            self.itemconfig(self.init_text, text=Lang.read('task.initText'))
 
 
 class DirectoryManager(ttk.Frame):
@@ -1217,14 +1280,11 @@ class DirectoryManager(ttk.Frame):
     def get_dirs(self) -> list:
         return self.dirs[:]
     
-    def get_rand_img(self) -> Optional[str]:
-        if not self.dirs: return
-
-        rand_dir = random.choice(self.dirs)
-        images = find_img_in_dir(rand_dir, full_path=True)
-        if not images: return
-
-        return random.choice(images)
+    def get_all_imgs(self) -> list:
+        images = []
+        for dir in self.dirs:
+            images += find_img_in_dir(dir, full_path=True)
+        return images
 
     # подсветка виджета пути цветом предупреждения
     def _highlight_invalid_path(self, path_number: list):
@@ -1569,24 +1629,45 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config: TaskConfig = kwargs.get('task_config')
             self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
 
-        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)
+        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)  # список доступных фреймрейтов
 
         self.size = 800, 650
         self.resizable(True, True)
 
         super()._default_set_up()
-        self.image_updater_thread = threading.Thread(target=self.image_updater, daemon=True)
+        self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
+    # обновляет высоту холста и окна
+    def change_canvas_resolution(self, resolution):
+        canvas_height_change = self.image_canvas.update_resolution(resolution)
+
+        window_height = self.winfo_height() + canvas_height_change
+        self.geometry(f"{self.winfo_width()}x{window_height}")
+
     # поток, обновляющий картинку на на холсте
-    def image_updater(self):  
+    def canvas_updater(self):
+        last_img_list = self.dir_manager.get_all_imgs()
         try:
-            while True:
-                random_image = self.dir_manager.get_rand_img()
-                if random_image:
-                    self.image_canvas.update_image(image_link=random_image)
+            while True:  # забирает список всех изображений во всех директориях
                 time.sleep(2)
-        except TclError:
+                current_img_list = self.dir_manager.get_all_imgs()
+                if not current_img_list:
+                    self.image_canvas.set_empty()
+                    continue
+
+                # если что-то изменилось, +- картинка или директория
+                if last_img_list != current_img_list:
+                    last_img_list = current_img_list  # запоминает изменение
+
+                    self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
+                    resolution = find_resolution(self.task_config)  # выясняет разрешение
+                    self.change_canvas_resolution(resolution)
+
+                random_image = random.choice(current_img_list)
+                self.image_canvas.update_image(image_link=random_image)
+
+        except TclError:  # когда окно закроется
             return
 
     # сбор данных из виджетов, создание конфигурации
@@ -1633,7 +1714,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=800, height=400,
             veiw_mode=self.view_mode,
             overlays=self.task_config.get_overlays(),
-            image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
             background=self.task_config.get_color(),
         )
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
@@ -1747,10 +1827,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def update_texts(self) -> None:
         super().update_texts()
         self.dir_manager.update_texts()
+        self.image_canvas.update_texts()
         # установка начального значения в выборе качества
         self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
 
-    @staticmethod
+    @staticmethod  # открытие окна в режиме просмотра
     def open_view(task_config: TaskConfig):
         LocalWM.open(NewTaskWindow, 'task', task_config=task_config)
 

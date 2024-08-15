@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Lang, PortSets
 from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager
-from task_flows import Task, GuiCallback, TaskManager, TaskConfig
+from task_flows import Task, GuiCallback, TaskManager, TaskConfig, find_resolution
 from windows_base import WindowMixin, LocalWM
 
 
@@ -217,24 +217,45 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config: TaskConfig = kwargs.get('task_config')
             self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
 
-        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)
+        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)  # список доступных фреймрейтов
 
         self.size = 800, 650
         self.resizable(True, True)
 
         super()._default_set_up()
-        self.image_updater_thread = threading.Thread(target=self.image_updater, daemon=True)
+        self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
+    # обновляет высоту холста и окна
+    def change_canvas_resolution(self, resolution):
+        canvas_height_change = self.image_canvas.update_resolution(resolution)
+
+        window_height = self.winfo_height() + canvas_height_change
+        self.geometry(f"{self.winfo_width()}x{window_height}")
+
     # поток, обновляющий картинку на на холсте
-    def image_updater(self):  
+    def canvas_updater(self):
+        last_img_list = self.dir_manager.get_all_imgs()
         try:
-            while True:
-                random_image = self.dir_manager.get_rand_img()
-                if random_image:
-                    self.image_canvas.update_image(image_link=random_image)
+            while True:  # забирает список всех изображений во всех директориях
                 time.sleep(2)
-        except TclError:
+                current_img_list = self.dir_manager.get_all_imgs()
+                if not current_img_list:
+                    self.image_canvas.set_empty()
+                    continue
+
+                # если что-то изменилось, +- картинка или директория
+                if last_img_list != current_img_list:
+                    last_img_list = current_img_list  # запоминает изменение
+
+                    self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
+                    resolution = find_resolution(self.task_config)  # выясняет разрешение
+                    self.change_canvas_resolution(resolution)
+
+                random_image = random.choice(current_img_list)
+                self.image_canvas.update_image(image_link=random_image)
+
+        except TclError:  # когда окно закроется
             return
 
     # сбор данных из виджетов, создание конфигурации
@@ -281,7 +302,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=800, height=400,
             veiw_mode=self.view_mode,
             overlays=self.task_config.get_overlays(),
-            image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
             background=self.task_config.get_color(),
         )
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
@@ -395,10 +415,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def update_texts(self) -> None:
         super().update_texts()
         self.dir_manager.update_texts()
+        self.image_canvas.update_texts()
         # установка начального значения в выборе качества
         self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
 
-    @staticmethod
+    @staticmethod  # открытие окна в режиме просмотра
     def open_view(task_config: TaskConfig):
         LocalWM.open(NewTaskWindow, 'task', task_config=task_config)
 

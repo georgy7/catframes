@@ -30,7 +30,6 @@ class Lang:
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Label 1',
             'root.openSets': 'Settings',
             'root.newTask': 'New task',
 
@@ -48,6 +47,7 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.initText': 'Add a directory of images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
             'task.lbQuality': 'Quality:',
@@ -73,7 +73,6 @@ class Lang:
         },
         'русский': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Строка 1',
             'root.openSets': 'Настройки',
             'root.newTask': 'Новая задача',
 
@@ -91,6 +90,7 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.initText': 'Добавьте папку изображений',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
