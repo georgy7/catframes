@@ -44,12 +44,12 @@ class TaskConfig:
 
     def __init__(self) -> None:
                 
-        self._dirs: List[str]                         # пути к директориям с изображениями
+        self._dirs: List[str] = []                    # пути к директориям с изображениями
         self._overlays: Dict[str, str] = {}           # словарь надписей
-        self._color: str = '#000'                     # цвет отступов и фона
+        self._color: str = DEFAULT_COLOR              # цвет отступов и фона
         self._framerate: int                          # частота кадров
         self._quality: str                            # качество видео
-        self._quality_index: int                      # номер значения качества
+        self._quality_index: int = 0                  # номер значения качества
         self._limit: int                              # предел видео в секундах
         self._filepath: str                           # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
@@ -61,6 +61,10 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
+        # if any(s == "" for s in overlays_texts):
+        #     empty = overlays_texts.index("")
+        #     overlays_texts[empty] = "warn"
+
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
     # установка цвета
@@ -89,17 +93,36 @@ class TaskConfig:
     
     def get_framerate(self) -> int:
         return self._framerate
+    
+    def get_overlays(self) -> List[str]:
+        return list(self._overlays.values())
+    
+    def get_color(self) -> str:
+        return self._color
+
+    def convert_to_resolution_command(self) -> str:
+        command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
+
+        for dir in self._dirs:                              # добавление директорий с изображениями
+            command += f' "{dir}"'
+
+        command += ' --resolutions'
+        return command
 
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
     
         # добавление текстовых оверлеев
         for position, text in self._overlays.items():
             if text:
                 command += f' {position}="{text}"'
         
-        command += f" --margin-color {self._color}"         # параметр цвета
+        command += f' --margin-color "{self._color}"'         # параметр цвета
         command += f" --frame-rate {self._framerate}"       # частота кадров
         command += f" --quality {self._quality}"            # качество рендера
 
@@ -150,47 +173,121 @@ class GuiCallback:
         ...
 
 
+class CatframesProcess:
+    """ Создаёт подпроцесс с запущенным catframes,
+    создаёт отдельный поток для чтения порта api, 
+    чтобы не задерживать обработку gui программы.
+    По запросу может сообщать данные о прогрессе.
+    """
+
+    def __init__(self, command):
+        self.process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
+        self.port = 0
+        self._progress = 0.0
+        # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
+        threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
+
+    def _update_progress(self):  # обновление прогресса, чтением вывода stdout
+        pattern = re.compile(r'Progress: +[0-9]+')
+        for line in io.TextIOWrapper(self.process.stdout):
+            data = re.search(pattern, line)
+            if data:
+                progress_percent = data.group().split()[1]
+                self._progress = int(progress_percent)/100
+
+    def get_progress(self):
+        return self._progress
+
+    # # получение порта api процесса
+    # def _recognize_port(self):
+    #     while not self.port:
+    #         text = self.process.stdout.readline()
+    #         if not 'port' in text:
+    #             continue
+    #         self.port = int(text.replace('port:', '').strip())
+
+    # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
+    # def get_progress(self) -> float:
+    #     if not self.port:  # если порт ещё не определён
+    #         return 0.0
+
+    #     try: # делает запрос на сервер, возвращает прогресс
+    #         data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
+    #         return data['framesEncoded'] / data['framesTotal']
+    #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
+    #         return 1.0
+        
+    # убивает процесс (для экстренной остановки)
+    def kill(self):
+        os.kill(self.process.pid, signal.SIGABRT)
+
+
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
         self.command = task_config.convert_to_command()
-        print(self.command)
+        # print(self.command)
+
+        # # !!! команда тестового api, а не процесса catframes
+        # run_dir = os.path.dirname(os.path.abspath(__file__))
+        # self.command = f'python {run_dir}/test_api/test_catframes_api.py'
+
+        self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
 
-    # запуск задачи (тестовый)
+    # запуск задачи
     def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
         self.gui_callback = gui_callback         # для оповещения наблюдателя
+        TaskManager.reg_start(self)              # регистрация запуска
 
-        # запуск фоновой задачи (дальше перепишется через subprocess)
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
-        TaskManager.reg_start(self)
+        # запуск фонового процесса catframes
+        self._process_thread = CatframesProcess(self.command)
 
-    # поток задачи (тестовый)
-    def run(self):
-        for i in range(21):
-            if self.stop_flag:
-                return
-            self.gui_callback.update(i/20)
+        # запуск потока слежения за прогрессом
+        threading.Thread(target=self._progress_watcher, daemon=True).start()
+
+    # спрашивает о прогрессе, обновляет прогрессбар, обрабатывает завершение
+    def _progress_watcher(self):
+        progress: float = 0.0
+        while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
             time.sleep(0.2)
-        self.done = True
-        TaskManager.reg_finish(self)
+            progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
+            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+
+        self.done = True  # ставит флаг завершения задачи
+        TaskManager.reg_finish(self)       # регистрация завершения
         self.gui_callback.finish(self.id)  # сигнал о завершении задачи
 
-    # остановка задачи (тестовая)
+    # остановка задачи
     def cancel(self):
         self.stop_flag = True
         TaskManager.reg_finish(self)
+        self._process_thread.kill()        # убивает процесс
         self.gui_callback.delete(self.id)  # сигнал о завершении задачи
 
     def delete(self):
         TaskManager.wipe(self)
         self.gui_callback.delete(self.id)  # сигнал об удалении задачи
 
+
+# выясняет у catframes, какого разрешения будет рендер
+def find_resolution(task_config: TaskConfig) -> Tuple[int]:
+    command = task_config.convert_to_resolution_command()
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+
+    # поиск нужной строки в stdout процесса
+    pattern = r'Decision: [x0-9]+'
+    for line in io.TextIOWrapper(process.stdout):
+        data = re.search(pattern, line)
+
+        if data:  # когда нашёл, превращает "Decision: 123x234" в (123, 234)
+            resolution = data.group().split()[1].split('x')
+            return tuple(map(int, resolution))
+    
 
 class TaskManager:
     """Менеджер задач.

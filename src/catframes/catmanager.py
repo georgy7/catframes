@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import subprocess
 import threading
-import time
-import os
-import re
-from os.path import isfile, join
 import random
+import time
+import signal
+import sys
+import os
+import io
+import re
+# import requests
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
+
+DEFAULT_COLOR = '#888888'  # цвет стандартного фона изображения
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
@@ -50,7 +56,6 @@ class Lang:
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Label 1',
             'root.openSets': 'Settings',
             'root.newTask': 'New task',
 
@@ -59,18 +64,23 @@ class Lang:
             'bar.btInfo': 'Info',
             'bar.btCancel': 'Cancel',
             'bar.btDelete': 'Delete',
+            'bar.lbEmpty': 'Your projects will appear here',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
+            'sets.lbPortRange': 'System ports range:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.initText': 'Add a directory of images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
             'task.lbQuality': 'Quality:',
             'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
+            'task.lbCopy': 'Copy cli command:',
+            'task.btCopy': 'Copy',
 
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
@@ -81,10 +91,14 @@ class Lang:
             'warn.lbText': 'Incomplete tasks!',
             'warn.btBack': 'Back',
             'warn.btExit': 'Leave',
+
+            'noti.title': 'Error',
+            'noti.lbWarn': 'Invalid port range!',
+            'noti.lbText': 'The acceptable range is from 10240 to 65025',
+            'noti.lbText2': 'The number of ports is at least 100'
         },
         'русский': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Строка 1',
             'root.openSets': 'Настройки',
             'root.newTask': 'Новая задача',
 
@@ -93,18 +107,23 @@ class Lang:
             'bar.btInfo': 'Инфо',
             'bar.btCancel': 'Отмена',
             'bar.btDelete': 'Удалить',
+            'bar.lbEmpty': 'Здесь появятся Ваши проекты',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
+            'sets.lbPortRange': 'Диапазон портов системы:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.initText': 'Добавьте папку изображений',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
+            'task.lbCopy': 'Команда терминала:',
+            'task.btCopy': 'Копировать',
 
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
@@ -115,6 +134,11 @@ class Lang:
             'warn.lbText': 'Задачи не завершены!',
             'warn.btBack': 'Назад',
             'warn.btExit': 'Выйти',
+
+            'noti.title': 'Ошибка',
+            'noti.lbWarn': 'Неверный диапазон портов!',
+            'noti.lbText': 'Допустимы значения от 10240 до 65025',
+            'noti.lbText2': 'Количество портов не менее 100'
         },
     }
 
@@ -146,24 +170,16 @@ class PortSets:
     системы для связи с ffmpeg."""
 
     min_port: int = 10240
-    max_port: int = 65535
+    max_port: int = 65000
 
     @classmethod
     def set_range(cls, min_port: int, max_port: int) -> None:
-        if max_port - min_port < 100:
-            raise AttributeError('range')
-        if min_port < 10240:
-            raise AttributeError('min')
-        if max_port > 65535:
-            raise AttributeError('max')
-
         cls.min_port = min_port
         cls.max_port = max_port
 
     @classmethod
     def get_range(cls) -> Tuple:
         return cls.min_port, cls.max_port
-    
 
 
 
@@ -212,12 +228,12 @@ class TaskConfig:
 
     def __init__(self) -> None:
                 
-        self._dirs: List[str]                         # пути к директориям с изображениями
+        self._dirs: List[str] = []                    # пути к директориям с изображениями
         self._overlays: Dict[str, str] = {}           # словарь надписей
-        self._color: str = '#000'                     # цвет отступов и фона
+        self._color: str = DEFAULT_COLOR              # цвет отступов и фона
         self._framerate: int                          # частота кадров
         self._quality: str                            # качество видео
-        self._quality_index: int                      # номер значения качества
+        self._quality_index: int = 0                  # номер значения качества
         self._limit: int                              # предел видео в секундах
         self._filepath: str                           # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
@@ -229,6 +245,10 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
+        # if any(s == "" for s in overlays_texts):
+        #     empty = overlays_texts.index("")
+        #     overlays_texts[empty] = "warn"
+
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
     # установка цвета
@@ -257,17 +277,36 @@ class TaskConfig:
     
     def get_framerate(self) -> int:
         return self._framerate
+    
+    def get_overlays(self) -> List[str]:
+        return list(self._overlays.values())
+    
+    def get_color(self) -> str:
+        return self._color
+
+    def convert_to_resolution_command(self) -> str:
+        command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
+
+        for dir in self._dirs:                              # добавление директорий с изображениями
+            command += f' "{dir}"'
+
+        command += ' --resolutions'
+        return command
 
     # создание консольной команды
     def convert_to_command(self) -> str:
         command = 'catframes'
+        if sys.platform == "win32":
+            command = 'catframes.exe'
     
         # добавление текстовых оверлеев
         for position, text in self._overlays.items():
             if text:
                 command += f' {position}="{text}"'
         
-        command += f" --margin-color {self._color}"         # параметр цвета
+        command += f' --margin-color "{self._color}"'         # параметр цвета
         command += f" --frame-rate {self._framerate}"       # частота кадров
         command += f" --quality {self._quality}"            # качество рендера
 
@@ -318,47 +357,121 @@ class GuiCallback:
         ...
 
 
+class CatframesProcess:
+    """ Создаёт подпроцесс с запущенным catframes,
+    создаёт отдельный поток для чтения порта api, 
+    чтобы не задерживать обработку gui программы.
+    По запросу может сообщать данные о прогрессе.
+    """
+
+    def __init__(self, command):
+        self.process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
+        self.port = 0
+        self._progress = 0.0
+        # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
+        threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
+
+    def _update_progress(self):  # обновление прогресса, чтением вывода stdout
+        pattern = re.compile(r'Progress: +[0-9]+')
+        for line in io.TextIOWrapper(self.process.stdout):
+            data = re.search(pattern, line)
+            if data:
+                progress_percent = data.group().split()[1]
+                self._progress = int(progress_percent)/100
+
+    def get_progress(self):
+        return self._progress
+
+    # # получение порта api процесса
+    # def _recognize_port(self):
+    #     while not self.port:
+    #         text = self.process.stdout.readline()
+    #         if not 'port' in text:
+    #             continue
+    #         self.port = int(text.replace('port:', '').strip())
+
+    # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
+    # def get_progress(self) -> float:
+    #     if not self.port:  # если порт ещё не определён
+    #         return 0.0
+
+    #     try: # делает запрос на сервер, возвращает прогресс
+    #         data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
+    #         return data['framesEncoded'] / data['framesTotal']
+    #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
+    #         return 1.0
+        
+    # убивает процесс (для экстренной остановки)
+    def kill(self):
+        os.kill(self.process.pid, signal.SIGABRT)
+
+
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
         self.command = task_config.convert_to_command()
-        print(self.command)
+        # print(self.command)
+
+        # # !!! команда тестового api, а не процесса catframes
+        # run_dir = os.path.dirname(os.path.abspath(__file__))
+        # self.command = f'python {run_dir}/test_api/test_catframes_api.py'
+
+        self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
         self.done = False  # флаг завершённости
         self.stop_flag = False  # требование остановки
 
-    # запуск задачи (тестовый)
+    # запуск задачи
     def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
         self.gui_callback = gui_callback         # для оповещения наблюдателя
+        TaskManager.reg_start(self)              # регистрация запуска
 
-        # запуск фоновой задачи (дальше перепишется через subprocess)
-        self.thread = threading.Thread(target=self.run, daemon=True)
-        self.thread.start()
-        TaskManager.reg_start(self)
+        # запуск фонового процесса catframes
+        self._process_thread = CatframesProcess(self.command)
 
-    # поток задачи (тестовый)
-    def run(self):
-        for i in range(21):
-            if self.stop_flag:
-                return
-            self.gui_callback.update(i/20)
+        # запуск потока слежения за прогрессом
+        threading.Thread(target=self._progress_watcher, daemon=True).start()
+
+    # спрашивает о прогрессе, обновляет прогрессбар, обрабатывает завершение
+    def _progress_watcher(self):
+        progress: float = 0.0
+        while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
             time.sleep(0.2)
-        self.done = True
-        TaskManager.reg_finish(self)
+            progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
+            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+
+        self.done = True  # ставит флаг завершения задачи
+        TaskManager.reg_finish(self)       # регистрация завершения
         self.gui_callback.finish(self.id)  # сигнал о завершении задачи
 
-    # остановка задачи (тестовая)
+    # остановка задачи
     def cancel(self):
         self.stop_flag = True
         TaskManager.reg_finish(self)
+        self._process_thread.kill()        # убивает процесс
         self.gui_callback.delete(self.id)  # сигнал о завершении задачи
 
     def delete(self):
         TaskManager.wipe(self)
         self.gui_callback.delete(self.id)  # сигнал об удалении задачи
 
+
+# выясняет у catframes, какого разрешения будет рендер
+def find_resolution(task_config: TaskConfig) -> Tuple[int]:
+    command = task_config.convert_to_resolution_command()
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+
+    # поиск нужной строки в stdout процесса
+    pattern = r'Decision: [x0-9]+'
+    for line in io.TextIOWrapper(process.stdout):
+        data = re.search(pattern, line)
+
+        if data:  # когда нашёл, превращает "Decision: 123x234" в (123, 234)
+            resolution = data.group().split()[1].split('x')
+            return tuple(map(int, resolution))
+    
 
 class TaskManager:
     """Менеджер задач.
@@ -457,13 +570,16 @@ class LocalWM:
         return name in cls._all_windows
 
     # открытие окна
-    @classmethod
-    def open(cls, window_cls, name: str) -> Tk:    # принимает класс окна, имя окна
-        if not cls.check('root'):                        # проверяем, есть ли корневое окно
+    @classmethod                                         # принимает класс окна, имя окна
+    def open(cls, window_cls, name: str, master: Optional[Tk] = None, **kwargs) -> Tk:    
+        if not cls.check('root'):                        # проверяем, есть ли или корневое окно
             return cls._reg(window_cls(), 'root')        # регистрируем окно как корневое
 
+        if not master:                                   # если мастер не был передан
+            master = cls.call('root')                    # мастером будет корневое окно
+
         if not cls.check(name):                          # проверяем, зарегистрировано ли окно
-            window = window_cls(root=cls.call('root'))   # создаём окно, передаём корневое окно
+            window = window_cls(root=master, **kwargs)   # создаём окно, передаём мастера
             cls._reg(window, name)                       # регистрируем окно
         return cls.call(name)
     
@@ -513,12 +629,12 @@ class WindowMixin(ABC):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
 
-    title: Tk.title         # эти атрибуты и методы объекта
-    protocol: Tk.protocol   # появятся автоматически при
-    destroy: Tk.destroy     # наследовании от Tk или Toplevel
+    title: Tk.wm_title        # эти атрибуты и методы объекта
+    protocol: Tk.wm_protocol  # появятся автоматически при
+    destroy: Tk.destroy       # наследовании от Tk или Toplevel
 
-    size: Tuple[int, int]   # размеры (ширина, высота) окна
-    name: str               # имя окна для словаря всех окон
+    size: Tuple[int, int]     # размеры (ширина, высота) окна
+    name: str                 # имя окна для словаря всех окон
     widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
     # настройка окна, вызывается через super в конце __init__ окна
@@ -676,6 +792,7 @@ class ScrollableFrame(ttk.Frame):
     def __init__(self, root_window, *args, **kwargs):
         super().__init__(root_window, *args, **kwargs)
         
+        self.root = root_window
         self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
         self.canvas.bind(           # привязка к виджету холста
             "<Configure>",          # обработчика событий, чтобы внутренний фрейм
@@ -690,7 +807,7 @@ class ScrollableFrame(ttk.Frame):
         self.scrollable_frame = ttk.Frame(self.canvas, padding=[15, 0])  # фрейм для контента (внутренних виджетов)
         self.scrollable_frame.bind(  # привязка к виджету фрейма 
             "<Configure>",           # обработчика событий <Configure>, чтобы полоса
-            self._update_scrollbar,  # прокрутки менялась, когда обновляется фрейм 
+            self._on_frame_update,   # прокрутки менялась, когда обновляется фрейм 
         )
 
         # привязка холста к верхнему левому углу, получение id фрейма
@@ -711,8 +828,30 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.bind("<Enter>", self._bind_mousewheel)
         self.canvas.bind("<Leave>", self._unbind_mousewheel)
 
+        # создание надписи "здесь появятся Ваши проекты"
+        self._empty_sign = ttk.Label(
+            self.scrollable_frame,
+            justify='center',
+            font=("Arial", 18)
+        )
+
         # первичное обновление полосы, чтобы сразу её не было видно
         self._update_scrollbar_visibility()
+
+    # отрабатываывает при добавлении/удалении таскбаров в фрейм
+    def _on_frame_update(self, event):
+        self._update_scrollbar(event)
+        self._update_empty_sign()
+
+    # обновление видимости надписи "здесь появятся Ваши проекты" 
+    def _update_empty_sign(self):
+        if '!taskbar' in self.scrollable_frame.children.keys():
+            self._empty_sign.pack_forget()  # если есть таскбары, удалить надпись
+        else:
+            self._empty_sign.pack(pady=80)  # если их нет - покажет её
+
+    def update_texts(self):
+        self._empty_sign.config(text=Lang.read('bar.lbEmpty'))
 
     # изменение размеров фрейма внутри холста
     def _on_resize_window(self, event):
@@ -749,12 +888,14 @@ class ScrollableFrame(ttk.Frame):
 class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
-    def __init__(self, master: ttk.Frame, task: Task):
+    def __init__(self, master: ttk.Frame, task: Task, **kwargs):
         super().__init__(master, borderwidth=1, padding=5, style='Task.TFrame')
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
         self.progress: float = 0
+        self.image: Image
+        self.open_view: Callable = kwargs.get('view')  # достаёт ручку для открытия окна просмотра
 
         self._init_widgets()
         self.update_texts()
@@ -799,7 +940,7 @@ class TaskBar(ttk.Frame):
         quality_text = f"{Lang.read('task.lbQuality')} {quality}  |  "
         framerate_text = f"{Lang.read('task.lbFramerate')} {self.task.config.get_framerate()}"
 
-        self.widgets['_lbData'] = ttk.Label(  
+        self.widgets['_lbData'] = ttk.Label(
             self.mid_frame, 
             font='14', padding=5,
             text=quality_text+framerate_text, 
@@ -812,6 +953,9 @@ class TaskBar(ttk.Frame):
         # кнопка "отмена"
         self.widgets['btCancel'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.cancel())
         
+        # кнопка "i"
+        # self.widgets['_btInfo'] = ttk.Button(self.right_frame, width=1, text='i', command=lambda: self.open_view(self.task.config))
+
         # полоса прогресса
         self.widgets['_progressBar'] = ttk.Progressbar(
             self.right_frame, 
@@ -820,6 +964,12 @@ class TaskBar(ttk.Frame):
             value=0,
             style='Task.Horizontal.TProgressbar'
         )
+
+        # каждый элемент таскбара при нажатии будет вызывать окно просмотра задачи
+        self.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
+        for w_name, w in self.widgets.items():
+            if not 'bt' in w_name:
+                w.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
@@ -830,8 +980,9 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
         self.mid_frame.pack(side='left')
 
-        self.widgets['btCancel'].pack(side='bottom', expand=True)
-        self.widgets['_progressBar'].pack(side='bottom', expand=True)
+        self.widgets['_progressBar'].pack(side='top', expand=True)
+        self.widgets['btCancel'].pack(side='bottom')
+        # self.widgets['_btInfo'].pack(side='right')
         self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
@@ -871,71 +1022,114 @@ class ImageCanvas(Canvas):
     на которой отображаются "умные" поля ввода.
     Если текст не введён - поле будет полупрозрачным."""
     
-    def __init__(self, master: Tk, width: int, height: int, image_link: str = '', background: str = '#888888'):
+    def __init__(
+            self, 
+            master: Tk, 
+            width: int, 
+            height: int, 
+            veiw_mode: bool,
+            overlays: list,
+            image_link: str = '', 
+            background: str = '#888888'
+        ):
 
         # создаёт объект холста
         super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
         self.height, self.width = height, width
         self.pack()
+        
+        self.view_mode = veiw_mode
+        self.default_overlays = overlays
+
+        # переменные для расположения виджетов
+        self.x_pad = 120   # отступы по горизонтали
+        self.y_pad = 50    # отступы по вертикали
+        self.sq_size = 24  # размер прозр. квадрата
 
         self.pil_img = None
         self.img = None
         self.img_id = None
+        self.init_text = None
 
         self.color = background
         self.alpha_square = None
         self._create_image(image_link)
         self._create_entries()
+        self._setup_entries()
+
+    # обновляет разрешение холста
+    def update_resolution(self, resolution) -> int:
+        ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
+        last_height = self.height            # запоминает предыдущую высоту
+        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+
+        self.config(height=self.height)      # установка новой высоты
+        self._setup_entries()                # обновляет позиции и настройки всех виджетов
+        return self.height-last_height       # возвращает изменение высоты
+
+    # позиционирует и привязывает обработчики позиций
+    def _setup_entries(self):
+        positions = [
+            (self.x_pad, self.y_pad),                            # верхний левый
+            (self.width // 2, self.y_pad),                       # верхний
+            (self.width - self.x_pad, self.y_pad),               # верхний правый
+            (self.width - self.x_pad, self.height // 2),         # правый
+            (self.width - self.x_pad, self.height - self.y_pad), # нижний правый
+            (self.width // 2, self.height - self.y_pad),         # нижний
+            (self.x_pad, self.height - self.y_pad),              # нижний левый
+            (self.x_pad, self.height // 2),                      # левый
+        ]
+
+        # позиционирует каждый виджет, привязывает обработчик
+        for i, pos in enumerate(positions):
+            self.coords(self.alpha_squares[i], pos[0]-self.sq_size/2, pos[1]-self.sq_size/2) 
+            self.coords(self.labels[i], pos[0], pos[1])
+
+            if not self.view_mode:
+                # привязка события отображения поля ввода при нажатии на текст
+                self.tag_bind(
+                    self.labels[i], "<Button-1>", 
+                    lambda event, pos=pos, entry=self.entries[i]: self._show_entry(event, pos, entry)
+                )
+
+            # привязка события скрытия поля ввода, когда с него снят фокус
+            self.entries[i].bind(
+                "<FocusOut>", 
+                lambda event, entry=self.entries[i]: self._hide_entry(event, entry)
+            )
 
     # инициализация полупрозрачнях треугольников и полей ввода
     def _create_entries(self):
 
         self.entries = []                      # список всех полей ввода
         self.shown = [None for i in range(8)]  # список отображаемых на холсте полей
-        self.labels = []
-        self.alpha_squares = []
-
-        # переменные для расположения виджетов
-        x_pad = 120   # отступы по горизонтали
-        y_pad = 50    # отступы по вертикали
-        sq_size = 24  # размер прозр. квадрата
+        self.labels = []                       # надписи, отражающие "+" или текст
+        self.alpha_squares = []                # полупрозрачные квадраты
 
         # создание прозрачного квадрата
-        self.alpha_square = self._create_alpha_square(sq_size, '#ffffff', 0.5)
+        self.alpha_square = self._create_alpha_square(self.sq_size, '#ffffff', 0.5)
 
-        # 8 позиций и элементов на холсте, с левого верхнего по часовой стрелке
-        positions = [
-            (x_pad, y_pad),                            # верхний левый
-            (self.width // 2, y_pad),                  # верхний
-            (self.width - x_pad, y_pad),               # верхний правый
-            (self.width - x_pad, self.height // 2),    # правый
-            (self.width - x_pad, self.height - y_pad), # нижний правый
-            (self.width // 2, self.height - y_pad),    # нижний
-            (x_pad, self.height - y_pad),              # нижний левый
-            (x_pad, self.height // 2),                 # левый
-        ]
+        # создание значка "+" и виджетов
+        for i in range(8):
+            """У всех объектов здесь нулевые координаты. 
+            Позже их позиции обновит метод sefl._setup_entries"""
 
-        # настройка и расположение значка "+" и виджета для каждой позиции
-        for pos in positions:
-            alpha_square = self.create_image(  # расположекние прозр. квадрата
-                pos[0]-sq_size/2, 
-                pos[1]-sq_size/2, 
-                image=self.alpha_square, 
-                anchor='nw'
-            )
-            label = self.create_text(pos[0], pos[1], text='+', font=("Arial", 24), justify='center')  # добавление текста
-            entry = Entry(self, font=("Arial", 12), justify='center')  # инициализация поля ввода
+            # добавление полупрозрачного квадрата
+            square = self.create_image(0, 0, image=self.alpha_square, anchor='nw')
 
+            # добавление текста
+            label = self.create_text(0, 0, text='+', font=("Arial", 24), justify='center')  
+
+            # инициализация поля ввода
+            entry = Entry(self, font=("Arial", 12), justify='center')  
+            
+            if self.view_mode:  # если это режим просмотра, заполняет поля ввода текстом
+                entry.insert(0, self.default_overlays[i])
+
+            # записывает сущности в их словари
+            self.alpha_squares.append(square)
             self.entries.append(entry) 
             self.labels.append(label)
-            self.alpha_squares.append(alpha_square)
-        
-            # привязка события скрытия поля ввода, когда с него снят фокус
-            entry.bind("<FocusOut>", lambda event, entry=entry: self._hide_entry(event, entry))
-
-            # привязка события отображения поля ввода при нажатии на текст
-            self.tag_bind(label, "<Button-1>", lambda event, pos=pos, entry=entry: self._show_entry(event, pos, entry))
-
     
     # создаёт картинку прозрачного квадрата
     def _create_alpha_square(self, size: int, fill: str, alpha: float):
@@ -968,7 +1162,7 @@ class ImageCanvas(Canvas):
         square_state = 'normal'
         label_color = 'black'
 
-        if entry.get():  # если в поле ввода указан какой-то текст
+        if entry.get() or self.view_mode:  # если в поле ввода указан какой-то текст
             text = entry.get()       # этот текст будет указан в лейбле
             font = ("Arial", 16)     # шрифт будет поменьше
             square_state = 'hidden'  # полупрозрачный квадрат будет скрыт
@@ -990,11 +1184,25 @@ class ImageCanvas(Canvas):
             )  
             self.pil_img = pil_img
             self.img = ImageTk.PhotoImage(pil_img)         # загрузка картинки и создание виджета
+            
+            if self.init_text:                             # если есть надпись "добавьте картинку"
+                self.delete(self.init_text)                # то удаляет её
+                self.init_text = None
 
-        except FileNotFoundError:                                           # если файл не найден
-            self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
-                Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
+        except (FileNotFoundError, AttributeError):        # если файл не найден
+            self.set_empty()                               # создаёт пустую картинку
+
+    # создание пустого изображения, и надписи "добавьте картинки"
+    def set_empty(self):
+        self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
+            Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
+        )
+        if not self.init_text:                             # если нет надписи добавьте картинку
+            self.init_text = self.create_text(             # то добавляет её 
+                self.width/2, self.height/2,               # по центру холста
+                font=("Arial", 24), justify='center'
             )
+            self.update_texts()                            # и обновляет тексты
 
     # создание изображения
     def _create_image(self, image_link: str):
@@ -1023,12 +1231,12 @@ class ImageCanvas(Canvas):
 
             color = self.pil_img.getpixel((x, y))       # цвет пикселя картинки на этих координатах
             r, g, b = color[0:3]
-        except IndexError:                              # если пиксель за пределами картинки
+        except TypeError:                               # если pillow вернёт не ргб, а яркость пикселя
+            return color < 128
+        except Exception:                               # если пиксель за пределами картинки
             r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
             r, g, b = r/255, g/255, b/255               # выбранного фона холста
-        except TypeError:                       
-            return color < 128                          # если pillow вернёт не ргб, а яркость пикселя
-        
+            
         brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
         return brightness < 128                         # сравнение яркости
 
@@ -1042,35 +1250,41 @@ class ImageCanvas(Canvas):
         self.color = color
         self.config(background=color)
 
+    # обновление
+    def update_texts(self):
+        if self.init_text:
+            self.itemconfig(self.init_text, text=Lang.read('task.initText'))
+
 
 class DirectoryManager(ttk.Frame):
     """Менеджер директорий, поле со списком.
     Даёт возможность добавлять, удалять директории, 
     и менять порядок кнопками и перетаскиванием"""
 
-    def __init__(self, master: Union[Tk, Frame]):
+    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list):
         super().__init__(master)
         self.name = 'dirs'
 
-        self.dirs = []
         self.widgets: Dict[str, Widget] = {}
         self.drag_data = {"start_index": None, "item": None}
 
+        self.veiw_mode = veiw_mode
         self._init_widgets()
         self._pack_widgets()
+
+        self.dirs = dirs
+        for dir in dirs:
+            self.listbox.insert(END, shrink_path(dir, 35))
 
     # возвращает список директорий
     def get_dirs(self) -> list:
         return self.dirs[:]
     
-    def get_rand_img(self) -> Optional[str]:
-        if not self.dirs: return
-
-        rand_dir = random.choice(self.dirs)
-        images = find_img_in_dir(rand_dir, full_path=True)
-        if not images: return
-
-        return random.choice(images)
+    def get_all_imgs(self) -> list:
+        images = []
+        for dir in self.dirs:
+            images += find_img_in_dir(dir, full_path=True)
+        return images
 
     # подсветка виджета пути цветом предупреждения
     def _highlight_invalid_path(self, path_number: list):
@@ -1106,8 +1320,9 @@ class DirectoryManager(ttk.Frame):
         self.scrollbar = ttk.Scrollbar(self.top_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.config(yscrollcommand=self.scrollbar.set)
 
-        self.listbox.bind('<Button-1>', self._start_drag)
-        self.listbox.bind('<B1-Motion>', self._do_drag)
+        if not self.veiw_mode:
+            self.listbox.bind('<Button-1>', self._start_drag)
+            self.listbox.bind('<B1-Motion>', self._do_drag)
 
         # добавление директории
         def add_directory():
@@ -1184,8 +1399,9 @@ class DirectoryManager(ttk.Frame):
 
         self.button_frame.pack(side='top', anchor='w', pady=10)
 
-        self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
-        self.widgets['btRemDir'].pack(side='right')
+        if not self.veiw_mode:
+            self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
+            self.widgets['btRemDir'].pack(side='right')
         # self.widgets['btUpDir'].pack(side='left')  # кнопки перетаскивания 
         # self.widgets['btDownDir'].pack(side='left') # вверх и вниз, пока убрал
 
@@ -1295,6 +1511,7 @@ class RootWindow(Tk, WindowMixin):
     # расширение метода обновления текстов
     def update_texts(self) -> None:
         super().update_texts()
+        self.task_space.update_texts()  # обновляет текст в основном поле
         for bar in self.task_bars.values():
             bar.update_texts()  # обновляет текст в каждом баре
 
@@ -1316,19 +1533,6 @@ class SettingsWindow(Toplevel, WindowMixin):
     # создание и настройка виджетов
     def _init_widgets(self):
 
-        # применение настроек
-        def apply_settings():
-            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
-            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
-                w.update_texts()  # для каждого обновляет текст методом из WindowMixin
-
-            ...  # считывание других виджетов настроек, и применение
-
-        # сохранение настроек (применение + закрытие)
-        def save_settings():
-            apply_settings()
-            self.close()
-
         # создание виджетов, привязывание функций
         self.widgets['lbLang'] = ttk.Label(self)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
@@ -1337,51 +1541,133 @@ class SettingsWindow(Toplevel, WindowMixin):
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
         )
+
+        def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
+            return new_value.isnumeric() or not new_value
         
+        v_numeric = (self.register(validate_numeric), '%P')  # регистрация валидации
+
+        self.widgets['lbPortRange'] = ttk.Label(self)
+        self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
+            self, 
+            justify='center', 
+            validate='key', 
+            validatecommand=v_numeric  # привязка валидации
+        )
+        self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
+            self, 
+            justify='center', 
+            validate='all',
+            validatecommand=v_numeric  # привязка валидации
+        )
+        
+        # применение настроек
+        def apply_settings():
+            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
+                w.update_texts()  # для каждого обновляет текст методом из WindowMixin
+
+            try:  # проверка введённых значений, если всё ок - сохранение
+                port_first = int(self.widgets['_entrPortFirst'].get())
+                port_last = int(self.widgets['_entrPortLast'].get())
+                assert(port_last-port_first >= 100)         # диапазон не меньше 100 портов
+                assert(port_first >= 10240)                 # начальный порт не ниже 10240
+                assert(port_last <= 65025)                  # конечный порт не выше 65025
+                PortSets.set_range(port_first, port_last)   # сохранение настроек
+
+            except:  # если какое-то из условий не выполнено
+                self._set_ports_default()  # возврат предыдущих значений виджетов
+                LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
+
+        # сохранение настроек (применение + закрытие)
+        def save_settings():
+            apply_settings()
+            self.close()
+
         self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
         self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
+
+    # установка полей ввода портов в последнее сохранённое состояние
+    def _set_ports_default(self):
+        self.widgets['_entrPortFirst'].delete(0, 'end')
+        self.widgets['_entrPortFirst'].insert(0, PortSets.get_range()[0])
+        self.widgets['_entrPortLast'].delete(0, 'end')
+        self.widgets['_entrPortLast'].insert(0, PortSets.get_range()[1])
 
     # расположение виджетов
     def _pack_widgets(self):
 
         for c in range(2): 
             self.columnconfigure(index=c, weight=1)
-        for r in range(5): 
+        for r in range(7): 
             self.rowconfigure(index=r, weight=1)
         
-        self.widgets['lbLang'].grid(row=0, column=0, sticky='w', padx=20)
-        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=(5 ,15))
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='ws', padx=15)
+        self.widgets['_cmbLang'].grid(columnspan=1, row=1, column=0, sticky='wne', padx=(15 ,5))
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
-        self.widgets['btApply'].grid(row=4, column=0, sticky='ew', padx=(15, 5), ipadx=30)
-        self.widgets['btSave'].grid(row=4, column=1, sticky='ew', padx=(5, 15), ipadx=30)
+        self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
+        self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))
+        self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
+        self._set_ports_default()  # заполняем поля ввода портов
+
+        self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
+        self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
     """Окно создания новой задачи"""
 
-    def __init__(self, root: RootWindow):
+    def __init__(self, root: RootWindow, **kwargs):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
+
         self.task_config = TaskConfig()
+        self.view_mode: bool = False
+        if kwargs.get('task_config'):  # если передан конфиг, берёт его
+            self.task_config: TaskConfig = kwargs.get('task_config')
+            self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
+
+        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)  # список доступных фреймрейтов
 
         self.size = 800, 650
         self.resizable(True, True)
 
         super()._default_set_up()
-        self.image_updater_thread = threading.Thread(target=self.image_updater, daemon=True)
+        self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
+    # обновляет высоту холста и окна
+    def change_canvas_resolution(self, resolution):
+        canvas_height_change = self.image_canvas.update_resolution(resolution)
+
+        window_height = self.winfo_height() + canvas_height_change
+        self.geometry(f"{self.winfo_width()}x{window_height}")
+
     # поток, обновляющий картинку на на холсте
-    def image_updater(self):  
+    def canvas_updater(self):
+        last_img_list = self.dir_manager.get_all_imgs()
         try:
-            while True:
-                random_image = self.dir_manager.get_rand_img()
-                if random_image:
-                    self.image_canvas.update_image(image_link=random_image)
+            while True:  # забирает список всех изображений во всех директориях
                 time.sleep(2)
-        except TclError:
+                current_img_list = self.dir_manager.get_all_imgs()
+                if not current_img_list:
+                    self.image_canvas.set_empty()
+                    continue
+
+                # если что-то изменилось, +- картинка или директория
+                if last_img_list != current_img_list:
+                    last_img_list = current_img_list  # запоминает изменение
+
+                    self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
+                    resolution = find_resolution(self.task_config)  # выясняет разрешение
+                    self.change_canvas_resolution(resolution)
+
+                random_image = random.choice(current_img_list)
+                self.image_canvas.update_image(image_link=random_image)
+
+        except TclError:  # когда окно закроется
             return
 
     # сбор данных из виджетов, создание конфигурации
@@ -1411,26 +1697,31 @@ class NewTaskWindow(Toplevel, WindowMixin):
         task = TaskManager.create(self.task_config)
 
         # создание бара задачи, получение метода обновления прогресса
-        update_progress: Callable = self.master.add_task_bar(task)
+        update_progress: Callable = self.master.add_task_bar(task, view=NewTaskWindow.open_view)
 
         gui_callback = GuiCallback(                       # создание колбека
             update_function=update_progress,              # передача методов обновления,
             finish_function=self.master.finish_task_bar,  # завершения задачи
-            delete_function=self.master.del_task_bar      # и удаления бара
+            delete_function=self.master.del_task_bar,     # и удаления бара
         )
 
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
-    def _init_widgets(self):            
+    def _init_widgets(self):
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
             width=800, height=400,
-            image_link="src/catframes/catmanager_sample/test_static/img.jpg", 
-            background='#888888'
+            veiw_mode=self.view_mode,
+            overlays=self.task_config.get_overlays(),
+            background=self.task_config.get_color(),
         )
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
-        self.dir_manager = DirectoryManager(self.bottom_grid)
+        self.dir_manager = DirectoryManager(
+            self.bottom_grid, 
+            veiw_mode=self.view_mode,
+            dirs=self.task_config.get_dirs() 
+        )
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -1451,20 +1742,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config.set_color(color)  # установка цвета в конфиге
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
+        def copy_to_clip():  # копирование команды в буфер обмена
+            self.clipboard_clear()
+            self.clipboard_append(self.task_config.convert_to_command())
+
         # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
         self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
         self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text='#888888', width=7)
+        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text=DEFAULT_COLOR, width=7)
+        if self.view_mode:
+            color = self.task_config.get_color()
+            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+
         self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
             self.bottom_grid,
-            values=(60, 50, 40, 30, 25, 20, 15, 10, 5), 
+            values=self.framerates, 
             state='readonly',
             justify='center',
             width=8,
         )
+        self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
+            self.task_config.get_framerate() if self.view_mode else 30
+        )
+
         self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
             self.bottom_grid,
             state='readonly',
@@ -1472,6 +1775,16 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=8,
         )
         self.widgets['btCreate'] = ttk.Button(self.bottom_grid, command=add_task)
+
+        # лейбл и кнопка копирования команды
+        self.widgets['lbCopy'] = ttk.Label(self.bottom_grid)
+        self.widgets['btCopy'] = ttk.Button(self.bottom_grid, command=copy_to_clip)
+
+        if self.view_mode:  # если это режим просмотра, все виджеты, кроме копирования - недоступны
+            for w_name, w in self.widgets.items():
+                if ('lb') in w_name or ('Copy') in w_name:
+                    continue
+                w.configure(state='disabled')
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -1495,20 +1808,32 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbColor'].grid(row=1, column=2, sticky='e', padx=10)
         self.widgets['lbFramerate'].grid(row=2, column=2, sticky='e', padx=10)
         self.widgets['lbQuality'].grid(row=3, column=2, sticky='e', padx=10)
+        if self.view_mode:
+            self.widgets['lbCopy'].grid(row=4, column=2, sticky='e', padx=10)
 
         # заполнение правого столбца (липнет влево, к столбцу описаний)
         ttk.Label(self.bottom_grid).grid(row=0, column=3)
         self.widgets['_btColor'].grid(row=1, column=3, sticky='w', padx=7)
         self.widgets['_cmbFramerate'].grid(row=2, column=3, sticky='w', padx=7)
-        self.widgets['_cmbFramerate'].current(newindex=3)
         self.widgets['cmbQuality'].grid(row=3, column=3, sticky='w', padx=7)
-        self.widgets['btCreate'].grid(row=4, column=3, sticky='w', padx=7)
+
+        if self.view_mode:
+            self.widgets['btCopy'].grid(row=4, column=3, sticky='w', padx=7)
+        else:
+            self.widgets['btCreate'].grid(row=4, column=3, sticky='w', padx=7)
         ttk.Label(self.bottom_grid).grid(row=5, column=3)
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
         super().update_texts()
         self.dir_manager.update_texts()
+        self.image_canvas.update_texts()
+        # установка начального значения в выборе качества
+        self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
+
+    @staticmethod  # открытие окна в режиме просмотра
+    def open_view(task_config: TaskConfig):
+        LocalWM.open(NewTaskWindow, 'task', task_config=task_config)
 
 
 class WarningWindow(Toplevel, WindowMixin):
@@ -1531,7 +1856,8 @@ class WarningWindow(Toplevel, WindowMixin):
             self.close()
 
         def exit():
-            print('TODO остановка всех задач')
+            for task in TaskManager.running_list():
+                task.cancel()
             self.master.destroy()
 
         _font = font.Font(size=16)
@@ -1553,6 +1879,43 @@ class WarningWindow(Toplevel, WindowMixin):
         self.widgets['btBack'].pack(side='left', anchor='w', padx=5)
         self.widgets['btExit'].pack(side='left', anchor='w', padx=5)
         self.choise_frame.pack(side='bottom', pady=10)
+
+
+class NotifyWindow(Toplevel, WindowMixin):
+    """Окно предупреждения о портах в настройках"""
+
+    def __init__(self, root: Toplevel):
+        super().__init__(master=root)
+        self.name = 'noti'
+        self.widgets: Dict[str, Widget] = {}
+
+        self.size = 350, 160
+        self.resizable(False, False)
+
+        super()._default_set_up()
+
+    # создание и настройка виджетов
+    def _init_widgets(self):
+        
+        _font = font.Font(size=16)
+
+        # три лейбла (один с крупным текстом, два с и обычным)
+        self.widgets['lbWarn'] = ttk.Label(self, padding=[0, 20, 0, 5], font=_font)
+        self.widgets['lbText'] = ttk.Label(self, padding=0)
+        self.widgets['lbText2'] = ttk.Label(self, padding=0)
+
+        # кнопка "ок"
+        self.frame = ttk.Frame(self)
+        self.widgets['_btOk'] = ttk.Button(self.frame, text='OK', command=self.close)
+
+    # расположение виджетов
+    def _pack_widgets(self):
+        self.widgets['lbWarn'].pack(side='top')
+        self.widgets['lbText'].pack(side='top')
+        self.widgets['lbText2'].pack(side='top')
+
+        self.widgets['_btOk'].pack(anchor='w', padx=5)
+        self.frame.pack(side='bottom', pady=10)
 
 
 

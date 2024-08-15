@@ -30,7 +30,6 @@ class Lang:
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Label 1',
             'root.openSets': 'Settings',
             'root.newTask': 'New task',
 
@@ -39,18 +38,23 @@ class Lang:
             'bar.btInfo': 'Info',
             'bar.btCancel': 'Cancel',
             'bar.btDelete': 'Delete',
+            'bar.lbEmpty': 'Your projects will appear here',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
+            'sets.lbPortRange': 'System ports range:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.initText': 'Add a directory of images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
             'task.lbQuality': 'Quality:',
             'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.btCreate': 'Create',
+            'task.lbCopy': 'Copy cli command:',
+            'task.btCopy': 'Copy',
 
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
@@ -61,10 +65,14 @@ class Lang:
             'warn.lbText': 'Incomplete tasks!',
             'warn.btBack': 'Back',
             'warn.btExit': 'Leave',
+
+            'noti.title': 'Error',
+            'noti.lbWarn': 'Invalid port range!',
+            'noti.lbText': 'The acceptable range is from 10240 to 65025',
+            'noti.lbText2': 'The number of ports is at least 100'
         },
         'русский': {
             'root.title': 'CatFrames',
-            'root.lbTest': 'Строка 1',
             'root.openSets': 'Настройки',
             'root.newTask': 'Новая задача',
 
@@ -73,18 +81,23 @@ class Lang:
             'bar.btInfo': 'Инфо',
             'bar.btCancel': 'Отмена',
             'bar.btDelete': 'Удалить',
+            'bar.lbEmpty': 'Здесь появятся Ваши проекты',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
+            'sets.lbPortRange': 'Диапазон портов системы:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.initText': 'Добавьте папку изображений',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.btCreate': 'Создать',
+            'task.lbCopy': 'Команда терминала:',
+            'task.btCopy': 'Копировать',
 
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
@@ -95,6 +108,11 @@ class Lang:
             'warn.lbText': 'Задачи не завершены!',
             'warn.btBack': 'Назад',
             'warn.btExit': 'Выйти',
+
+            'noti.title': 'Ошибка',
+            'noti.lbWarn': 'Неверный диапазон портов!',
+            'noti.lbText': 'Допустимы значения от 10240 до 65025',
+            'noti.lbText2': 'Количество портов не менее 100'
         },
     }
 
@@ -126,21 +144,13 @@ class PortSets:
     системы для связи с ffmpeg."""
 
     min_port: int = 10240
-    max_port: int = 65535
+    max_port: int = 65000
 
     @classmethod
     def set_range(cls, min_port: int, max_port: int) -> None:
-        if max_port - min_port < 100:
-            raise AttributeError('range')
-        if min_port < 10240:
-            raise AttributeError('min')
-        if max_port > 65535:
-            raise AttributeError('max')
-
         cls.min_port = min_port
         cls.max_port = max_port
 
     @classmethod
     def get_range(cls) -> Tuple:
         return cls.min_port, cls.max_port
-    

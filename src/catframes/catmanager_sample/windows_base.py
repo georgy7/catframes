@@ -37,13 +37,16 @@ class LocalWM:
         return name in cls._all_windows
 
     # открытие окна
-    @classmethod
-    def open(cls, window_cls, name: str) -> Tk:    # принимает класс окна, имя окна
-        if not cls.check('root'):                        # проверяем, есть ли корневое окно
+    @classmethod                                         # принимает класс окна, имя окна
+    def open(cls, window_cls, name: str, master: Optional[Tk] = None, **kwargs) -> Tk:    
+        if not cls.check('root'):                        # проверяем, есть ли или корневое окно
             return cls._reg(window_cls(), 'root')        # регистрируем окно как корневое
 
+        if not master:                                   # если мастер не был передан
+            master = cls.call('root')                    # мастером будет корневое окно
+
         if not cls.check(name):                          # проверяем, зарегистрировано ли окно
-            window = window_cls(root=cls.call('root'))   # создаём окно, передаём корневое окно
+            window = window_cls(root=master, **kwargs)   # создаём окно, передаём мастера
             cls._reg(window, name)                       # регистрируем окно
         return cls.call(name)
     
@@ -93,12 +96,12 @@ class WindowMixin(ABC):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
 
-    title: Tk.title         # эти атрибуты и методы объекта
-    protocol: Tk.protocol   # появятся автоматически при
-    destroy: Tk.destroy     # наследовании от Tk или Toplevel
+    title: Tk.wm_title        # эти атрибуты и методы объекта
+    protocol: Tk.wm_protocol  # появятся автоматически при
+    destroy: Tk.destroy       # наследовании от Tk или Toplevel
 
-    size: Tuple[int, int]   # размеры (ширина, высота) окна
-    name: str               # имя окна для словаря всех окон
+    size: Tuple[int, int]     # размеры (ширина, высота) окна
+    name: str                 # имя окна для словаря всех окон
     widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
     # настройка окна, вызывается через super в конце __init__ окна
