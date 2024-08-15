@@ -57,7 +57,7 @@ class Lang:
         'english': {
             'root.title': 'CatFrames',
             'root.openSets': 'Settings',
-            'root.newTask': 'New task',
+            'root.newTask': 'Create',
 
             'bar.active': 'processing',
             'bar.inactive': 'complete', 
@@ -100,7 +100,7 @@ class Lang:
         'русский': {
             'root.title': 'CatFrames',
             'root.openSets': 'Настройки',
-            'root.newTask': 'Новая задача',
+            'root.newTask': 'Создать',
 
             'bar.lbActive': 'обработка',
             'bar.lbInactive': 'завершено', 
@@ -238,6 +238,7 @@ class TaskConfig:
         self._filepath: str                           # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
         self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
+        self._resolution = None                       # разрешение рендера (нужно для режима просмотра)
 
     # установка директорий
     def set_dirs(self, dirs) -> list:
@@ -262,6 +263,9 @@ class TaskConfig:
         self._quality = self.quality_names[quality]
         self._limit = limit
 
+    def set_resolution(self, width: int, height: int):
+        self._resolution = width, height
+
     # установка пути файла
     def set_filepath(self, filepath: str):
         self._filepath = filepath
@@ -283,6 +287,9 @@ class TaskConfig:
     
     def get_color(self) -> str:
         return self._color
+    
+    def get_resolution(self) -> Optional[Tuple[int]]:
+        return self._resolution
 
     def convert_to_resolution_command(self) -> str:
         command = 'catframes'
@@ -1025,27 +1032,23 @@ class ImageCanvas(Canvas):
     def __init__(
             self, 
             master: Tk, 
-            width: int, 
-            height: int, 
             veiw_mode: bool,
-            overlays: list,
-            image_link: str = '', 
+            resolution: Optional[Tuple[int]] = None, 
+            overlays: list = None,
             background: str = '#888888'
         ):
 
+        self.default_width = self.width = 800
+        self.default_height = self.height = 400
+
         # создаёт объект холста
-        super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
-        self.height, self.width = height, width
+        super().__init__(master, width=self.width, height=self.height, highlightthickness=0, background=background)
         self.pack()
         
         self.view_mode = veiw_mode
         self.default_overlays = overlays
 
-        # переменные для расположения виджетов
-        self.x_pad = 120   # отступы по горизонтали
-        self.y_pad = 50    # отступы по вертикали
         self.sq_size = 24  # размер прозр. квадрата
-
         self.pil_img = None
         self.img = None
         self.img_id = None
@@ -1053,7 +1056,8 @@ class ImageCanvas(Canvas):
 
         self.color = background
         self.alpha_square = None
-        self._create_image(image_link)
+
+        self._create_image()
         self._create_entries()
         self._setup_entries()
 
@@ -1061,23 +1065,34 @@ class ImageCanvas(Canvas):
     def update_resolution(self, resolution) -> int:
         ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
         last_height = self.height            # запоминает предыдущую высоту
-        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+        if self.width < self.default_width:
+            self.width = self.default_width
 
-        self.config(height=self.height)      # установка новой высоты
+        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+        
+        if self.height > 600:                # но если высота больше 600
+            self.height = 600                # то высота выставляется в 600
+            self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
+
+        self.config(height=self.height, width=self.width)  # установка новых размеров
+
         self._setup_entries()                # обновляет позиции и настройки всех виджетов
         return self.height-last_height       # возвращает изменение высоты
 
     # позиционирует и привязывает обработчики позиций
     def _setup_entries(self):
+        x_pad = int(self.width / 8)  # отступ по горизонтали, исходя из ширины холста
+        y_pad = 50                   # отступ по вертикали статический
+
         positions = [
-            (self.x_pad, self.y_pad),                            # верхний левый
-            (self.width // 2, self.y_pad),                       # верхний
-            (self.width - self.x_pad, self.y_pad),               # верхний правый
-            (self.width - self.x_pad, self.height // 2),         # правый
-            (self.width - self.x_pad, self.height - self.y_pad), # нижний правый
-            (self.width // 2, self.height - self.y_pad),         # нижний
-            (self.x_pad, self.height - self.y_pad),              # нижний левый
-            (self.x_pad, self.height // 2),                      # левый
+            (x_pad, y_pad),                             # верхний левый
+            (self.width // 2, y_pad),                   # верхний
+            (self.width - x_pad, y_pad),                # верхний правый
+            (self.width - x_pad, self.height // 2),     # правый
+            (self.width - x_pad, self.height - y_pad),  # нижний правый
+            (self.width // 2, self.height - y_pad),     # нижний
+            (x_pad, self.height - y_pad),               # нижний левый
+            (x_pad, self.height // 2),                  # левый
         ]
 
         # позиционирует каждый виджет, привязывает обработчик
@@ -1205,7 +1220,7 @@ class ImageCanvas(Canvas):
             self.update_texts()                            # и обновляет тексты
 
     # создание изображения
-    def _create_image(self, image_link: str):
+    def _create_image(self, image_link: str = None):
         self._open_image(image_link)
         self.img_id = self.create_image((self.width//2)-(self.img.width()//2), 0, anchor=NW, image=self.img)
 
@@ -1635,25 +1650,37 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.resizable(True, True)
 
         super()._default_set_up()
+
         self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
     # обновляет высоту холста и окна
-    def change_canvas_resolution(self, resolution):
+    def update_canvas_resolution(self, resolution):
+
+        # обновляем разрешение холста, узнаём, насколько изменился его размер
         canvas_height_change = self.image_canvas.update_resolution(resolution)
 
-        window_height = self.winfo_height() + canvas_height_change
-        self.geometry(f"{self.winfo_width()}x{window_height}")
+        # если окно практически не было растянуто
+        if self.winfo_width() - self.size[0] < 50:
+            shift = canvas_height_change/2               # возьмём половину от изменения высоты
+            x, y = self.winfo_x(), self.winfo_y()-shift  # вычтем её из координат окна
+            self.geometry(f'+{x}+{int(y)}')              # и обновим их
+
+        self.size = self.size[0], self.size[1]+canvas_height_change  # новые минимальные размеры окна
+        self.minsize(*self.size)                                     # передадим окну для обновления
 
     # поток, обновляющий картинку на на холсте
     def canvas_updater(self):
+        if self.view_mode:
+            self.update_canvas_resolution(self.task_config.get_resolution())
         last_img_list = self.dir_manager.get_all_imgs()
         try:
             while True:  # забирает список всех изображений во всех директориях
-                time.sleep(2)
                 current_img_list = self.dir_manager.get_all_imgs()
-                if not current_img_list:
-                    self.image_canvas.set_empty()
+
+                if not current_img_list:            # если картинок для показа нет
+                    self.image_canvas.set_empty()   # показывает на холсте надпись "добавьте..."
+                    time.sleep(2)
                     continue
 
                 # если что-то изменилось, +- картинка или директория
@@ -1662,10 +1689,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
                     self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
                     resolution = find_resolution(self.task_config)  # выясняет разрешение
-                    self.change_canvas_resolution(resolution)
+                    self.task_config.set_resolution(*resolution)    # записывает в объект задачи
+                    self.update_canvas_resolution(resolution)       # обновляет разрешение холста
 
-                random_image = random.choice(current_img_list)
-                self.image_canvas.update_image(image_link=random_image)
+                random_image = random.choice(current_img_list)           # выбирает случайную картинку
+                self.image_canvas.update_image(image_link=random_image)  # отображает её на холсте
+                time.sleep(2)
 
         except TclError:  # когда окно закроется
             return
@@ -1709,13 +1738,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
-            width=800, height=400,
             veiw_mode=self.view_mode,
+            resolution=self.task_config.get_resolution(),
             overlays=self.task_config.get_overlays(),
             background=self.task_config.get_color(),
         )
+
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
         self.dir_manager = DirectoryManager(
             self.bottom_grid, 

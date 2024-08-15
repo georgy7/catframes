@@ -223,25 +223,37 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.resizable(True, True)
 
         super()._default_set_up()
+
         self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
     # обновляет высоту холста и окна
-    def change_canvas_resolution(self, resolution):
+    def update_canvas_resolution(self, resolution):
+
+        # обновляем разрешение холста, узнаём, насколько изменился его размер
         canvas_height_change = self.image_canvas.update_resolution(resolution)
 
-        window_height = self.winfo_height() + canvas_height_change
-        self.geometry(f"{self.winfo_width()}x{window_height}")
+        # если окно практически не было растянуто
+        if self.winfo_width() - self.size[0] < 50:
+            shift = canvas_height_change/2               # возьмём половину от изменения высоты
+            x, y = self.winfo_x(), self.winfo_y()-shift  # вычтем её из координат окна
+            self.geometry(f'+{x}+{int(y)}')              # и обновим их
+
+        self.size = self.size[0], self.size[1]+canvas_height_change  # новые минимальные размеры окна
+        self.minsize(*self.size)                                     # передадим окну для обновления
 
     # поток, обновляющий картинку на на холсте
     def canvas_updater(self):
+        if self.view_mode:
+            self.update_canvas_resolution(self.task_config.get_resolution())
         last_img_list = self.dir_manager.get_all_imgs()
         try:
             while True:  # забирает список всех изображений во всех директориях
-                time.sleep(2)
                 current_img_list = self.dir_manager.get_all_imgs()
-                if not current_img_list:
-                    self.image_canvas.set_empty()
+
+                if not current_img_list:            # если картинок для показа нет
+                    self.image_canvas.set_empty()   # показывает на холсте надпись "добавьте..."
+                    time.sleep(2)
                     continue
 
                 # если что-то изменилось, +- картинка или директория
@@ -250,10 +262,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
                     self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
                     resolution = find_resolution(self.task_config)  # выясняет разрешение
-                    self.change_canvas_resolution(resolution)
+                    self.task_config.set_resolution(*resolution)    # записывает в объект задачи
+                    self.update_canvas_resolution(resolution)       # обновляет разрешение холста
 
-                random_image = random.choice(current_img_list)
-                self.image_canvas.update_image(image_link=random_image)
+                random_image = random.choice(current_img_list)           # выбирает случайную картинку
+                self.image_canvas.update_image(image_link=random_image)  # отображает её на холсте
+                time.sleep(2)
 
         except TclError:  # когда окно закроется
             return
@@ -297,13 +311,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
-            width=800, height=400,
             veiw_mode=self.view_mode,
+            resolution=self.task_config.get_resolution(),
             overlays=self.task_config.get_overlays(),
             background=self.task_config.get_color(),
         )
+
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
         self.dir_manager = DirectoryManager(
             self.bottom_grid, 
