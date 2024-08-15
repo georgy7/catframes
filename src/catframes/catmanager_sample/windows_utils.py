@@ -290,26 +290,23 @@ class ImageCanvas(Canvas):
     def __init__(
             self, 
             master: Tk, 
-            width: int, 
-            height: int, 
             veiw_mode: bool,
-            overlays: list,
+            resolution: Optional[Tuple[int]] = None, 
+            overlays: list = None,
             background: str = '#888888'
         ):
 
+        self.default_width = self.width = 800
+        self.default_height = self.height = 400
+
         # создаёт объект холста
-        super().__init__(master, width=width, height=height, highlightthickness=0, background=background)
-        self.height, self.width = height, width
+        super().__init__(master, width=self.width, height=self.height, highlightthickness=0, background=background)
         self.pack()
         
         self.view_mode = veiw_mode
         self.default_overlays = overlays
 
-        # переменные для расположения виджетов
-        self.x_pad = 120   # отступы по горизонтали
-        self.y_pad = 50    # отступы по вертикали
         self.sq_size = 24  # размер прозр. квадрата
-
         self.pil_img = None
         self.img = None
         self.img_id = None
@@ -317,6 +314,7 @@ class ImageCanvas(Canvas):
 
         self.color = background
         self.alpha_square = None
+
         self._create_image()
         self._create_entries()
         self._setup_entries()
@@ -325,23 +323,34 @@ class ImageCanvas(Canvas):
     def update_resolution(self, resolution) -> int:
         ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
         last_height = self.height            # запоминает предыдущую высоту
-        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+        if self.width < self.default_width:
+            self.width = self.default_width
 
-        self.config(height=self.height)      # установка новой высоты
+        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+        
+        if self.height > 600:                # но если высота больше 600
+            self.height = 600                # то высота выставляется в 600
+            self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
+
+        self.config(height=self.height, width=self.width)  # установка новых размеров
+
         self._setup_entries()                # обновляет позиции и настройки всех виджетов
         return self.height-last_height       # возвращает изменение высоты
 
     # позиционирует и привязывает обработчики позиций
     def _setup_entries(self):
+        x_pad = int(self.width / 8)  # отступ по горизонтали, исходя из ширины холста
+        y_pad = 50                   # отступ по вертикали статический
+
         positions = [
-            (self.x_pad, self.y_pad),                            # верхний левый
-            (self.width // 2, self.y_pad),                       # верхний
-            (self.width - self.x_pad, self.y_pad),               # верхний правый
-            (self.width - self.x_pad, self.height // 2),         # правый
-            (self.width - self.x_pad, self.height - self.y_pad), # нижний правый
-            (self.width // 2, self.height - self.y_pad),         # нижний
-            (self.x_pad, self.height - self.y_pad),              # нижний левый
-            (self.x_pad, self.height // 2),                      # левый
+            (x_pad, y_pad),                             # верхний левый
+            (self.width // 2, y_pad),                   # верхний
+            (self.width - x_pad, y_pad),                # верхний правый
+            (self.width - x_pad, self.height // 2),     # правый
+            (self.width - x_pad, self.height - y_pad),  # нижний правый
+            (self.width // 2, self.height - y_pad),     # нижний
+            (x_pad, self.height - y_pad),               # нижний левый
+            (x_pad, self.height // 2),                  # левый
         ]
 
         # позиционирует каждый виджет, привязывает обработчик

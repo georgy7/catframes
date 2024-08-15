@@ -31,7 +31,7 @@ class Lang:
         'english': {
             'root.title': 'CatFrames',
             'root.openSets': 'Settings',
-            'root.newTask': 'New task',
+            'root.newTask': 'Create',
 
             'bar.active': 'processing',
             'bar.inactive': 'complete', 
@@ -74,7 +74,7 @@ class Lang:
         'русский': {
             'root.title': 'CatFrames',
             'root.openSets': 'Настройки',
-            'root.newTask': 'Новая задача',
+            'root.newTask': 'Создать',
 
             'bar.lbActive': 'обработка',
             'bar.lbInactive': 'завершено', 

@@ -54,6 +54,7 @@ class TaskConfig:
         self._filepath: str                           # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
         self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
+        self._resolution = None                       # разрешение рендера (нужно для режима просмотра)
 
     # установка директорий
     def set_dirs(self, dirs) -> list:
@@ -78,6 +79,9 @@ class TaskConfig:
         self._quality = self.quality_names[quality]
         self._limit = limit
 
+    def set_resolution(self, width: int, height: int):
+        self._resolution = width, height
+
     # установка пути файла
     def set_filepath(self, filepath: str):
         self._filepath = filepath
@@ -99,6 +103,9 @@ class TaskConfig:
     
     def get_color(self) -> str:
         return self._color
+    
+    def get_resolution(self) -> Optional[Tuple[int]]:
+        return self._resolution
 
     def convert_to_resolution_command(self) -> str:
         command = 'catframes'
