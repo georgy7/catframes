@@ -262,6 +262,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
                     self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
                     resolution = find_resolution(self.task_config)  # выясняет разрешение
+                    self.widgets['_lbResolution'].configure(text=f'{Lang.read("task.lbResolution")} {resolution[0]}x{resolution[1]}')
                     self.task_config.set_resolution(*resolution)    # записывает в объект задачи
                     self.update_canvas_resolution(resolution)       # обновляет разрешение холста
 
@@ -326,6 +327,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
             veiw_mode=self.view_mode,
             dirs=self.task_config.get_dirs() 
         )
+
+        self.widgets['_lbResolution'] = ttk.Label(self.bottom_grid)
+
+        self.settings_grid = Frame(self.bottom_grid)  # создание фрейма настроек в нижнем фрейме
         
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -351,18 +356,18 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.clipboard_append(self.task_config.convert_to_command())
 
         # виджеты столбца описания кнопок
-        self.widgets['lbColor'] = ttk.Label(self.bottom_grid)
-        self.widgets['lbFramerate'] = ttk.Label(self.bottom_grid)
-        self.widgets['lbQuality'] = ttk.Label(self.bottom_grid)
+        self.widgets['lbColor'] = ttk.Label(self.settings_grid)
+        self.widgets['lbFramerate'] = ttk.Label(self.settings_grid)
+        self.widgets['lbQuality'] = ttk.Label(self.settings_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(self.bottom_grid, command=ask_color, text=DEFAULT_COLOR, width=7)
+        self.widgets['_btColor'] = Button(self.settings_grid, command=ask_color, text=DEFAULT_COLOR, width=7)
         if self.view_mode:
             color = self.task_config.get_color()
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
         self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
-            self.bottom_grid,
+            self.settings_grid,
             values=self.framerates, 
             state='readonly',
             justify='center',
@@ -373,16 +378,17 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
-            self.bottom_grid,
+            self.settings_grid,
             state='readonly',
             justify='center',
             width=8,
         )
-        self.widgets['btCreate'] = ttk.Button(self.bottom_grid, command=add_task)
+
+        self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task)
 
         # лейбл и кнопка копирования команды
-        self.widgets['lbCopy'] = ttk.Label(self.bottom_grid)
-        self.widgets['btCopy'] = ttk.Button(self.bottom_grid, command=copy_to_clip)
+        self.widgets['lbCopy'] = ttk.Label(self.settings_grid)
+        self.widgets['btCopy'] = ttk.Button(self.settings_grid, command=copy_to_clip)
 
         if self.view_mode:  # если это режим просмотра, все виджеты, кроме копирования - недоступны
             for w_name, w in self.widgets.items():
@@ -393,39 +399,39 @@ class NewTaskWindow(Toplevel, WindowMixin):
     # расположение виджетов
     def _pack_widgets(self):
         # упаковка нижнего фрейма для сетки
-        self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=30)
+        self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=100)
 
-        # настройка веса столбцов
-        for i in range(4):
+        for i in range(2):  # настройка веса столбцов
             self.bottom_grid.columnconfigure(i, weight=1)
 
-        # настройка веса строк
-        for i in range(6):
+        for i in range(3):  # настройка веса строк
             self.bottom_grid.rowconfigure(i, weight=1)
 
-        # заполнение левого столбца
-        self.dir_manager.grid(
-            row=0, column=0, rowspan=6, columnspan=2
-        )
+        # подпись разрешения рендера
+        self.widgets['_lbResolution'].grid(columnspan=2, row=0, column=0, sticky='n', padx=7)
 
-        # заполнение столбца описания кнопок (липнет вправо, к правому столбцу)        
-        self.widgets['lbColor'].grid(row=1, column=2, sticky='e', padx=10)
-        self.widgets['lbFramerate'].grid(row=2, column=2, sticky='e', padx=10)
-        self.widgets['lbQuality'].grid(row=3, column=2, sticky='e', padx=10)
-        if self.view_mode:
-            self.widgets['lbCopy'].grid(row=4, column=2, sticky='e', padx=10)
+        # левый и правый столбцы нижнего фрейма
+        self.dir_manager.grid(row=1, column=0)    # левый столбец - менеджер директорий
+        self.settings_grid.grid(row=1, column=1)  # правый - фрейм настроек
 
-        # заполнение правого столбца (липнет влево, к столбцу описаний)
-        ttk.Label(self.bottom_grid).grid(row=0, column=3)
-        self.widgets['_btColor'].grid(row=1, column=3, sticky='w', padx=7)
-        self.widgets['_cmbFramerate'].grid(row=2, column=3, sticky='w', padx=7)
-        self.widgets['cmbQuality'].grid(row=3, column=3, sticky='w', padx=7)
+        # подпись и кнопка цвета       
+        self.widgets['lbColor'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_btColor'].grid(row=1, column=1, sticky='w', padx=7, pady=5)
 
-        if self.view_mode:
-            self.widgets['btCopy'].grid(row=4, column=3, sticky='w', padx=7)
-        else:
-            self.widgets['btCreate'].grid(row=4, column=3, sticky='w', padx=7)
-        ttk.Label(self.bottom_grid).grid(row=5, column=3)
+        # подпись и комбобокс частоты
+        self.widgets['lbFramerate'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_cmbFramerate'].grid(row=2, column=1, sticky='w', padx=7, pady=5)
+
+        # подпись и комбобокс качества
+        self.widgets['lbQuality'].grid(row=3, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['cmbQuality'].grid(row=3, column=1, sticky='w', padx=7, pady=5)
+
+        # в режиме просмотра
+        if self.view_mode:  # подпись и кнопка копирования команды
+            self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=10, pady=5)
+            self.widgets['btCopy'].grid(row=4, column=1, sticky='w', padx=7, pady=5)
+        else:  # кнопка создания задачи
+            self.widgets['btCreate'].grid(row=4, column=1, sticky='w', padx=7, pady=5)
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
