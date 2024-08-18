@@ -43,7 +43,6 @@ import gc
 import hashlib
 import itertools
 import io
-import json
 import math
 import os
 from operator import itemgetter
@@ -57,11 +56,9 @@ import sys
 import tempfile
 import threading
 import textwrap
+from wsgiref.simple_server import make_server
 from queue import Queue, Empty
 from collections import deque
-
-from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
-from socketserver import ThreadingMixIn
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -75,7 +72,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.4.0'
+__version__ = '2024.8.0-SNAPSHOT'
 __license__ = 'Zlib'
 
 
@@ -152,7 +149,7 @@ class TwoFromTheChest:
         :raises Exception: thrown by the eater.
         """
         while not self._was_running():
-            print('Trying different port...', flush=True)
+            print('Trying different port...')
         if self._eater_error:
             raise self._eater_error
 
@@ -169,31 +166,12 @@ class TwoFromTheChest:
             self._options.min_http_port,
             self._options.max_http_port
         )
-        print(f"\nPort: {http_port}\n", flush=True)
-
-        server_log = deque(maxlen=20)
-
-        class ClosureHandler(WSGIRequestHandler):
-            def log_message(self, format, *args):
-                server_log.append("%s - - [%s] %s\n" %
-                                  (self.address_string(),
-                                   self.log_date_time_string(),
-                                   format % args))
-
-        class ThreadedServer(ThreadingMixIn, WSGIServer):
-            daemon_threads = True
-
-        def print_log():
-            print('Web-server log:', flush=True)
-            print('\n'.join([x.rstrip() for x in server_log]), flush=True)
-            print(flush=True)
-
+        print(f"\nPort: {http_port}\n")
         try:
-            httpd = make_server(host='', port=http_port, app=self._giver,
-                                handler_class=ClosureHandler, server_class=ThreadedServer)
 
+            httpd = make_server(host='', port=http_port, app=self._giver)
             try:
-                web_thread = threading.Thread(target=httpd.serve_forever)
+                web_thread = threading.Thread(target = httpd.serve_forever)
                 web_thread.daemon = True
                 web_thread.start()
                 self._eat(http_port)
@@ -204,8 +182,6 @@ class TwoFromTheChest:
             return True
         except OSError:
             return False
-        finally:
-            print_log()
 
 
 class _TwoFromTheChestTest(TestCase):
@@ -305,18 +281,6 @@ class FileUtils:
         if not path:
             return False
         return path.expanduser().is_symlink()
-
-    @staticmethod
-    def tail(file_path, line_count):
-        """Retuns at the most n last lines of a file, or empty string."""
-        result = deque(maxlen = line_count)
-        try:
-            with file_path.open(mode='r') as f:
-                for line in f:
-                    result.append(line)
-        except OSError:
-            pass
-        return '\n'.join([x.rstrip() for x in result])
 
     @staticmethod
     def list_images(path: Path) -> List[Path]:
@@ -656,7 +620,7 @@ class Resolution:
 
     @property
     def ratio(self) -> float:
-        """Aspect ratio. Always more than zero."""
+        """Aspect ratio. Always greater than zero."""
         return self.width / self.height
 
 
@@ -1569,12 +1533,6 @@ class FrameProcessor:
         self._alive = False
 
 
-class ImageProvider(ABC):
-    @abstractmethod
-    def get_image(self) -> Optional[Image.Image]:
-        """Do you want some?"""
-
-
 @dataclass(frozen=True)
 class OutputOptions:
     """Это опции сохранения видеозаписи. Грубо говоря, опции FFmpeg. Они не влияют ни на выбор
@@ -1630,37 +1588,21 @@ class OutputOptions:
 
     def make(self, frames: Sequence[Frame], \
              frame_processor: FrameProcessor, \
-             server_options: TheChestParameterSet, \
-             preview_provider: ImageProvider):
+             server_options: TheChestParameterSet):
 
         # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
         # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
         offset: int = random.randint(0, max(0, sys.maxsize - len(frames)))
 
-        render_results = deque(maxlen = 10)
+        render_results = deque()
+        max_results = 10
 
         # Чтобы случайно не запрашивать по сто раз один и тот же кадр.
-        requested = deque(maxlen = 3)
-
-        processed_frame_count = 0
-        processed_per_cent = -1
-
-        last_preview = None
-        last_preview_time = monotonic()
-
-
-        def set_processed(count):
-            nonlocal processed_frame_count
-            nonlocal processed_per_cent
-
-            last_processed = processed_per_cent
-
-            processed_per_cent = math.floor(count / len(frames) * 100)
-            processed_frame_count = count
-
-            if last_processed < processed_per_cent:
-                print(f'Progress: {processed_per_cent}%', flush=True)
-
+        requested = deque()
+        # Чтобы не делать проверку перед popleft: так в очереди всегда будет 3 элемента.
+        requested.append(-1)
+        requested.append(-1)
+        requested.append(-1)
 
         def get_render_result(frame_index):
             while not frame_processor.empty:
@@ -1672,10 +1614,12 @@ class OutputOptions:
             next_index = frame_index + 1
             if (next_index < len(frames)) and not (next_index in requested):
                 requested.append(next_index)
+                requested.popleft()
                 frame_processor.request_frame(next_index, frames[next_index])
 
             if result is None:
                 requested.append(frame_index)
+                requested.popleft()
                 frame_processor.request_frame(frame_index, frames[frame_index])
 
                 while result is None:
@@ -1685,12 +1629,12 @@ class OutputOptions:
                         if frame_index == x[0]:
                             result = x[1]
 
+            while len(render_results) > max_results:
+                render_results.popleft()
+
             return result
 
         def service(environ, start_response):
-            nonlocal last_preview
-            nonlocal last_preview_time
-
             method: str = environ['REQUEST_METHOD']
             pathname: str = environ['PATH_INFO']
 
@@ -1702,38 +1646,9 @@ class OutputOptions:
                 if frame_index in range(len(frames)):
                     status = '200 OK'
                     render_result = get_render_result(frame_index)
-                    set_processed(1 + frame_index)
                     headers = [('Content-type', render_result.content_type)]
                     start_response(status, headers)
                     return [render_result.data]
-            elif http_get and ('/progress' == pathname):
-                status = '200 OK'
-                headers = [('Content-type', 'application/json')]
-                start_response(status, headers)
-                return [json.dumps({
-                    "framesTotal": len(frames),
-                    "framesEncoded": processed_frame_count,
-                    "percentage": processed_per_cent
-                }, sort_keys=True).encode('utf-8')]
-            elif http_get and ('/livePreview' == pathname):
-                if (None == last_preview) or (monotonic() - last_preview_time >= 0.33):
-                    preview = preview_provider.get_image()
-                    if preview:
-                        preview_jpeg = io.BytesIO()
-                        preview.save(preview_jpeg, 'JPEG', quality=98, subsampling=0)
-                        last_preview_time = monotonic()
-                        last_preview = preview_jpeg.getvalue()
-
-                if last_preview:
-                    status = '200 OK'
-                    headers = [('Content-type', 'image/jpeg')]
-                    start_response(status, headers)
-                    return [last_preview]
-                else:
-                    status = '202 Accepted'
-                    headers = [('Content-type', 'text/plain; charset=utf-8')]
-                    start_response(status, headers)
-                    return ['Not ready yet.'.encode("utf-8")]
 
             status = '404 Not Found'
             headers = [('Content-type', 'text/plain; charset=utf-8')]
@@ -1776,30 +1691,7 @@ class OutputOptions:
                     str(self.destination.expanduser())
                 ])
 
-                set_processed(0)
-
-                with tempfile.TemporaryDirectory() as logs_path_string:
-                    logs_path = Path(logs_path_string)
-
-                    output_path = logs_path / 'output.txt'
-                    errors_path = logs_path / 'error.txt'
-                    catched = None
-
-                    with output_path.open(mode='w') as output_file:
-                        with errors_path.open(mode='w') as errors_file:
-                            try:
-                                subprocess.run(
-                                    ffmpeg_options, check=True,
-                                    stdout=output_file,
-                                    stderr=errors_file)
-                            except Exception as exc:
-                                catched = exc
-
-                    if catched:
-                        print('\nFFmpeg output:', flush=True)
-                        print(FileUtils.tail(output_path, 10), flush=True)
-                        print('\nFFmpeg errors:', flush=True)
-                        print(FileUtils.tail(errors_path, 10), flush=True)
+                subprocess.check_call(ffmpeg_options)
 
         these_guys = TwoFromTheChest(service, client, server_options)
         these_guys.start()
@@ -1898,10 +1790,10 @@ class PillowFrameView(FrameView):
         for filename in popular_fonts:
             try:
                 result = ImageFont.truetype(font=filename, size=size)
-                print(f'{filename}: yes', flush=True)
+                print(f'{filename}: yes')
                 return result
             except OSError:
-                print(f'{filename}: no', flush=True)
+                print(f'{filename}: no')
 
         raise ValueError('Could not find any font.')
 
@@ -2011,7 +1903,7 @@ class Layout:
         return len([x for x in self._cells if x])
 
 
-class DefaultFrameView(PillowFrameView, ImageProvider):
+class DefaultFrameView(PillowFrameView):
     """Масштабирует, добавляет поля при необходимости, накладывает текстовые индикаторы, а если
     файл внезапно стал недоступен, создаёт красный кадр-заглушку с названием ошибки по центру.
 
@@ -2034,8 +1926,6 @@ class DefaultFrameView(PillowFrameView, ImageProvider):
         self.machine = platform.machine()
         self.network_name = platform.node()
         self.message_text_wrapper = textwrap.TextWrapper(width=70)
-
-        self._live_preview: Union[Image.Image, None] = None
 
     def _make_overlay_model(self, frame: Frame, source_size: Tuple[int, int]) -> OverlayModel:
         file_checksum = FileUtils.get_checksum(frame.path)
@@ -2178,14 +2068,6 @@ class DefaultFrameView(PillowFrameView, ImageProvider):
                         template(overlay_model),
                         get_text_stroke_color,
                         get_text_fill_color)
-
-            self._live_preview = self._image.resize(
-                thumbnail_size,
-                resample=Image.Resampling.BICUBIC,
-                reducing_gap=2.0)
-
-    def get_image(self) -> Optional[Image.Image]:
-        return self._live_preview
 
 
 class _DefaultFrameViewTest(TestCase):
@@ -2894,7 +2776,7 @@ class ConsoleInterface:
             add_overlay(h_pos[1], v_pos[1], f'{v_pos[0]}_{h_pos[0]}')
 
         if not has_warning:
-            print("\nBy the way: You didn't specify any WARN overlays.", flush=True)
+            raise ValueError('At least one WARN overlay required.')
 
         return result
 
@@ -2991,29 +2873,29 @@ class ConsoleInterface:
 
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
-        print(flush=True)
+        print()
         for key, value in vars(self._args).items():
             if 'paths' == key:
                 continue
 
             if isinstance(value, list):
-                print(f'  {key}:', flush=True)
+                print(f'  {key}:')
                 for item in value:
-                    print(f'    - {item}', flush=True)
+                    print(f'    - {item}')
             elif value:
-                print(f'  {key}: {value}', flush=True)
+                print(f'  {key}: {value}')
 
-        print(f'  source:', flush=True)
+        print(f'  source:')
         for item in self._source:
-            print(f'    - {item}', flush=True)
+            print(f'    - {item}')
         if None != self._destination:
-            print(f'  destination:', flush=True)
-            print(f'    - {self._destination}', flush=True)
-        print(flush=True)
+            print(f'  destination:')
+            print(f'    - {self._destination}')
+        print()
 
     def show_splitter(self):
         """Визуально отделить всё, что было выведено в консоль выше."""
-        print(f"{'-'*42}\n", flush=True)
+        print(f"{'-'*42}\n")
 
     def get_input_sequence(self) -> Sequence[Frame]:
         """Возвращает отсортированную и пронумерованную последовательность кадров.
@@ -3021,7 +2903,7 @@ class ConsoleInterface:
         :raises ValueError: не удалось прочитать список файлов или в указанных директориях нет
             ни одного изображения.
         """
-        print('Scanning for files...', flush=True)
+        print('Scanning for files...')
         frame_groups = []
 
         banner_duration_seconds = 4
@@ -3051,12 +2933,12 @@ class ConsoleInterface:
                 FileUtils.sort_natural(real_images)
                 frame_groups.append([Frame(image) for image in real_images])
 
-        print('Numbering frames...', flush=True)
+        print('Numbering frames...')
         Enumerator.enumerate(frame_groups)
 
         frames = functools.reduce(lambda x, y: x+y, frame_groups)
 
-        print(f'\nThere are {Enumerator.count(frames)} frames...', flush=True)
+        print(f'\nThere are {Enumerator.count(frames)} frames...')
 
         # Имеется ввиду, что совсем никаких кадров нет, даже кадров-заглушек.
         # Если не только несуществующие, но и пустые папки будут приводить
@@ -3067,7 +2949,7 @@ class ConsoleInterface:
         if not frames:
             raise ValueError('Error: empty frame set.')
 
-        print(flush=True)
+        print()
 
         return frames
 
@@ -3131,12 +3013,12 @@ class ConsoleInterface:
         lines = resolutions.sort_by_count_desc()
         assert limit > 0
 
-        print('Resolutions:', flush=True)
+        print('Resolutions:')
         for resolution, count in lines[:limit]:
-            print(f"{resolution} => {count}", flush=True)
+            print(f"{resolution} => {count}")
 
         if len(lines) > limit:
-            print('...', flush=True)
+            print('...')
 
 
 def main():
@@ -3148,7 +3030,7 @@ def main():
         cli = ConsoleInterface()
         cli.show_options()
         cli.show_splitter()
-        print(f'The number of overlays: {len(cli.layout)}\n', flush=True)
+        print(f'The number of overlays: {len(cli.layout)}\n')
         cli.show_splitter()
 
         if not cli.statistics_only:
@@ -3164,7 +3046,7 @@ def main():
         cli.list_resolutions(resolution_table)
 
         resolution = resolution_table.choose()
-        print(f'\nDecision: {resolution}\n', flush=True)
+        print(f'\nDecision: {resolution}\n')
 
         if cli.statistics_only:
             sys.exit(0)
@@ -3174,16 +3056,16 @@ def main():
 
         processing_start = monotonic()
 
-        view: DefaultFrameView = DefaultFrameView(resolution, cli.margin_color, cli.layout)
+        view = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         frames = output_options.limit_frames(frames)
-
+        
         with FrameProcessor(view) as frame_processor:
-            output_options.make(frames, frame_processor, cli.get_server_options(), view)
+            output_options.make(frames, frame_processor, cli.get_server_options())
 
-        print(f'\nFinished in {int(monotonic() - processing_start)} seconds.', flush=True)
+        print(f'\nCompressed in {int(monotonic() - processing_start)} seconds.')
 
     except ValueError as err:
-        print(f'\n{err}\n', file=sys.stderr, flush=True)
+        print(f'\n{err}\n', file=sys.stderr)
         sys.exit(1)
 
 
