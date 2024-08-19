@@ -313,7 +313,6 @@ class ImageCanvas(Canvas):
             self, 
             master: Tk, 
             veiw_mode: bool,
-            resolution: Optional[Tuple[int]] = None, 
             overlays: list = None,
             background: str = '#888888'
         ):
@@ -342,22 +341,22 @@ class ImageCanvas(Canvas):
         self._setup_entries()
 
     # обновляет разрешение холста
-    def update_resolution(self, resolution) -> int:
-        ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
-        last_height = self.height            # запоминает предыдущую высоту
-        if self.width < self.default_width:
-            self.width = self.default_width
+    # def update_resolution(self, resolution) -> int:
+    #     ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
+    #     last_height = self.height            # запоминает предыдущую высоту
+    #     if self.width < self.default_width:
+    #         self.width = self.default_width
 
-        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+    #     self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
         
-        if self.height > 600:                # но если высота больше 600
-            self.height = 600                # то высота выставляется в 600
-            self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
+    #     if self.height > 600:                # но если высота больше 600
+    #         self.height = 600                # то высота выставляется в 600
+    #         self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
 
-        self.config(height=self.height, width=self.width)  # установка новых размеров
+    #     self.config(height=self.height, width=self.width)  # установка новых размеров
 
-        self._setup_entries()                # обновляет позиции и настройки всех виджетов
-        return self.height-last_height       # возвращает изменение высоты
+    #     self._setup_entries()                # обновляет позиции и настройки всех виджетов
+    #     return self.height-last_height       # возвращает изменение высоты
 
     # позиционирует и привязывает обработчики позиций
     def _setup_entries(self):
