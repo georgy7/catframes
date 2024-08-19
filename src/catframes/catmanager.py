@@ -1109,7 +1109,6 @@ class ImageCanvas(Canvas):
             self, 
             master: Tk, 
             veiw_mode: bool,
-            resolution: Optional[Tuple[int]] = None, 
             overlays: list = None,
             background: str = '#888888'
         ):
@@ -1138,22 +1137,22 @@ class ImageCanvas(Canvas):
         self._setup_entries()
 
     # обновляет разрешение холста
-    def update_resolution(self, resolution) -> int:
-        ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
-        last_height = self.height            # запоминает предыдущую высоту
-        if self.width < self.default_width:
-            self.width = self.default_width
+    # def update_resolution(self, resolution) -> int:
+    #     ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
+    #     last_height = self.height            # запоминает предыдущую высоту
+    #     if self.width < self.default_width:
+    #         self.width = self.default_width
 
-        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+    #     self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
         
-        if self.height > 600:                # но если высота больше 600
-            self.height = 600                # то высота выставляется в 600
-            self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
+    #     if self.height > 600:                # но если высота больше 600
+    #         self.height = 600                # то высота выставляется в 600
+    #         self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
 
-        self.config(height=self.height, width=self.width)  # установка новых размеров
+    #     self.config(height=self.height, width=self.width)  # установка новых размеров
 
-        self._setup_entries()                # обновляет позиции и настройки всех виджетов
-        return self.height-last_height       # возвращает изменение высоты
+    #     self._setup_entries()                # обновляет позиции и настройки всех виджетов
+    #     return self.height-last_height       # возвращает изменение высоты
 
     # позиционирует и привязывает обработчики позиций
     def _setup_entries(self):
@@ -1739,27 +1738,45 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # поток, обновляющий картинку на на холсте
     def canvas_updater(self):
-        last_img_list = self.dir_manager.get_all_imgs()
-        try:
-            while True:  # забирает список всех изображений во всех директориях
-                current_img_list = self.dir_manager.get_all_imgs()
+        last_dirs = []       # копия списка последних директорий
+        images_to_show = []  # список картинок для показа
+        index = 0            # индекс картинки в этом списке
 
-                if not current_img_list:            # если картинок для показа нет
-                    self.image_canvas.set_empty()   # показывает на холсте надпись "добавьте..."
-                    time.sleep(2)
-                    continue
+        while True:
+            
+            # проверяет, поменялись ли директории
+            new_dirs = self.dir_manager.get_dirs()
+            if last_dirs != new_dirs:  # если поменялись
+                last_dirs = new_dirs   # запоминает их
 
-                # если что-то изменилось, +- картинка или директория
-                if last_img_list != current_img_list:
-                    last_img_list = current_img_list  # запоминает изменение
-                    self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
+                # забирает список всех картинок
+                all_images = self.dir_manager.get_all_imgs()
 
-                random_image = random.choice(current_img_list)           # выбирает случайную картинку
-                self.image_canvas.update_image(image_link=random_image)  # отображает её на холсте
-                time.sleep(2)
+                # вычисляет шаг индекса (если катинок меньше 4ёх, то step == 0)
+                step = int(len(all_images)/4)
 
-        except TclError:  # когда окно закроется
-            return
+                # обновляет список картинок для показа
+                if step:   
+                    # берёт срез списка картинок, с нужным шагом
+                    images_to_show = all_images[step::step]
+                else:  
+                    # если картинок было меньше 4ёх, берёт весь список 
+                    images_to_show = all_images[:]
+                    index = 0  # обновляет индекс, чтобы
+                
+            # блок работы с холстом
+            try:  
+                if images_to_show:
+                    # если список не пуст, передаёт холсту следующую
+                    self.image_canvas.update_image(images_to_show[index])
+                    index = (index + 1) % len(images_to_show)  # инкремент
+                else:
+                    # показывает на холсте надпись "выберите картинку"
+                    self.image_canvas.set_empty()  
+                time.sleep(4)
+
+            except TclError:  # это исключение появится, когда окно закроется
+                return
 
     # сбор данных из виджетов, создание конфигурации
     def _collect_task_config(self) -> None:
@@ -1805,7 +1822,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
             veiw_mode=self.view_mode,
-            resolution=(800, 400),
             overlays=self.task_config.get_overlays(),
             background=self.task_config.get_color(),
         )
