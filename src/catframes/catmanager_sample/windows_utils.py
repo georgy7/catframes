@@ -273,12 +273,13 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # изменение бара на состояние "ошибки"
-    def set_error(self):
+    def set_error(self, error: str):
         self._set_style(2)
         self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
         self.widgets['btDelete'].config(
             command=lambda: self.task.delete(),  # переопределение поведения кнопки
         )
+        self.widgets['_lbData'].config(text=Lang.read(f'bar.error.{error}'))
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса

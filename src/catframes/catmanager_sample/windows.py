@@ -92,10 +92,9 @@ class RootWindow(Tk, WindowMixin):
             del self.task_bars[task_id]  # чистит регистрацию
 
     # обработка ошибки процесса catframes
-    def set_error_task_bar(self, task_id: int, error: str) -> None:
+    def handle_error(self, task_id: int, error: str) -> None:
         if task_id in self.task_bars:
-            self.task_bars[task_id].set_error()
-        print(f"TODO оповещение пользователя об ошибке: {error}")
+            self.task_bars[task_id].set_error(error)
         LocalWM.update_on_task_finish()
 
     # закрытие задачи, смена виджета
@@ -313,7 +312,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         gui_callback = GuiCallback(                         # создание колбека
             update_function=update_progress,                # передача методов обновления,
             finish_function=self.master.finish_task_bar,    # завершения задачи
-            error_function=self.master.set_error_task_bar,  # обработки ошибки выполнения
+            error_function=self.master.handle_error,        # обработки ошибки выполнения
             delete_function=self.master.del_task_bar,       # и удаления бара
         )
 
