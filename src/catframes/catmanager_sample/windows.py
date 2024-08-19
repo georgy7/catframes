@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Lang, PortSets
 from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager
-from task_flows import Task, GuiCallback, TaskManager, TaskConfig, find_resolution
+from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
 
 
@@ -234,25 +234,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
-    # обновляет высоту холста и окна
-    def update_canvas_resolution(self, resolution):
-
-        # обновляем разрешение холста, узнаём, насколько изменился его размер
-        canvas_height_change = self.image_canvas.update_resolution(resolution)
-
-        # если окно практически не было растянуто
-        if self.winfo_width() - self.size[0] < 50:
-            shift = canvas_height_change/2               # возьмём половину от изменения высоты
-            x, y = self.winfo_x(), self.winfo_y()-shift  # вычтем её из координат окна
-            self.geometry(f'+{x}+{int(y)}')              # и обновим их
-
-        self.size = self.size[0], self.size[1]+canvas_height_change  # новые минимальные размеры окна
-        self.minsize(*self.size)                                     # передадим окну для обновления
-
     # поток, обновляющий картинку на на холсте
     def canvas_updater(self):
-        if self.view_mode:
-            self.update_canvas_resolution(self.task_config.get_resolution())
         last_img_list = self.dir_manager.get_all_imgs()
         try:
             while True:  # забирает список всех изображений во всех директориях
@@ -266,12 +249,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 # если что-то изменилось, +- картинка или директория
                 if last_img_list != current_img_list:
                     last_img_list = current_img_list  # запоминает изменение
-
                     self.task_config.set_dirs(self.dir_manager.get_dirs()) # передаёт в конфиг
-                    resolution = find_resolution(self.task_config)  # выясняет разрешение
-                    self.widgets['_lbResolution'].configure(text=f'{Lang.read("task.lbResolution")} {resolution[0]}x{resolution[1]}')
-                    self.task_config.set_resolution(*resolution)    # записывает в объект задачи
-                    self.update_canvas_resolution(resolution)       # обновляет разрешение холста
 
                 random_image = random.choice(current_img_list)           # выбирает случайную картинку
                 self.image_canvas.update_image(image_link=random_image)  # отображает её на холсте
@@ -324,7 +302,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self, 
             veiw_mode=self.view_mode,
-            resolution=self.task_config.get_resolution(),
+            resolution=(800, 400),
             overlays=self.task_config.get_overlays(),
             background=self.task_config.get_color(),
         )
@@ -335,8 +313,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
             veiw_mode=self.view_mode,
             dirs=self.task_config.get_dirs() 
         )
-
-        self.widgets['_lbResolution'] = ttk.Label(self.bottom_grid)
 
         self.settings_grid = Frame(self.bottom_grid)  # создание фрейма настроек в нижнем фрейме
         
@@ -415,9 +391,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         for i in range(3):  # настройка веса строк
             self.bottom_grid.rowconfigure(i, weight=1)
-
-        # подпись разрешения рендера
-        self.widgets['_lbResolution'].grid(columnspan=2, row=0, column=0, sticky='n', padx=7)
 
         # левый и правый столбцы нижнего фрейма
         self.dir_manager.grid(row=1, column=0)    # левый столбец - менеджер директорий
