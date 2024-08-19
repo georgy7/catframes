@@ -154,7 +154,7 @@ class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
     def __init__(self, master: ttk.Frame, task: Task, **kwargs):
-        super().__init__(master, borderwidth=1, padding=5, style='Task.TFrame')
+        super().__init__(master, borderwidth=1, padding=5)
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
@@ -166,9 +166,20 @@ class TaskBar(ttk.Frame):
         self.update_texts()
         self._pack_widgets()
 
+    # установка стиля для прогрессбара
+    def _set_style(self, style_id: int):
+        styles = ['Running', 'Success', 'Error']
+        style = styles[style_id]
+
+        for elem in (self, self.left_frame, self.mid_frame, self.right_frame):
+            elem.config(style=f'{style}.Task.TFrame')
+        self.widgets['_lbData'].config(style=f'{style}.Task.TLabel')
+        self.widgets['_lbPath'].config(style=f'{style}.Task.TLabel')
+        self.widgets['_progressBar'].config(style=f'{style}.Task.Horizontal.TProgressbar')
+
     # создание и настрйока виджетов
     def _init_widgets(self):
-        self.left_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
+        self.left_frame = ttk.Frame(self, padding=5)
 
         img_dir = self.task.config.get_dirs()[0]              # достаём первую директорию
         img_paths = find_img_in_dir(img_dir, full_path=True)  # берём все картинки из неё
@@ -187,7 +198,7 @@ class TaskBar(ttk.Frame):
 
 
         # создании средней части бара
-        self.mid_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
+        self.mid_frame = ttk.Frame(self, padding=5)
 
         bigger_font = font.Font(size=16)
 
@@ -196,7 +207,6 @@ class TaskBar(ttk.Frame):
             self.mid_frame, 
             font=bigger_font, padding=5,
             text=shrink_path(self.task.config.get_filepath(), 32), 
-            style='Task.TLabel'
         )
 
         # создание локализованых строк "качество: высокое | частота кадров: 50"
@@ -209,32 +219,34 @@ class TaskBar(ttk.Frame):
             self.mid_frame, 
             font='14', padding=5,
             text=quality_text+framerate_text, 
-            style='Task.TLabel'
         )
 
         # создание правой части бара
-        self.right_frame = ttk.Frame(self, padding=5, style='Task.TFrame')
+        self.right_frame = ttk.Frame(self, padding=5)
        
         # кнопка "отмена"
-        self.widgets['btCancel'] = ttk.Button(self.right_frame, width=8, command=lambda: self.task.cancel())
+        self.widgets['btCancel'] = ttk.Button(
+            self.right_frame, 
+            width=8, 
+            command=lambda: self.task.cancel()
+        )
         
-        # кнопка "i"
-        # self.widgets['_btInfo'] = ttk.Button(self.right_frame, width=1, text='i', command=lambda: self.open_view(self.task.config))
-
         # полоса прогресса
         self.widgets['_progressBar'] = ttk.Progressbar(
             self.right_frame, 
             # length=320,
             maximum=1,
             value=0,
-            style='Task.Horizontal.TProgressbar'
         )
+
+        self._set_style(0)
 
         # каждый элемент таскбара при нажатии будет вызывать окно просмотра задачи
         self.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
         for w_name, w in self.widgets.items():
-            if not 'bt' in w_name:
+            if not 'bt' in w_name:  # привязка действий ко всем виджетам, кроме кнопок
                 w.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
+
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
@@ -247,13 +259,22 @@ class TaskBar(ttk.Frame):
 
         self.widgets['_progressBar'].pack(side='top', expand=True)
         self.widgets['btCancel'].pack(side='bottom')
-        # self.widgets['_btInfo'].pack(side='right')
         self.right_frame.pack(side='left', expand=True)
 
         self.pack(pady=[0, 10])
 
-    # обновление кнопки "отмена" после завершения задачи
-    def update_cancel_button(self):
+    # изменение бара на "завершённое" состояние
+    def finish(self):
+        self._set_style(1)
+        self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
+        self.widgets['btDelete'].config(
+            command=lambda: self.task.delete(),  # переопределение поведения кнопки
+        )
+        self.update_texts()  # обновление текста виджетов
+
+    # изменение бара на состояние "ошибки"
+    def set_error(self):
+        self._set_style(2)
         self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
         self.widgets['btDelete'].config(
             command=lambda: self.task.delete(),  # переопределение поведения кнопки

@@ -171,11 +171,12 @@ class WindowMixin(ABC):
         style.configure(style='.', font=_font)  # шрифт текста в кнопке
         self.option_add("*Font", _font)  # шрифты остальных виджетов
 
-        # task_background = '#94d0eb'
-        task_background = '#c4f0ff'
-        style.configure('Task.TFrame', background=task_background)
-        style.configure('Task.TLabel', background=task_background)
-        style.configure('Task.Horizontal.TProgressbar', background=task_background)
+        # создание стилей фона таскбара для разных состояний
+        taskbar_colors = {'Running': '#cccccc', 'Error': '#ffcccc', 'Success': '#9afcab'}
+        for status, color in taskbar_colors.items():
+            style.configure(f'{status}.Task.TFrame', background=color)
+            style.configure(f'{status}.Task.TLabel', background=color)
+            style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
 
         x, y = self.size                   # забираем объявленные размеры окна
         # x, y = int(x*scale), int(y*scale)  # масштабируем их

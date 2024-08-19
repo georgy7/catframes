@@ -118,34 +118,33 @@ class TaskConfig:
         command += ' --resolutions'
         return command
 
-    # создание консольной команды
-    def convert_to_command(self) -> str:
-        command = 'catframes'
+    # создание консольной команды в виде списка
+    def convert_to_command(self) -> List[str]:
+        command = ['catframes']
         if sys.platform == "win32":
-            command = 'catframes.exe'
+            command = ['catframes.exe']
     
         # добавление текстовых оверлеев
         for position, text in self._overlays.items():
             if text:
-                command += f' {position}="{text}"'
+                command.append(f'{position}="{text}"')
         
-        command += f' --margin-color "{self._color}"'         # параметр цвета
-        command += f" --frame-rate {self._framerate}"       # частота кадров
-        command += f" --quality {self._quality}"            # качество рендера
+        command.append(f'--margin-color={self._color}')     # параметр цвета
+        command.append(f"--frame-rate={self._framerate}")   # частота кадров
+        command.append(f"--quality={self._quality}")        # качество рендера
 
         if self._limit:                                     # ограничение времени, если есть
-            command += f" --limit {self._limit}"
+            command.append(f"--limit={self._limit}")
 
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
-            command += f" --force"
+            command.append("--force")
 
-        command += f" --port-range {self._ports[0]}:{self._ports[1]}"  # диапазон портов
+        command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
-            command += f' "{dir}"'
+            command.append(dir)
         
-        command += f' "{self._filepath}"'                   # добавление полного пути файла    
-        
+        command.append(self._filepath)                      # добавление полного пути файла    
         return command                                      # возврат собранной команды
 
 
@@ -157,10 +156,12 @@ class GuiCallback:
             self,
             update_function,
             finish_function,
+            error_function,
             delete_function,
             ):
         self.update = update_function
         self.finish = finish_function
+        self.set_error = error_function
         self.delete = delete_function
         
     
@@ -172,6 +173,11 @@ class GuiCallback:
     @staticmethod  # метод из RootWindow
     def finish(id: int):
         """сигнал о завершении задачи"""
+        ...
+
+    @staticmethod
+    def set_error(id: int, error: str):
+        """сигнал об ошибке в выполнении"""
         ...
 
     @staticmethod  # метод из RootWindow
@@ -188,45 +194,67 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-        self.process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
-        self.port = 0
+
+        # в зависимости от системы, дополнительные аргументы при создании процесса
+        if sys.platform == 'win32':
+            # для windows создание отдельной группы, чтобы завершить всё
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+        else:
+            # для unix создание процесса с новой сессией
+            os_issues = {'preexec_fn': os.setsid}
+
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)  # запуск catframes
+
+        self.error_flag = False
         self._progress = 0.0
-        # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
+        # self._port = 0
+        # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
         pattern = re.compile(r'Progress: +[0-9]+')
-        for line in io.TextIOWrapper(self.process.stdout):
-            data = re.search(pattern, line)
+
+        for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
+            data = re.search(pattern, line)                 # ищет в строке процент прогресса
             if data:
-                progress_percent = data.group().split()[1]
-                self._progress = int(progress_percent)/100
+                progress_percent = int(data.group().split()[1])  # если находит, забирает число
+                if self._progress != 100:                  # если процент 100 - предерживает его
+                    self._progress = progress_percent/100  # переводит чистый процент в сотые
+
+        if self.process.poll() != 0:  # если процесс завершился некорректно
+            self.error_flag = True    # ставит флаг ошибки
+
+        self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):
         return self._progress
 
     # # получение порта api процесса
     # def _recognize_port(self):
-    #     while not self.port:
+    #     while not self._port:
     #         text = self.process.stdout.readline()
     #         if not 'port' in text:
     #             continue
-    #         self.port = int(text.replace('port:', '').strip())
+    #         self._port = int(text.replace('port:', '').strip())
 
     # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
     # def get_progress(self) -> float:
-    #     if not self.port:  # если порт ещё не определён
+    #     if not self._port:  # если порт ещё не определён
     #         return 0.0
 
     #     try: # делает запрос на сервер, возвращает прогресс
-    #         data = requests.get(f'http://127.0.0.1:{self.port}/progress', timeout=1).json()        
+    #         data = requests.get(f'http://127.0.0.1:{self._port}/progress', timeout=1).json()        
     #         return data['framesEncoded'] / data['framesTotal']
     #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
     #         return 1.0
         
     # убивает процесс (для экстренной остановки)
     def kill(self):
-        os.kill(self.process.pid, signal.SIGABRT)
+        if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
+            self.process.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            parent_pid = self.process.pid
+            os.killpg(os.getppid(parent_pid), signal.SIGTERM)
 
 
 class Task:
@@ -251,8 +279,12 @@ class Task:
         self.gui_callback = gui_callback         # для оповещения наблюдателя
         TaskManager.reg_start(self)              # регистрация запуска
 
-        # запуск фонового процесса catframes
-        self._process_thread = CatframesProcess(self.command)
+        try:  # запуск фонового процесса catframes
+            self._process_thread = CatframesProcess(self.command)
+        
+        except Exception as e:  # если возникла ошибка, обработает её
+            self.handle_error(f'процесс не смог запуститься ({e})')
+            return
 
         # запуск потока слежения за прогрессом
         threading.Thread(target=self._progress_watcher, daemon=True).start()
@@ -265,6 +297,22 @@ class Task:
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
             self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
 
+            if self._process_thread.error_flag and not self.stop_flag:      # если процесс прервался не из-за юзера
+                return self.handle_error('процесс завершился некорректно')  # обработает ошибку             
+                
+        # если всё завершилось корректно
+        self.finish()  # обработает завершение
+
+    # обработка ошибки процесса
+    def handle_error(self, text):
+        TaskManager.reg_finish(self)   # регистрация завершения
+        self.gui_callback.set_error(   # сигнал об ошибке в ходе выполнения
+            self.id,
+            error=text
+        )
+
+    # обработка финиша задачи
+    def finish(self):
         self.done = True  # ставит флаг завершения задачи
         TaskManager.reg_finish(self)       # регистрация завершения
         self.gui_callback.finish(self.id)  # сигнал о завершении задачи
@@ -283,17 +331,18 @@ class Task:
 
 # выясняет у catframes, какого разрешения будет рендер
 def find_resolution(task_config: TaskConfig) -> Tuple[int]:
-    command = task_config.convert_to_resolution_command()
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+    return 800, 500  # временно возвращает статическое разрешение
+    # command = task_config.convert_to_resolution_command()
+    # process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
 
-    # поиск нужной строки в stdout процесса
-    pattern = r'Decision: [x0-9]+'
-    for line in io.TextIOWrapper(process.stdout):
-        data = re.search(pattern, line)
+    # # поиск нужной строки в stdout процесса
+    # pattern = r'Decision: [x0-9]+'
+    # for line in io.TextIOWrapper(process.stdout):
+    #     data = re.search(pattern, line)
 
-        if data:  # когда нашёл, превращает "Decision: 123x234" в (123, 234)
-            resolution = data.group().split()[1].split('x')
-            return tuple(map(int, resolution))
+    #     if data:  # когда нашёл, превращает "Decision: 123x234" в (123, 234)
+    #         resolution = data.group().split()[1].split('x')
+    #         return tuple(map(int, resolution))
     
 
 class TaskManager:

@@ -87,13 +87,21 @@ class RootWindow(Tk, WindowMixin):
 
     # удаление строки задачи
     def del_task_bar(self, task_id: int) -> None:
-        self.task_bars[task_id].delete()  # удаляет таскбар
-        del self.task_bars[task_id]  # чистит регистрацию
+        if task_id in self.task_bars:
+            self.task_bars[task_id].delete()  # удаляет таскбар
+            del self.task_bars[task_id]  # чистит регистрацию
+
+    # обработка ошибки процесса catframes
+    def set_error_task_bar(self, task_id: int, error: str) -> None:
+        if task_id in self.task_bars:
+            self.task_bars[task_id].set_error()
+        print(f"TODO оповещение пользователя об ошибке: {error}")
+        LocalWM.update_on_task_finish()
 
     # закрытие задачи, смена виджета
     def finish_task_bar(self, task_id: int) -> None:
         if task_id in self.task_bars:
-            self.task_bars[task_id].update_cancel_button()
+            self.task_bars[task_id].finish()
         LocalWM.update_on_task_finish()
 
     # расширение метода обновления текстов
@@ -302,10 +310,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
         # создание бара задачи, получение метода обновления прогресса
         update_progress: Callable = self.master.add_task_bar(task, view=NewTaskWindow.open_view)
 
-        gui_callback = GuiCallback(                       # создание колбека
-            update_function=update_progress,              # передача методов обновления,
-            finish_function=self.master.finish_task_bar,  # завершения задачи
-            delete_function=self.master.del_task_bar,     # и удаления бара
+        gui_callback = GuiCallback(                         # создание колбека
+            update_function=update_progress,                # передача методов обновления,
+            finish_function=self.master.finish_task_bar,    # завершения задачи
+            error_function=self.master.set_error_task_bar,  # обработки ошибки выполнения
+            delete_function=self.master.del_task_bar,       # и удаления бара
         )
 
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
@@ -352,8 +361,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
         def copy_to_clip():  # копирование команды в буфер обмена
+            command = ' '.join(self.task_config.convert_to_command())
             self.clipboard_clear()
-            self.clipboard_append(self.task_config.convert_to_command())
+            self.clipboard_append(command)
 
         # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.settings_grid)
