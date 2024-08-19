@@ -19,6 +19,12 @@ from PIL import Image, ImageTk
 
 DEFAULT_COLOR = '#888888'  # цвет стандартного фона изображения
 
+# константы имён ошибок
+INTERNAL_ERROR = 'internal'
+NO_FFMPEG_ERROR = 'noffmpeg'
+NO_CATFRAMES_ERROR = 'nocatframes'
+START_FAILED_ERROR = 'failed'
+
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
@@ -65,6 +71,10 @@ class Lang:
             'bar.btCancel': 'Cancel',
             'bar.btDelete': 'Delete',
             'bar.lbEmpty': 'Your projects will appear here',
+            'bar.error.noffmpeg': 'Error! FFmpeg not found!',
+            'bar.error.nocatframes': 'Error! Catframes not found!',
+            'bar.error.internal': 'Internal process error!',
+            'bar.error.failed': 'Error! Process start failed!',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
@@ -96,7 +106,8 @@ class Lang:
             'noti.title': 'Error',
             'noti.lbWarn': 'Invalid port range!',
             'noti.lbText': 'The acceptable range is from 10240 to 65025',
-            'noti.lbText2': 'The number of ports is at least 100'
+            'noti.lbText2': 'The number of ports is at least 100',
+            
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -109,6 +120,10 @@ class Lang:
             'bar.btCancel': 'Отмена',
             'bar.btDelete': 'Удалить',
             'bar.lbEmpty': 'Здесь появятся Ваши проекты',
+            'bar.error.noffmpeg': 'Ошибка! FFmpeg не найден!',
+            'bar.error.nocatframes': 'Ошибка! Catframes не найден!',
+            'bar.error.internal': 'Внутренняя ошибка процесса!',
+            'bar.error.failed': 'Ошибка при старте процесса!',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
@@ -391,7 +406,7 @@ class CatframesProcess:
 
         self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)  # запуск catframes
 
-        self.error_flag = False
+        self.error: Optional[str] = None
         self._progress = 0.0
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
         # self._port = 0
@@ -401,14 +416,17 @@ class CatframesProcess:
         pattern = re.compile(r'Progress: +[0-9]+')
 
         for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
+            if 'FFmpeg not found' in line:
+                self.error = NO_FFMPEG_ERROR
+
             data = re.search(pattern, line)                 # ищет в строке процент прогресса
             if data:
                 progress_percent = int(data.group().split()[1])  # если находит, забирает число
                 if self._progress != 100:                  # если процент 100 - предерживает его
                     self._progress = progress_percent/100  # переводит чистый процент в сотые
 
-        if self.process.poll() != 0:  # если процесс завершился некорректно
-            self.error_flag = True    # ставит флаг ошибки
+        if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
+            self.error = INTERNAL_ERROR   # текст последней строки
 
         self._progress == 1.0         # полный прогресс только после завершения скрипта
 
@@ -442,6 +460,19 @@ class CatframesProcess:
             parent_pid = self.process.pid
             os.killpg(os.getppid(parent_pid), signal.SIGTERM)
 
+    @classmethod
+    def check_error(cls) -> bool:
+        command = ['catframes']
+        if sys.platform == 'win32':
+            command = ['catframes.exe']
+        try:
+            proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
+        except FileNotFoundError:
+            print('\ncatframes не найден'.upper())
+            return NO_CATFRAMES_ERROR
+        if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
+            return NO_FFMPEG_ERROR
+
 
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
@@ -468,9 +499,11 @@ class Task:
         try:  # запуск фонового процесса catframes
             self._process_thread = CatframesProcess(self.command)
         
-        except Exception as e:  # если возникла ошибка, обработает её
-            self.handle_error(f'процесс не смог запуститься ({e})')
-            return
+        except FileNotFoundError:  # если catframes не найден
+            return self.handle_error(NO_CATFRAMES_ERROR)
+        
+        except Exception as e:  # если возникла другая ошибка, обработает её
+            return self.handle_error(START_FAILED_ERROR)
 
         # запуск потока слежения за прогрессом
         threading.Thread(target=self._progress_watcher, daemon=True).start()
@@ -483,18 +516,18 @@ class Task:
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
             self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
 
-            if self._process_thread.error_flag and not self.stop_flag:      # если процесс прервался не из-за юзера
-                return self.handle_error('процесс завершился некорректно')  # обработает ошибку             
+            if self._process_thread.error and not self.stop_flag:      # если процесс прервался не из-за юзера
+                return self.handle_error(self._process_thread.error)   # обработает ошибку             
                 
         # если всё завершилось корректно
         self.finish()  # обработает завершение
 
     # обработка ошибки процесса
-    def handle_error(self, text):
+    def handle_error(self, error: str):
         TaskManager.reg_finish(self)   # регистрация завершения
         self.gui_callback.set_error(   # сигнал об ошибке в ходе выполнения
             self.id,
-            error=text
+            error=error
         )
 
     # обработка финиша задачи
@@ -1067,12 +1100,13 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # изменение бара на состояние "ошибки"
-    def set_error(self):
+    def set_error(self, error: str):
         self._set_style(2)
         self.widgets['btDelete'] = self.widgets.pop('btCancel')  # переименование кнопки
         self.widgets['btDelete'].config(
             command=lambda: self.task.delete(),  # переопределение поведения кнопки
         )
+        self.widgets['_lbData'].config(text=Lang.read(f'bar.error.{error}'))
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
@@ -1592,10 +1626,9 @@ class RootWindow(Tk, WindowMixin):
             del self.task_bars[task_id]  # чистит регистрацию
 
     # обработка ошибки процесса catframes
-    def set_error_task_bar(self, task_id: int, error: str) -> None:
+    def handle_error(self, task_id: int, error: str) -> None:
         if task_id in self.task_bars:
-            self.task_bars[task_id].set_error()
-        print(f"TODO оповещение пользователя об ошибке: {error}")
+            self.task_bars[task_id].set_error(error)
         LocalWM.update_on_task_finish()
 
     # закрытие задачи, смена виджета
@@ -1813,7 +1846,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         gui_callback = GuiCallback(                         # создание колбека
             update_function=update_progress,                # передача методов обновления,
             finish_function=self.master.finish_task_bar,    # завершения задачи
-            error_function=self.master.set_error_task_bar,  # обработки ошибки выполнения
+            error_function=self.master.handle_error,        # обработки ошибки выполнения
             delete_function=self.master.del_task_bar,       # и удаления бара
         )
 
@@ -2041,9 +2074,14 @@ class NotifyWindow(Toplevel, WindowMixin):
 
 
 
-    #  из файла main.py:
+    #  из файла main.py:# from task_flows import CatframesProcess
+
 
 def main():
+    # error = CatframesProcess.check_error()
+    # if error:
+    #     messagebox.showerror("Error", error)
+    #     return
     root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
     root.mainloop()
 

@@ -39,6 +39,10 @@ class Lang:
             'bar.btCancel': 'Cancel',
             'bar.btDelete': 'Delete',
             'bar.lbEmpty': 'Your projects will appear here',
+            'bar.error.noffmpeg': 'Error! FFmpeg not found!',
+            'bar.error.nocatframes': 'Error! Catframes not found!',
+            'bar.error.internal': 'Internal process error!',
+            'bar.error.failed': 'Error! Process start failed!',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
@@ -70,7 +74,8 @@ class Lang:
             'noti.title': 'Error',
             'noti.lbWarn': 'Invalid port range!',
             'noti.lbText': 'The acceptable range is from 10240 to 65025',
-            'noti.lbText2': 'The number of ports is at least 100'
+            'noti.lbText2': 'The number of ports is at least 100',
+            
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -83,6 +88,10 @@ class Lang:
             'bar.btCancel': 'Отмена',
             'bar.btDelete': 'Удалить',
             'bar.lbEmpty': 'Здесь появятся Ваши проекты',
+            'bar.error.noffmpeg': 'Ошибка! FFmpeg не найден!',
+            'bar.error.nocatframes': 'Ошибка! Catframes не найден!',
+            'bar.error.internal': 'Внутренняя ошибка процесса!',
+            'bar.error.failed': 'Ошибка при старте процесса!',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',

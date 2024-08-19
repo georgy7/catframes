@@ -205,7 +205,7 @@ class CatframesProcess:
 
         self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)  # запуск catframes
 
-        self.error_flag = False
+        self.error: Optional[str] = None
         self._progress = 0.0
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
         # self._port = 0
@@ -215,14 +215,17 @@ class CatframesProcess:
         pattern = re.compile(r'Progress: +[0-9]+')
 
         for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
+            if 'FFmpeg not found' in line:
+                self.error = NO_FFMPEG_ERROR
+
             data = re.search(pattern, line)                 # ищет в строке процент прогресса
             if data:
                 progress_percent = int(data.group().split()[1])  # если находит, забирает число
                 if self._progress != 100:                  # если процент 100 - предерживает его
                     self._progress = progress_percent/100  # переводит чистый процент в сотые
 
-        if self.process.poll() != 0:  # если процесс завершился некорректно
-            self.error_flag = True    # ставит флаг ошибки
+        if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
+            self.error = INTERNAL_ERROR   # текст последней строки
 
         self._progress == 1.0         # полный прогресс только после завершения скрипта
 
@@ -256,6 +259,19 @@ class CatframesProcess:
             parent_pid = self.process.pid
             os.killpg(os.getppid(parent_pid), signal.SIGTERM)
 
+    @classmethod
+    def check_error(cls) -> bool:
+        command = ['catframes']
+        if sys.platform == 'win32':
+            command = ['catframes.exe']
+        try:
+            proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
+        except FileNotFoundError:
+            print('\ncatframes не найден'.upper())
+            return NO_CATFRAMES_ERROR
+        if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
+            return NO_FFMPEG_ERROR
+
 
 class Task:
     """Класс самой задачи, связывающейся с catframes"""
@@ -282,9 +298,11 @@ class Task:
         try:  # запуск фонового процесса catframes
             self._process_thread = CatframesProcess(self.command)
         
-        except Exception as e:  # если возникла ошибка, обработает её
-            self.handle_error(f'процесс не смог запуститься ({e})')
-            return
+        except FileNotFoundError:  # если catframes не найден
+            return self.handle_error(NO_CATFRAMES_ERROR)
+        
+        except Exception as e:  # если возникла другая ошибка, обработает её
+            return self.handle_error(START_FAILED_ERROR)
 
         # запуск потока слежения за прогрессом
         threading.Thread(target=self._progress_watcher, daemon=True).start()
@@ -297,18 +315,18 @@ class Task:
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
             self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
 
-            if self._process_thread.error_flag and not self.stop_flag:      # если процесс прервался не из-за юзера
-                return self.handle_error('процесс завершился некорректно')  # обработает ошибку             
+            if self._process_thread.error and not self.stop_flag:      # если процесс прервался не из-за юзера
+                return self.handle_error(self._process_thread.error)   # обработает ошибку             
                 
         # если всё завершилось корректно
         self.finish()  # обработает завершение
 
     # обработка ошибки процесса
-    def handle_error(self, text):
+    def handle_error(self, error: str):
         TaskManager.reg_finish(self)   # регистрация завершения
         self.gui_callback.set_error(   # сигнал об ошибке в ходе выполнения
             self.id,
-            error=text
+            error=error
         )
 
     # обработка финиша задачи

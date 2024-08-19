@@ -19,6 +19,12 @@ from PIL import Image, ImageTk
 
 DEFAULT_COLOR = '#888888'  # цвет стандартного фона изображения
 
+# константы имён ошибок
+INTERNAL_ERROR = 'internal'
+NO_FFMPEG_ERROR = 'noffmpeg'
+NO_CATFRAMES_ERROR = 'nocatframes'
+START_FAILED_ERROR = 'failed'
+
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
