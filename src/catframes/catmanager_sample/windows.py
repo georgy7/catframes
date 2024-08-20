@@ -268,10 +268,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
                     # если список не пуст, передаёт холсту следующую
                     self.image_canvas.update_image(images_to_show[index])
                     index = (index + 1) % len(images_to_show)  # инкремент
+                    time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
                 else:
                     # показывает на холсте надпись "выберите картинку"
                     self.image_canvas.clear_image()  
-                time.sleep(4)
+                time.sleep(1)
 
             except TclError:  # это исключение появится, когда окно закроется
                 return
