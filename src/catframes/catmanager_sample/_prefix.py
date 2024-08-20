@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
 
-DEFAULT_COLOR = '#888888'  # цвет стандартного фона изображения
+DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 
 # константы имён ошибок
 INTERNAL_ERROR = 'internal'

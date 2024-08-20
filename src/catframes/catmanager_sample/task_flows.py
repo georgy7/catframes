@@ -46,7 +46,7 @@ class TaskConfig:
                 
         self._dirs: List[str] = []                    # пути к директориям с изображениями
         self._overlays: Dict[str, str] = {}           # словарь надписей
-        self._color: str = DEFAULT_COLOR              # цвет отступов и фона
+        self._color: str = DEFAULT_CANVAS_COLOR       # цвет отступов и фона
         self._framerate: int                          # частота кадров
         self._quality: str                            # качество видео
         self._quality_index: int = 0                  # номер значения качества

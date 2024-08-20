@@ -270,7 +270,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
                     index = (index + 1) % len(images_to_show)  # инкремент
                 else:
                     # показывает на холсте надпись "выберите картинку"
-                    self.image_canvas.set_empty()  
+                    self.image_canvas.clear_image()  
                 time.sleep(4)
 
             except TclError:  # это исключение появится, когда окно закроется
@@ -363,7 +363,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbQuality'] = ttk.Label(self.settings_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(self.settings_grid, command=ask_color, text=DEFAULT_COLOR, width=7)
+        self.widgets['_btColor'] = Button(self.settings_grid, command=ask_color, text=DEFAULT_CANVAS_COLOR, width=7)
         if self.view_mode:
             color = self.task_config.get_color()
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки

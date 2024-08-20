@@ -304,6 +304,18 @@ class TaskBar(ttk.Frame):
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
 
 
+class ImageComposite:
+    """Класс для хранения информации о картинке
+    Также, сохраняет tk ссылку на картнику"""
+
+    def __init__(self) -> None:
+        self.id: int = None
+        self.pil: Image = None
+        self.tk: ImageTk = None
+        self.stock = True
+        self.hidden = True
+
+
 class ImageCanvas(Canvas):
     """Объект холста с картинкой в окне создания задачи.
     на которой отображаются "умные" поля ввода.
@@ -314,7 +326,7 @@ class ImageCanvas(Canvas):
             master: Tk, 
             veiw_mode: bool,
             overlays: list = None,
-            background: str = '#888888'
+            background: str = DEFAULT_CANVAS_COLOR
         ):
 
         self.default_width = self.width = 800
@@ -324,39 +336,171 @@ class ImageCanvas(Canvas):
         super().__init__(master, width=self.width, height=self.height, highlightthickness=0, background=background)
         self.pack()
         
-        self.view_mode = veiw_mode
+        self.view_mode = veiw_mode  # флаг режима просмотра
         self.default_overlays = overlays
+        self.color = background
 
         self.sq_size = 24  # размер прозр. квадрата
-        self.pil_img = None
-        self.img = None
-        self.img_id = None
-        self.init_text = None
-
-        self.color = background
         self.alpha_square = None
 
-        self._create_image()
-        self._create_entries()
-        self._setup_entries()
+        self.init_text = None
+        self._create_init_text()    # создание пригласительной надписи
+        if not veiw_mode:           # и, если это не режим просмотра,
+            self._show_init_text()  # показывает надпись
+
+        self.new_img = ImageComposite()   # изображения, которые будут
+        self.old_img = ImageComposite()   # менять прозрачность по очереди
+        self._create_image(self.new_img)  # и их настройка
+        self._create_image(self.old_img)
+
+        self.alpha_step = 0.1  # Шаг изменения прозрачности 
+        self.delay = 20  # Задержка между кадрами (мс) 
+
+        self._create_entries()  # создание полей ввода, квадратов, лейблов
+        self._setup_entries()   # их настройка и позиционирование
+
+    # приобразование ссылки на картинку, наполнение объекта композита
+    def _open_image(self, image_link: str, img: ImageComposite):
+        try:
+            pil_img = Image.open(image_link)               # открытие изображения по пути
+            img_ratio = pil_img.size[0] / pil_img.size[1]  # оценка соотношения сторон картинки
+            pil_img = pil_img.resize(
+                (int(self.height*img_ratio), self.height), # масштабирование с учётом соотношения
+                Image.LANCZOS
+            )  
+            img.pil = pil_img
+            img.tk = ImageTk.PhotoImage(pil_img)  # загрузка картинки и создание виджета
+            img.stock = False
+
+        except (FileNotFoundError, AttributeError):     # если файл не найден
+            self._set_empty(img)                         # создаёт пустую картинку
+    
+    # создание изображения
+    def _create_image(self, img: ImageComposite):
+        self._set_empty(img)  # запись пустой картинки
+        img.id = self.create_image(
+            (self.width//2)-(img.tk.width()//2), 0, # координаты
+            anchor=NW, image=img.tk  # передача изображения
+        )
+        # привязка фокусировки на холст при нажатие на изображение, чтобы снять фокус с полей ввода
+        self.tag_bind(img.id, "<Button-1>", lambda event: self.focus_set())
+
+    # расположение картинки на холсте по центру
+    def _set_image_coords(self, img: ImageComposite):
+        self.coords(img.id, (self.width // 2)-(img.tk.width() // 2), 0)
+
+    # создание пустого изображения, и надписи "добавьте картинки"
+    def _set_empty(self, img: ImageComposite):
+        img.pil = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # пустое изображение
+        img.tk = ImageTk.PhotoImage(img.pil)               # создаём объект тк
+        img.stock = True        # установка флага, потому что изображение стоковое
+
+    # изменение прозрачности картинки
+    def _change_img_alpha(self, img: ImageComposite, alpha):
+        faded_current_image = img.pil.copy()              # копируем картинку 
+        faded_current_image.putalpha(int(alpha * 255))    # применяем альфа-канал 
+        img.tk = ImageTk.PhotoImage(faded_current_image)  # создаём тк картинку, сохраняем
+        self.itemconfig(img.id, image=img.tk)             # обновляем изображения на холсте 
+
+    # анимируем смену изображений (рекурсивный метод)
+    def _animate_transition(self, alpha: float = 1): 
+        if alpha <= 0:                   # если альфа-канал дошёл до нуля
+            self.old_img.hidden = True   # расставляем флаги прозрачности
+            self.new_img.hidden = False
+            self._update_all_labels()    # обновляем цвета лейблов
+            self._hide_init_text()       # только в конце прячем текст
+            return
+        
+        if not self.old_img.stock:       # если изображение не стоковое
+            self._change_img_alpha(self.old_img, alpha)  # делаем его прозрачнее
+        self._change_img_alpha(self.new_img, 1-alpha)    # а новое - наоборот
+
+        # вызываем этот же метод, но уменьшая альфа-канал
+        self.master.after(self.delay, self._animate_transition, alpha-self.alpha_step)
+            
+    # плавное исчезновение картинки (рекурсивный метод)
+    def _animate_fadeoff(self, alpha: float = 1):
+        if alpha <= 0:                   # если альфа-канал дошёл до нуля
+            self.old_img.hidden = True   # ставим флаг прозрачности
+            self._update_all_labels()    # обновляем цвета лейблов
+            return
+        
+        if not self.old_img.stock:
+            self._change_img_alpha(self.old_img, alpha)  # делаем картинку прозрачнее
+        self.master.after(self.delay, self._animate_fadeoff, alpha-self.alpha_step)  # рекурсия
+        
+    # обновление изображения (внешняя ручка)
+    def update_image(self, image_link: str):
+        self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
+        self._open_image(image_link, img=self.new_img)  # открываем картинку
+        self._set_image_coords(self.new_img)            # устанавливаем её координаты
+        self._animate_transition()                      # анимируем замену старой
+
+    # очистка холста от изображений (внешняя ручка)
+    def clear_image(self):
+        self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
+        self._show_init_text()                          # сначала показ пригласительного текста
+        self._animate_fadeoff()                         # анимируем исчезновение
+        self._set_empty(self.new_img)                   # устанавливаем стоковую картинку
+        self._set_image_coords(self.new_img)            # позиционируем её
+
+    # создание объекта пригласительного текста
+    def _create_init_text(self):
+        self.init_text = self.create_text(          # то добавляет её 
+            self.width/2, self.height/2,            # позиционирует по
+            font=("Arial", 24), justify='center',   # центру холста,
+            state='hidden', fill='#cccccc'          # делает невидимым
+        )
+        self.update_texts()                         # и обновляет тексты
+
+    # показывает пригласительный текст
+    def _show_init_text(self):
+        self.itemconfig(self.init_text, state='normal')
+
+    # удаляет пригласительный текст
+    def _hide_init_text(self):
+        self.itemconfig(self.init_text, state='hidden')
+
+    # проверка, тёмный ли фон на картинке за элементом канваса
+    def _is_dark_background(self, elem_id: int) -> bool:
+        try:
+            image_shift = self.coords(self.new_img.id)[0]   # сдвиг картинки от левого края холста
+            x, y = self.coords(elem_id)                 # координаты элемента на холсте
+            x -= int(image_shift)                       # поправка, теперь это коорд. элемента на картинке
+            if x < 0:
+                raise IndexError                        # если координата меньше нуля
+
+            if self.new_img.hidden:                     # если картинка спрятана
+                raise Exception
+            
+            color = self.new_img.pil.getpixel((x, y))   # цвет пикселя картинки на этих координатах
+            r, g, b = color[0:3]
+        except TypeError:                               # если pillow вернёт не ргб, а яркость пикселя
+            return color < 128
+        except Exception:                               # если пиксель за пределами картинки
+            r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
+            r, g, b = r/255, g/255, b/255               # выбранного фона холста
+        
+        brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
+        return brightness < 128                         # сравнение яркости
 
     # обновляет разрешение холста
-    # def update_resolution(self, resolution) -> int:
-    #     ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
-    #     last_height = self.height            # запоминает предыдущую высоту
-    #     if self.width < self.default_width:
-    #         self.width = self.default_width
+    def update_resolution(self, resolution) -> int:
+        ratio = resolution[0]/resolution[1]  # вычисляет соотношение сторон разрешения рендера
+        last_height = self.height            # запоминает предыдущую высоту
+        if self.width < self.default_width:
+            self.width = self.default_width
 
-    #     self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
+        self.height = int(self.width/ratio)  # высота холста растягивается по соотношению
         
-    #     if self.height > 600:                # но если высота больше 600
-    #         self.height = 600                # то высота выставляется в 600
-    #         self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
+        if self.height > 600:                # но если высота больше 600
+            self.height = 600                # то высота выставляется в 600
+            self.width = int(self.height*ratio)  # а ширина выставляется по соотношению
 
-    #     self.config(height=self.height, width=self.width)  # установка новых размеров
+        self.config(height=self.height, width=self.width)  # установка новых размеров
 
-    #     self._setup_entries()                # обновляет позиции и настройки всех виджетов
-    #     return self.height-last_height       # возвращает изменение высоты
+        self._setup_entries()                # обновляет позиции и настройки всех виджетов
+        return self.height-last_height       # возвращает изменение высоты
 
     # позиционирует и привязывает обработчики позиций
     def _setup_entries(self):
@@ -391,6 +535,7 @@ class ImageCanvas(Canvas):
                 "<FocusOut>", 
                 lambda event, entry=self.entries[i]: self._hide_entry(event, entry)
             )
+        self._update_all_labels()
 
     # инициализация полупрозрачнях треугольников и полей ввода
     def _create_entries(self):
@@ -402,6 +547,8 @@ class ImageCanvas(Canvas):
 
         # создание прозрачного квадрата
         self.alpha_square = self._create_alpha_square(self.sq_size, '#ffffff', 0.5)
+        if self.view_mode:
+            self.alpha_square = self._create_alpha_square(self.sq_size, '#ffffff', 0)
 
         # создание значка "+" и виджетов
         for i in range(8):
@@ -445,7 +592,11 @@ class ImageCanvas(Canvas):
         self.delete(self.shown[index])     # удаляет поле ввода
         self._update_label(index)
 
-    # обновляет тексты лейблов и видимость квадрата
+    def _update_all_labels(self):
+        for i in range(8):
+            self._update_label(i)
+
+    # обновляет текст лейбла и видимость квадрата
     def _update_label(self, index):
         label = self.labels[index]
         entry = self.entries[index]
@@ -467,73 +618,6 @@ class ImageCanvas(Canvas):
         self.itemconfig(label, text=text, font=font, fill=label_color)  # придание тексту нужных параметров
         self.itemconfig(square, state=square_state)                     # скрытие или проявление квадрата
 
-    # приобразование ссылки на картинку в объект
-    def _open_image(self, image_link: str):
-        try:
-            pil_img = Image.open(image_link)               # открытие изображения по пути
-            img_ratio = pil_img.size[0] / pil_img.size[1]  # оценка соотношения сторон картинки
-            pil_img = pil_img.resize(
-                (int(self.height*img_ratio), self.height), # масштабирование с учётом соотношения
-                Image.LANCZOS
-            )  
-            self.pil_img = pil_img
-            self.img = ImageTk.PhotoImage(pil_img)         # загрузка картинки и создание виджета
-            
-            if self.init_text:                             # если есть надпись "добавьте картинку"
-                self.delete(self.init_text)                # то удаляет её
-                self.init_text = None
-
-        except (FileNotFoundError, AttributeError):        # если файл не найден
-            self.set_empty()                               # создаёт пустую картинку
-
-    # создание пустого изображения, и надписи "добавьте картинки"
-    def set_empty(self):
-        self.img = ImageTk.PhotoImage(                                  # создаёт пустое изображение
-            Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # с прозрачным фоном
-        )
-        if not self.init_text:                             # если нет надписи добавьте картинку
-            self.init_text = self.create_text(             # то добавляет её 
-                self.width/2, self.height/2,               # по центру холста
-                font=("Arial", 24), justify='center'
-            )
-            self.update_texts()                            # и обновляет тексты
-
-    # создание изображения
-    def _create_image(self, image_link: str = None):
-        self._open_image(image_link)
-        self.img_id = self.create_image((self.width//2)-(self.img.width()//2), 0, anchor=NW, image=self.img)
-
-        # привязка фокусировки на холст при нажатие на изображение, чтобы снять фокус с полей ввода
-        self.tag_bind(self.img_id, "<Button-1>", lambda event: self.focus_set())
-
-    # обновление изображения 
-    def update_image(self, image_link: str):
-        self._open_image(image_link)
-        self.itemconfig(self.img_id, image=self.img)                            # замена изображения
-        self.coords(self.img_id, (self.width // 2)-(self.img.width() // 2), 0)  # повторное задание координат
-        for i in range(8):
-            self._update_label(i)
-
-    # проверка, тёмный ли фон на картинке за элементом канваса
-    def _is_dark_background(self, elem_id: int) -> bool:
-        try:
-            image_shift = self.coords(self.img_id)[0]   # сдвиг картинки от левого края холста
-            x, y = self.coords(elem_id)                 # координаты элемента на холсте
-            x -= int(image_shift)                       # поправка, теперь это коорд. элемента на картинке
-            if x < 0:
-                raise IndexError                        # если координата меньше нуля
-
-            color = self.pil_img.getpixel((x, y))       # цвет пикселя картинки на этих координатах
-            r, g, b = color[0:3]
-        except TypeError:                               # если pillow вернёт не ргб, а яркость пикселя
-            return color < 128
-        except Exception:                               # если пиксель за пределами картинки
-            r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
-            r, g, b = r/255, g/255, b/255               # выбранного фона холста
-            
-        brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
-        return brightness < 128                         # сравнение яркости
-
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:
         entries_text = map(lambda entry: entry.get(), self.entries)
@@ -543,6 +627,7 @@ class ImageCanvas(Canvas):
     def update_background_color(self, color: str):
         self.color = color
         self.config(background=color)
+        self._update_all_labels()
 
     # обновление
     def update_texts(self):
