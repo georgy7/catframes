@@ -1100,6 +1100,69 @@ class TaskBar(ttk.Frame):
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
 
 
+class ResizingField(Text):
+    """Поле, переводящее курсор по нажатию Enter,
+    и изменяющее свой размер по количеству строк"""
+
+    def __init__(self, master: Canvas, width: int, font: tuple):
+        super().__init__(master, width=width, font=font)
+        self.default_width = width
+        self.id_on_canvas: int = None   # id объекта на холсте
+        self.coords: list = None        # координаты объекта на холсте
+
+        self.bind("<Escape>", self._on_escape)  # привязка нажатия Escape
+        self.bind("<Return>", self._on_enter_press)  # привязка нажатия Enter
+        self.bind("<<Modified>>", self._on_text_change)  # привязка изменения текста
+        self.configure(height=1, wrap="word")  # начальная высота 1 строка и перенос по словам
+
+    # получение всего текста в поле
+    def get_text(self):
+        return self.get("1.0", "end-1c").strip('\n ')
+
+    # фокусировка на объект холста, чтобы убрать это поле ввода
+    def _on_escape(self, event):
+        self.master.focus_set()
+
+    # обновление высоты после выполнения стандартного переноса строки
+    def _on_enter_press(self, event):
+        self.after(1, self._update_height)
+
+    # сбрасываем статус изменения текста, чтобы событие могло срабатывать повторно
+    def _on_text_change(self, event):
+        self._update_height()
+        # self._update_width()
+        self.edit_modified(False)
+
+    # получение id себя на холсте
+    def bind_self_id(self, id):
+        self.id_on_canvas = id
+        self.coords = self.master.coords(id)
+
+    # обновление высоты, исходя из количества строк
+    def _update_height(self):
+        num_lines = int(self.index('end-1c').split('.')[0])  # определяем количество строк
+        # self._update_coords(num_lines-1)
+        self.configure(height=num_lines)  # устанавливаем высоту
+
+    # обновление ширины, исходя из самой длинной строки
+    # def _update_width(self):
+    #     lines = self.get_text().split('\n')
+    #     longest = len(max(lines, key=lambda i: len(i)))
+    #     if longest < self.default_width:
+    #         self.config(width=self.default_width)
+    #         return
+    #     self.config(width=longest+2)
+
+    
+    # движение по вертикали при изменении количества строк
+    # def _update_coords(self, steps):
+    #     self.master.coords(
+    #         self.id_on_canvas, 
+    #         self.coords[0], 
+    #         self.coords[1]-(steps*9)
+    #     )
+
+
 class ImageComposite:
     """Класс для хранения информации о картинке
     Также, сохраняет tk ссылку на картнику"""
@@ -1302,7 +1365,6 @@ class ImageCanvas(Canvas):
     def _setup_entries(self):
         x_pad = int(self.width / 8)  # отступ по горизонтали, исходя из ширины холста
         y_pad = 50                   # отступ по вертикали статический
-
         positions = [
             (x_pad, y_pad),                             # верхний левый
             (self.width // 2, y_pad),                   # верхний
@@ -1346,6 +1408,9 @@ class ImageCanvas(Canvas):
         if self.view_mode:
             self.alpha_square = self._create_alpha_square(self.sq_size, '#ffffff', 0)
 
+        l, c, r = 'left', 'center', 'right'
+        justify_indexes = (l, c, r, r, r, c, l, l)
+
         # создание значка "+" и виджетов
         for i in range(8):
             """У всех объектов здесь нулевые координаты. 
@@ -1355,17 +1420,17 @@ class ImageCanvas(Canvas):
             square = self.create_image(0, 0, image=self.alpha_square, anchor='nw')
 
             # добавление текста
-            label = self.create_text(0, 0, text='+', font=("Arial", 24), justify='center')  
+            label = self.create_text(0, 0, text='+', font=("Arial", 24), justify=justify_indexes[i])  
 
             # инициализация поля ввода
-            entry = Entry(self, font=("Arial", 12), justify='center')  
+            entry = ResizingField(self, width=15, font=("Arial", 14))
             
             if self.view_mode:  # если это режим просмотра, заполняет поля ввода текстом
-                entry.insert(0, self.default_overlays[i])
+                entry.insert('end', self.default_overlays[i])
 
             # записывает сущности в их словари
             self.alpha_squares.append(square)
-            self.entries.append(entry) 
+            self.entries.append(entry)
             self.labels.append(label)
     
     # создаёт картинку прозрачного квадрата
@@ -1378,10 +1443,11 @@ class ImageCanvas(Canvas):
     # отображает поле ввода
     def _show_entry(self, event, pos, entry):
         index = self.entries.index(entry)
-        entry_window = self.create_window(pos, window=entry, anchor=CENTER)
-        self.shown[index] = entry_window
+        entry_id = self.create_window(pos, window=entry, anchor=CENTER)
+        entry.bind_self_id(entry_id)
+        self.shown[index] = entry_id
         entry.focus_set()
-
+        
     # прячет поле ввода, меняет текст в лейбле
     def _hide_entry(self, event, entry):
         index = self.entries.index(entry)
@@ -1403,8 +1469,8 @@ class ImageCanvas(Canvas):
         square_state = 'normal'
         label_color = 'black'
 
-        if entry.get() or self.view_mode:  # если в поле ввода указан какой-то текст
-            text = entry.get()       # этот текст будет указан в лейбле
+        if entry.get_text() or self.view_mode:  # если в поле ввода указан какой-то текст
+            text = entry.get_text()       # этот текст будет указан в лейбле
             font = ("Arial", 16)     # шрифт будет поменьше
             square_state = 'hidden'  # полупрозрачный квадрат будет скрыт
 
@@ -1416,7 +1482,7 @@ class ImageCanvas(Canvas):
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:
-        entries_text = map(lambda entry: entry.get(), self.entries)
+        entries_text = map(lambda entry: entry.get_text(), self.entries)
         return list(entries_text)
     
     # обновляет цвета отступов холста
