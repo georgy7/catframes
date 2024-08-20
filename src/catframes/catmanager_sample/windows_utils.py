@@ -358,10 +358,12 @@ class ResizingField(Text):
 
     # движение по вертикали при изменении количества строк
     def _update_coords(self, steps):
-        if self.side == CENTER:
+        if not self.default_coords:  # если поле ввода ещё не размещено
             return
-        if self.side == BOTTOM:
-            steps = -steps
+        if self.side == CENTER:      # если выравнивание по центру,
+            return                   # - менять координаты не нужно.
+        if self.side == BOTTOM:      # если выравнивание по низу, 
+            steps = -steps           # - поле пойдёт вверх при увеличении
         self.current_coords = [
             self.default_coords[0], 
             self.default_coords[1]+(steps*11)
