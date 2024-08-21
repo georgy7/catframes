@@ -324,6 +324,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
             overlays=self.task_config.get_overlays(),
             background=self.task_config.get_color(),
         )
+        # def update_canvas(event):
+        #     size = self.winfo_width(), self.winfo_height()-200
+        #     self.image_canvas.update_resolution(size)
+
+        # self.bind('<Configure>', update_canvas)
 
         self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
         self.dir_manager = DirectoryManager(
