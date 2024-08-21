@@ -421,7 +421,6 @@ class Overlay:
 
     # обновляет текст лейбла и видимость квадрата
     def update_label(self):
-
         text = '+'              # дефолтные значения, когда поле ввода пустое 
         font = ("Arial", 24)
         square_state = 'normal'
@@ -442,6 +441,9 @@ class Overlay:
         except TclError:
             pass
 
+    def get_text(self) -> str:
+        return self.entry.get_text()
+
     # установка кординат для квадрата и лейбла
     def set_coords(self, coords: Tuple[int]):
         self.master.coords(self.square_id, coords[0]-self.sq_size/2, coords[1]-self.sq_size/2) 
@@ -456,7 +458,6 @@ class Overlay:
     
     # отображает поле ввода
     def _show_entry(self, event):
-
         label_coords = self.master.coords(self.label_id)
         self.master.coords(self.entry_id, *label_coords)
         self.entry.bind_self_id(self.entry_id)
@@ -519,6 +520,11 @@ class OverlaysUnion:
         for i, pos in enumerate(positions):
             self.overlays[i].set_coords(pos)
         self.update()
+
+    # 
+    def get_text(self) -> List[str]:
+        entries_text = map(lambda overlay: overlay.get_text(), self.overlays)
+        return list(entries_text)
 
     # обновление всех лейблов
     def update(self):
@@ -725,8 +731,7 @@ class ImageCanvas(Canvas):
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:
-        entries_text = map(lambda entry: entry.get_text(), self.entries)
-        return list(entries_text)
+        return self.overlays.get_text()
     
     # обновляет цвета отступов холста
     def update_background_color(self, color: str):
