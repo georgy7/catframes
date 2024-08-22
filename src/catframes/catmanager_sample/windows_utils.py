@@ -315,7 +315,6 @@ class ResizingField(Text):
         self.id_on_canvas: int = None   # id объекта на холсте
         self.default_coords: list = None  # начальные координаты объекта на холсте
         self.vertical_shift = 0  # смещение по вертикали от начальных координат
-        self.shift_updated = False  # флаг о том, что смещение изменилось
 
         self.bind("<Escape>", self._on_escape)      # привязка нажатия Escape
         self.bind("<<Modified>>", self._on_text_change)  # привязка изменения текста
@@ -348,6 +347,7 @@ class ResizingField(Text):
     def _on_text_change(self, event):
         self._update_height()
         self._update_width()
+        self.master.overlays.update()
         self.edit_modified(False)  # сбрасывает флаг изменения
 
     # обновление высоты, исходя из количества строк
@@ -365,9 +365,7 @@ class ResizingField(Text):
         if self.side == BOTTOM:      # если выравнивание по низу, 
             steps = -steps           # - поле пойдёт вверх при увеличении
 
-        self.vertical_shift = steps*11  # рассчёт вертикального смещения
-        self.shift_updated = True
-        
+        self.vertical_shift = steps*11  # рассчёт вертикального смещения        
         self.master.coords(
             self.id_on_canvas, 
             self.default_coords[0], 
@@ -485,7 +483,7 @@ class OverlaysUnion:
         self.overlays = []
 
         self._create_entries()
-        self.setup_entries()
+        self.update()
         
     # инициализация полей ввода
     def _create_entries(self):
@@ -502,7 +500,7 @@ class OverlaysUnion:
             self.overlays.append(overlay)
 
     # позиционирует и привязывает обработчики позиций
-    def setup_entries(self):
+    def update(self):
         x_pad = int(self.master.width / 8)  # отступ по горизонтали, исходя из ширины холста
         y_pad = int(self.master.height/ 8)  # отступ по вертикали статический
         positions = [
@@ -516,18 +514,21 @@ class OverlaysUnion:
             (x_pad,                   self.master.height//2),     # левый
         ]
 
-        # позиционирует каждый виджет, привязывает обработчик
-        for i, pos in enumerate(positions):
-            self.overlays[i].set_coords(pos)
-        self.update()
+        try:
+            # позиционирует каждый виджет, привязывает обработчик
+            for i, pos in enumerate(positions):
+                self.overlays[i].set_coords(pos)
+            self._update_labels()
+        except TclError:
+            pass
 
-    # 
+    # получение текста из всех оверлеев
     def get_text(self) -> List[str]:
         entries_text = map(lambda overlay: overlay.get_text(), self.overlays)
         return list(entries_text)
 
     # обновление всех лейблов
-    def update(self):
+    def _update_labels(self):
         for overlay in self.overlays:
             overlay.update_label()
 
@@ -645,7 +646,7 @@ class ImageCanvas(Canvas):
         if alpha <= 0:                   # если альфа-канал дошёл до нуля
             self.old_img.hidden = True   # расставляем флаги прозрачности
             self.new_img.hidden = False
-            self.overlays.update()       # обновляем цвета лейблов
+            self.overlays.update()       # обновляем оверлеи
             self._hide_init_text()       # только в конце прячем текст
             return
         
@@ -660,7 +661,7 @@ class ImageCanvas(Canvas):
     def _animate_fadeoff(self, alpha: float = 1):
         if alpha <= 0:                   # если альфа-канал дошёл до нуля
             self.old_img.hidden = True   # ставим флаг прозрачности
-            self.overlays.update()       # обновляем цвета лейблов
+            self.overlays.update()       # обновляем оверлеи
             return
         
         if not self.old_img.stock:
@@ -722,10 +723,12 @@ class ImageCanvas(Canvas):
         return brightness < 128                         # сравнение яркости
 
     # обновляет разрешение холста
-    def update_resolution(self, resolution: Tuple[int]) -> int:
-        self.width, self.height = resolution
-        self.config(height=self.height, width=self.width)  # установка новых размеров
-        self.overlays.setup_entries()                # обновляет позиции и настройки всех виджетов
+    def update_resolution(self, width, height) -> int:
+        if self.width == width and self.height == height:
+            return
+        self.width, self.height = width, height
+        self.config(height=height, width=width)  # установка новых размеров
+        self.overlays.update()                             # обновляет оверлеи
         self.coords(self.init_text, self.width/2, self.height/2)
         self.new_img.reload()
 
