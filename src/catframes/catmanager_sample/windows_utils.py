@@ -546,6 +546,7 @@ class ImageComposite:
         self.pil: Image = None
         self.tk: ImageTk = None
         self.link: str = None
+        self.height: int = None
         self._create_image()
     
     # создание изображения
@@ -559,6 +560,7 @@ class ImageComposite:
 
     # изменение размера картинки, подгонка под холст
     def _update_size(self, current_as_base: bool = False):
+        self.height = self.master.height
         ratio = self.orig_pil.size[0] / self.orig_pil.size[1]  # оценка соотношения сторон картинки
         try:
             sizes = int(self.master.height*ratio), self.master.height  # размеры с учётом соотношения
@@ -587,6 +589,7 @@ class ImageComposite:
 
     # создание пустого изображения, и надписи "добавьте картинки"
     def set_empty(self):
+        self.height = self.master.height
         self.orig_pil = Image.new("RGBA", (self.master.width, self.master.height), (0, 0, 0, 0))  # пустое изображение
         self.tk = ImageTk.PhotoImage(self.orig_pil)        # создаём объект тк
         self.stock = True                                  # установка флага стокового изображения
@@ -602,7 +605,6 @@ class ImageComposite:
     def reload(self):
         self._update_size()                                # обновление размера
         self.master.itemconfig(self.id, image=self.tk)     # замена тк-картинки на холсте
-        self.update_coords()                               # обновление координат
 
 
 class ImageCanvas(Canvas):
@@ -633,6 +635,7 @@ class ImageCanvas(Canvas):
         if not veiw_mode:           # и, если это не режим просмотра,
             self._show_init_text()  # показывает надпись
 
+        self.cleared = True
         self.new_img = ImageComposite(self)   # изображения, которые будут
         self.old_img = ImageComposite(self)   # менять прозрачность по очереди
 
@@ -670,6 +673,7 @@ class ImageCanvas(Canvas):
         
     # обновление изображения (внешняя ручка)
     def update_image(self, image_link: str):
+        self.cleared = False
         self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
         self.new_img.open_image(image_link)     # открываем картинку
         self.new_img.update_coords()            # устанавливаем её координаты
@@ -677,6 +681,9 @@ class ImageCanvas(Canvas):
 
     # очистка холста от изображений (внешняя ручка)
     def clear_image(self):
+        if self.cleared:
+            return
+        self.cleared = True
         self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
         self._show_init_text()                  # сначала показ пригласительного текста
         self._animate_fadeoff()                 # анимируем исчезновение
@@ -723,14 +730,21 @@ class ImageCanvas(Canvas):
         return brightness < 128                         # сравнение яркости
 
     # обновляет разрешение холста
-    def update_resolution(self, width, height) -> int:
-        if self.width == width and self.height == height:
+    def update_resolution(self, width: int, height: int, resize_image: bool):
+        if self.width == width and self.new_img.height == height:
             return
+        
+        if self.new_img.height == height:  # если высота картинки не изменилась
+            resize_image = False           # то пересчитать не нужно
+
         self.width, self.height = width, height
-        self.config(height=height, width=width)  # установка новых размеров
-        self.overlays.update()                             # обновляет оверлеи
-        self.coords(self.init_text, self.width/2, self.height/2)
-        self.new_img.reload()
+        self.config(height=height, width=width)             # установка новых размеров
+        self.overlays.update()                              # обновляет оверлеи
+        self.coords(self.init_text, self.width/2, self.height/2)  # позиция прив. текста
+
+        if resize_image:                # если нужен пересчёт картинки
+            self.new_img.reload()       # то пересчитывает
+        self.new_img.update_coords()    # обновляет координаты картинки
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:

@@ -234,46 +234,49 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
         self.image_updater_thread.start()
 
-    # поток, обновляющий картинку на на холсте
+    # поток, обновляющий картинку и размеры холста
     def canvas_updater(self):
         last_dirs = []       # копия списка последних директорий
         images_to_show = []  # список картинок для показа
         index = 0            # индекс картинки в этом списке
 
-        while True:
-            
-            # проверяет, поменялись ли директории
+        # проверяет, не поменялся ли список картинок
+        def check_images_change():
+            nonlocal images_to_show, last_dirs, index
+
             new_dirs = self.dir_manager.get_dirs()
-            if last_dirs != new_dirs:  # если поменялись
-                last_dirs = new_dirs   # запоминает их
+            if last_dirs == new_dirs:
+                return
 
-                # забирает список всех картинок
-                all_images = self.dir_manager.get_all_imgs()
+            last_dirs = new_dirs  # обновляем директории, забираем картинки
+            all_images = self.dir_manager.get_all_imgs()
 
-                # вычисляет шаг индекса (если катинок меньше 4ёх, то step == 0)
-                step = int(len(all_images)/4)
+            if len(all_images) < 4:  # если картинок меньше 4, забираем все
+                images_to_show = all_images
+                index = 0
+            else:                    # если их много - выбираем с нужным шагом
+                step = len(all_images) // 4
+                images_to_show = all_images[step::step]
 
-                # обновляет список картинок для показа
-                if step:   
-                    # берёт срез списка картинок, с нужным шагом
-                    images_to_show = all_images[step::step]
-                else:  
-                    # если картинок было меньше 4ёх, берёт весь список 
-                    images_to_show = all_images[:]
-                    index = 0  # обновляет индекс, чтобы
-                
-            # блок работы с холстом
-            try:  
-                if images_to_show:
-                    # если список не пуст, передаёт холсту следующую
-                    self.image_canvas.update_image(images_to_show[index])
-                    index = (index + 1) % len(images_to_show)  # инкремент
-                    time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
-                else:
-                    # показывает на холсте надпись "выберите картинку"
-                    self.image_canvas.clear_image()  
-                time.sleep(1)
+        # попытка обновления картинки
+        def update_image():
+            nonlocal index
 
+            if not images_to_show:  # если список картинок пуст
+                # показывает на холсте надпись "выберите картинку"
+                self.image_canvas.clear_image()
+                return
+
+            # если список не пуст, и счётчик дошёл
+            self.image_canvas.update_image(images_to_show[index])
+            index = (index + 1) % len(images_to_show)  # инкремент
+            time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
+
+        while True:
+            time.sleep(1)
+            check_images_change()
+            try:
+                update_image()  # пробуем обновить картинку
             except TclError:  # это исключение появится, когда окно закроется
                 return
 
@@ -317,20 +320,37 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        self.main_pane = PanedWindow(
+            self,
+            orient=VERTICAL,
+            sashwidth=5,
+            background='grey',
+            sashrelief='flat',
+            opaqueresize=True,
+            proxybackground='grey',
+            proxyborderwidth=5,
+            proxyrelief='flat'
+        )
+
+        self.canvas_frame = Frame(self.main_pane, background='black')
+        self.main_pane.add(self.canvas_frame)
+        self.main_pane.paneconfig(self.canvas_frame, minsize=300)
+        self.canvas_frame.pack_propagate(False)
+        self.canvas_frame.config(height=400)
 
         self.image_canvas = ImageCanvas(  # создание холста с изображением
-            self, 
+            self.canvas_frame, 
             veiw_mode=self.view_mode,
             overlays=self.task_config.get_overlays(),
             background=self.task_config.get_color(),
         )
-        # def update_canvas(event):
-        #     size = self.winfo_width(), self.winfo_height()-200
-        #     self.image_canvas.update_resolution(size)
 
-        # self.bind('<Configure>', update_canvas)
+        self.bottom_grid = Frame(self.main_pane)    # создание табличного фрейма ниже холста
+        self.main_pane.add(self.bottom_grid)
+        self.main_pane.paneconfig(self.bottom_grid, minsize=150)
 
-        self.bottom_grid = Frame(self)    # создание табличного фрейма ниже холста
+        self._bind_resize_events()
+
         self.dir_manager = DirectoryManager(
             self.bottom_grid, 
             veiw_mode=self.view_mode,
@@ -338,7 +358,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         self.settings_grid = Frame(self.bottom_grid)  # создание фрейма настроек в нижнем фрейме
-        
+
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
             if not self.dir_manager.validate_dirs(): # если каких-то директорий нет,
@@ -355,6 +375,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
             self.image_canvas.update_background_color(color)
+            self.canvas_frame.config(background=color)
             self.task_config.set_color(color)  # установка цвета в конфиге
             self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
 
@@ -404,10 +425,48 @@ class NewTaskWindow(Toplevel, WindowMixin):
                     continue
                 w.configure(state='disabled')
 
+    # привязка событий изменений размеров
+    def _bind_resize_events(self):
+        """ресайз картинки - это долгий процесс, PIL задерживает поток, 
+        поэтому, во избежание лагов окна - логика следующая:
+
+        если пользователь всё ещё тянет окно/шторку - 
+            холст меняет размер (оверлеи, квадратики, надпись)
+
+        но если события изменения не было уже 100мс - 
+            холст обновляет размер всего, в том числе - картинки"""
+        
+        resize_delay = 100   # задержка перед вызовом обновления
+        resize_timer = None  # идентификатор таймера окна
+
+        def trigger_update(resize_image: bool):
+            new_width = self.canvas_frame.winfo_width()
+            new_height = self.canvas_frame.winfo_height()
+            self.image_canvas.update_resolution(new_width, new_height, resize_image)
+
+        # вызов при любом любом изменении размера
+        def on_resize(event):
+            nonlocal resize_timer
+            trigger_update(resize_image=False)
+
+            # если таймер уже существует, отменяем его
+            if resize_timer:
+                self.after_cancel(resize_timer)
+
+            # новый таймер, который вызовет trigger_update через заданное время
+            resize_timer = self.after(resize_delay, trigger_update, True)
+
+        # привязка обработчика к событиям изменения размеров окна и перетягиания шторки
+        self.bind("<Configure>", on_resize)  # для изменения размеров окна
+        self.main_pane.bind("<Configure>", on_resize)  # для отпускания лкм на шторке
+
+
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_pane.pack(expand=True, fill='both')
+
         # упаковка нижнего фрейма для сетки
-        self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=100)
+        # self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=100)
 
         for i in range(2):  # настройка веса столбцов
             self.bottom_grid.columnconfigure(i, weight=1)

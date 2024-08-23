@@ -110,9 +110,9 @@ class WindowMixin(ABC):
 
         self._set_style()     # настройка внешнего вида окна
         self._to_center()     # размещение окна в центре экрана
-        self._init_widgets()  # создание виджетов
-        self.update_texts()   # установка текста нужного языка
-        self._pack_widgets()  # расстановка виджетов
+        self.after(1, self._init_widgets)  # создание виджетов
+        self.after(2, self.update_texts)   # установка текста нужного языка
+        self.after(3, self._pack_widgets)  # расстановка виджетов
 
     # закрытие окна
     def close(self) -> None:
@@ -162,11 +162,8 @@ class WindowMixin(ABC):
         # scale *= MAJOR_SCALING                     # домножаем на глобальную
 
         style=ttk.Style()
-        # if TTK_THEME: style.theme_use(TTK_THEME)   # применение темы, если есть
         _font = font.Font(
-            # family= "helvetica", 
             size=12, 
-            weight='bold'
         )
         style.configure(style='.', font=_font)  # шрифт текста в кнопке
         self.option_add("*Font", _font)  # шрифты остальных виджетов

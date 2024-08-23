@@ -252,7 +252,6 @@ class CatframesProcess:
         try:
             proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
         except FileNotFoundError:
-            print('\ncatframes не найден'.upper())
             return NO_CATFRAMES_ERROR
         if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
             return NO_FFMPEG_ERROR
