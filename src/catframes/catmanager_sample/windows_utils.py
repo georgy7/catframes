@@ -545,14 +545,14 @@ class ImageComposite:
         self.orig_pil: Image = None
         self.pil: Image = None
         self.tk: ImageTk = None
-        self.link: str = None
         self.height: int = None
+        self.width: int = None
         self._create_image()
     
     # создание изображения
     def _create_image(self):
         self.set_empty()  # запись пустой картинки
-        x, y = self.master.width//2 - self.tk.width()//2, 0
+        x, y = self.master.width//2 - self.height//2, 0
         self.id = self.master.create_image(x, y, anchor=NW, image=self.tk)  # передача изображения
         
         # привязка фокусировки на холст при нажатие на изображение, чтобы снять фокус с полей ввода
@@ -560,22 +560,30 @@ class ImageComposite:
 
     # изменение размера картинки, подгонка под холст
     def _update_size(self, current_as_base: bool = False):
-        self.height = self.master.height
-        ratio = self.orig_pil.size[0] / self.orig_pil.size[1]  # оценка соотношения сторон картинки
+        canvas_ratio = self.master.width / self.master.height  # соотношение сторон холста
+        ratio = self.orig_pil.size[0] / self.orig_pil.size[1]  # соотношение сторон картинки
+
+        if canvas_ratio > ratio:                                      # если холст по соотносшению шире
+            size = int(self.master.height*ratio), self.master.height    # упор по высоте
+        else:                                                         # а если холст по соотношению выше
+            size = self.master.width, int(self.master.width/ratio)      # то упор по высоте
+
+        if (self.width, self.height) == size:  # если размеры не поменялись
+            return
+
         try:
-            sizes = int(self.master.height*ratio), self.master.height  # размеры с учётом соотношения
-            self.pil = self.orig_pil.resize(sizes, Image.LANCZOS)      # масштабирование по размерам
-            self.tk = ImageTk.PhotoImage(self.pil)                     # загрузка новой тк-картинки
+            self.pil = self.orig_pil.resize(size, Image.LANCZOS)  # масштабирование
+            self.tk = ImageTk.PhotoImage(self.pil)                # загрузка новой тк-картинки
+            self.width, self.height = size                        # сохранение новых размеров
 
             if current_as_base:           # установка текущего размера картинки
                 self.orig_pil = self.pil  # как базового (для оптимизации)
-        except Exception:
+        except Exception:  # если PIL сломается внутри из-за сложного и частого вызова
             pass
 
     # приобразование ссылки на картинку, наполнение объекта композита
     def open_image(self, image_link: str):
         try:
-            self.link = image_link
             self.orig_pil = Image.open(image_link)   # открытие изображения по пути
             self._update_size(current_as_base=True)  # установка размеров картинки базовыми
             self.stock = False
@@ -584,13 +592,14 @@ class ImageComposite:
 
     # расположение картинки на холсте по центру
     def update_coords(self):
-        x, y = self.master.width//2 - self.tk.width()//2, 0
+        x = self.master.width//2 - self.width//2
+        y = self.master.height//2 - self.height//2
         self.master.coords(self.id, x, y)
 
     # создание пустого изображения, и надписи "добавьте картинки"
     def set_empty(self):
-        self.height = self.master.height
-        self.orig_pil = Image.new("RGBA", (self.master.width, self.master.height), (0, 0, 0, 0))  # пустое изображение
+        self.height, self.width = self.master.height, self.master.width
+        self.orig_pil = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # пустое изображение
         self.tk = ImageTk.PhotoImage(self.orig_pil)        # создаём объект тк
         self.stock = True                                  # установка флага стокового изображения
 
@@ -708,11 +717,12 @@ class ImageCanvas(Canvas):
 
     # проверка, тёмный ли фон на картинке за элементом канваса
     def is_dark_background(self, elem_id: int) -> bool:
-        image_shift = self.coords(self.new_img.id)[0]   # сдвиг картинки от левого края холста
+        x_shift, y_shift = self.coords(self.new_img.id) # сдвиг картинки от левого края холста
         x, y = self.coords(elem_id)                     # координаты элемента на холсте
         try:
-            x -= int(image_shift)                       # поправка, теперь это коорд. элемента на картинке
-            if x < 0:
+            x -= int(x_shift)                       # поправка, теперь это коорд. элемента на картинке
+            y -= int(y_shift)
+            if x < 0 or y < 0:
                 raise IndexError                        # если координата меньше нуля
 
             if self.new_img.hidden:                     # если картинка спрятана
@@ -731,11 +741,6 @@ class ImageCanvas(Canvas):
 
     # обновляет разрешение холста
     def update_resolution(self, width: int, height: int, resize_image: bool):
-        if self.width == width and self.new_img.height == height:
-            return
-        
-        if self.new_img.height == height:  # если высота картинки не изменилась
-            resize_image = False           # то пересчитать не нужно
 
         self.width, self.height = width, height
         self.config(height=height, width=width)             # установка новых размеров
@@ -822,7 +827,7 @@ class DirectoryManager(ttk.Frame):
         self.widgets['lbDirList'] = ttk.Label(self.top_frame)  # надпись "Список директорий:"
 
         # создание списка и полосы прокрутки
-        self.listbox = Listbox(self.top_frame, selectmode=SINGLE, width=28, height=4)
+        self.listbox = Listbox(self.top_frame, selectmode=SINGLE, width=20, height=8)
         self.scrollbar = ttk.Scrollbar(self.top_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.config(yscrollcommand=self.scrollbar.set)
 
@@ -839,7 +844,7 @@ class DirectoryManager(ttk.Frame):
             if not find_img_in_dir(dir_name):
                 return
 
-            self.listbox.insert(END, shrink_path(dir_name, 35))
+            self.listbox.insert(END, shrink_path(dir_name, 25))
             self.dirs.append(dir_name)  # добавление в список директорий
 
         # удаление выбранной директории из списка
