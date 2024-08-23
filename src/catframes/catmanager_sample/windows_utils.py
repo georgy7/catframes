@@ -588,7 +588,7 @@ class ImageComposite:
             self._update_size(current_as_base=True)  # установка размеров картинки базовыми
             self.stock = False
         except (FileNotFoundError, AttributeError):  # если файл не найден
-            self.set_empty(self)                     # создаёт пустую картинку
+            self.set_empty()                         # создаёт пустую картинку
 
     # расположение картинки на холсте по центру
     def update_coords(self):
@@ -600,6 +600,7 @@ class ImageComposite:
     def set_empty(self):
         self.height, self.width = self.master.height, self.master.width
         self.orig_pil = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # пустое изображение
+        self.pil = self.orig_pil                           # текущий объект pil будет таким же
         self.tk = ImageTk.PhotoImage(self.orig_pil)        # создаём объект тк
         self.stock = True                                  # установка флага стокового изображения
 
