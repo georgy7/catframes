@@ -169,8 +169,8 @@ class WindowMixin(ABC):
             y = border_gap
 
         # если окно вышло за низнюю границу экрана
-        if y+self.size[1]+border_gap > screen_size[1]:
-            y = screen_size[1]-self.size[1]-border_gap
+        if y+self.size[1]+(border_gap*3) > screen_size[1]:  # отступ больше в три раза, 
+            y = screen_size[1]-self.size[1]-(border_gap*3)  # учитывая панель задач или dock
 
         self.geometry(f'+{int(x)}+{int(y)}')
 
