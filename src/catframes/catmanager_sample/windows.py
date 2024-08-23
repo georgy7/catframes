@@ -272,11 +272,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
             index = (index + 1) % len(images_to_show)  # инкремент
             time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
 
+        time.sleep(0.1)
         while True:
-            time.sleep(1)
             check_images_change()
             try:
                 update_image()  # пробуем обновить картинку
+                time.sleep(1)
             except TclError:  # это исключение появится, когда окно закроется
                 return
 
