@@ -333,7 +333,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         self.canvas_frame = Frame(self.main_pane, background='black')
-        self.main_pane.add(self.canvas_frame)
+        self.main_pane.add(self.canvas_frame, stretch='always')
         self.main_pane.paneconfig(self.canvas_frame, minsize=300)
         self.canvas_frame.pack_propagate(False)
         self.canvas_frame.config(height=400)
@@ -346,7 +346,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         self.bottom_grid = Frame(self.main_pane)    # создание табличного фрейма ниже холста
-        self.main_pane.add(self.bottom_grid)
+        self.main_pane.add(self.bottom_grid, stretch='never')
         self.main_pane.paneconfig(self.bottom_grid, minsize=150)
 
         self._bind_resize_events()

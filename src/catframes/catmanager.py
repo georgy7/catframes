@@ -1614,7 +1614,7 @@ class DirectoryManager(ttk.Frame):
         self.widgets['lbDirList'] = ttk.Label(self.top_frame)  # надпись "Список директорий:"
 
         # создание списка и полосы прокрутки
-        self.listbox = Listbox(self.top_frame, selectmode=SINGLE, width=28, height=4)
+        self.listbox = Listbox(self.top_frame, selectmode=SINGLE, width=20, height=8)
         self.scrollbar = ttk.Scrollbar(self.top_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.config(yscrollcommand=self.scrollbar.set)
 
@@ -1631,7 +1631,7 @@ class DirectoryManager(ttk.Frame):
             if not find_img_in_dir(dir_name):
                 return
 
-            self.listbox.insert(END, shrink_path(dir_name, 35))
+            self.listbox.insert(END, shrink_path(dir_name, 25))
             self.dirs.append(dir_name)  # добавление в список директорий
 
         # удаление выбранной директории из списка
@@ -1936,7 +1936,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)  # список доступных фреймрейтов
 
-        self.size = 800, 650
+        self.size = 900, 500
         self.resizable(True, True)
 
         super()._default_set_up()
@@ -2032,7 +2032,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def _init_widgets(self):
         self.main_pane = PanedWindow(
             self,
-            orient=VERTICAL,
+            orient=HORIZONTAL,
             sashwidth=5,
             background='grey',
             sashrelief='flat',
@@ -2043,10 +2043,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         self.canvas_frame = Frame(self.main_pane, background='black')
-        self.main_pane.add(self.canvas_frame)
+        self.main_pane.add(self.canvas_frame, stretch='always')
         self.main_pane.paneconfig(self.canvas_frame, minsize=300)
         self.canvas_frame.pack_propagate(False)
-        self.canvas_frame.config(height=400)
+        self.canvas_frame.config(
+            width=self.winfo_width()-200,
+        )
 
         self.image_canvas = ImageCanvas(  # создание холста с изображением
             self.canvas_frame, 
@@ -2056,8 +2058,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         self.bottom_grid = Frame(self.main_pane)    # создание табличного фрейма ниже холста
-        self.main_pane.add(self.bottom_grid)
-        self.main_pane.paneconfig(self.bottom_grid, minsize=150)
+        self.main_pane.add(self.bottom_grid, stretch='never')
+        self.main_pane.paneconfig(self.bottom_grid, minsize=250)
 
         self._bind_resize_events()
 
@@ -2178,15 +2180,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
         # упаковка нижнего фрейма для сетки
         # self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=100)
 
-        for i in range(2):  # настройка веса столбцов
+        for i in range(1):  # настройка веса столбцов
             self.bottom_grid.columnconfigure(i, weight=1)
 
-        for i in range(3):  # настройка веса строк
+        for i in range(2):  # настройка веса строк
             self.bottom_grid.rowconfigure(i, weight=1)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.grid(row=1, column=0)    # левый столбец - менеджер директорий
-        self.settings_grid.grid(row=1, column=1)  # правый - фрейм настроек
+        self.dir_manager.grid(row=0, column=0)    # левый столбец - менеджер директорий
+        self.settings_grid.grid(row=1, column=0)  # правый - фрейм настроек
 
         # подпись и кнопка цвета       
         self.widgets['lbColor'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
