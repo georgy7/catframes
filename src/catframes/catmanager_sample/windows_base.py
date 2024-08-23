@@ -140,16 +140,37 @@ class WindowMixin(ABC):
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
+        border_gap = 30  # минимальный отступ от края окна при открытии
 
-        # если это побочное окно
-        if isinstance(self, Toplevel):
-            x = self.master.winfo_x() + self.master.winfo_width()/2 - self.size[0]/2  # размещаем по центру
-            y = self.master.winfo_y() + self.master.winfo_height()/2 - self.size[1]/2  # главного окна
+        screen_size = self.winfo_screenwidth(), self.winfo_screenheight()
 
-        # а если это главное окно    
-        else:  # размещаем по центру экрана
-            x = (self.winfo_screenwidth() - self.size[0]) / 2
-            y = (self.winfo_screenheight() - self.size[1]) / 2
+        # если это не побочное окно, то размещаем по центру экрана
+        if not isinstance(self, Toplevel):
+            x = (screen_size[0] - self.size[0]) / 2
+            y = (screen_size[1] - self.size[1]) / 2
+            self.geometry(f'+{int(x)}+{int(y)}')
+            return
+
+        # далее для побочных окон:
+        master_size = self.master.winfo_width(), self.master.winfo_height()
+        x = self.master.winfo_x() + master_size[0]/2 - self.size[0]/2  # размещаем по центру
+        y = self.master.winfo_y() + master_size[1]/2 - self.size[1]/2  # главного окна
+
+        # если окно вышло за левый край экрана
+        if x < border_gap:  
+            x = border_gap
+
+        # если окно вышло за правый край экрана
+        if x+self.size[0]+border_gap > screen_size[0]:
+            x = screen_size[0]-self.size[0]-border_gap
+
+        # если окно вышло за верхнюю границу
+        if y < border_gap:  
+            y = border_gap
+
+        # если окно вышло за низнюю границу экрана
+        if y+self.size[1]+border_gap > screen_size[1]:
+            y = screen_size[1]-self.size[1]-border_gap
 
         self.geometry(f'+{int(x)}+{int(y)}')
 
