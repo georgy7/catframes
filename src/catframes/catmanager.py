@@ -1278,6 +1278,8 @@ class Overlay:
 
         if self.entry.get_text():               # если в поле ввода есть текст
             shift_abs -= self.master.width//20  # смещаем его к краю на часть ширины холста
+        else:
+            shift_abs = 0
 
         if self.horizontal_pos == RIGHT:        # если поле справа
             self.horizontal_shift = shift_abs   # то смещение положительное
