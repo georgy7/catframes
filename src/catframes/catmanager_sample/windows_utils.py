@@ -308,13 +308,26 @@ class ResizingField(Text):
     """Поле, переводящее курсор по нажатию Enter,
     и изменяющее свой размер по количеству строк"""
 
-    def __init__(self, master: Canvas, width: int, font: tuple, side: str = CENTER):
-        super().__init__(master, width=width, font=font)
-        self.default_width = width
-        self.side = side
+    def __init__(self, master: Canvas, horizontal_pos, vertical_pos):
+        super().__init__(
+            master, 
+            width=10,
+            font=("Arial", 14), 
+            wrap=NONE, 
+            undo=True,
+            highlightthickness=2
+        )
+        self.default_width = 10
+        self.extra_width = 0
+        self.num_lines = 0
+
+        self.vertical_pos = vertical_pos
+        self.horizontal_pos = horizontal_pos
+        self.vertical_shift = 0  # смещение по вертикали от начальных координат
+        self.horisontal_shift = 0  # смещение по горизонтали
+
         self.id_on_canvas: int = None   # id объекта на холсте
         self.default_coords: list = None  # начальные координаты объекта на холсте
-        self.vertical_shift = 0  # смещение по вертикали от начальных координат
 
         self.bind("<Escape>", self._on_escape)      # привязка нажатия Escape
         self.bind("<<Modified>>", self._on_text_change)  # привязка изменения текста
@@ -343,53 +356,71 @@ class ResizingField(Text):
     def _on_escape(self, event):
         self.master.focus_set()
 
+
+
     # сбрасываем статус изменения текста, чтобы событие могло срабатывать повторно
     def _on_text_change(self, event):
-        self._update_height()
         self._update_width()
+        self._update_height()
+        self._update_coords()
         self.master.overlays.update()
         self.edit_modified(False)  # сбрасывает флаг изменения
 
+    # обновление ширины, исходя из самой длинной строки
+    def _update_width(self):
+        lines = self.get_text().split('\n')              # забираем список строк
+        longest = len(max(lines, key=lambda i: len(i)))  # вычисляем самую длинную
+
+        self.extra_width = 0
+        if longest > self.default_width-1:  # если строка слишком длинная, добавит
+            self.extra_width = longest + 2 - self.default_width  # дополнительную ширину
+        
+        y_shift_abs = self.extra_width*5          # рассчёт модуля горизонтального смещения  
+        if self.horizontal_pos == RIGHT:          # если выравнивание по правому краю 
+            self.horisontal_shift = -y_shift_abs  # поле пойдёт влево при расширении,
+        if self.horizontal_pos == LEFT:           # а если по левому
+            self.horisontal_shift = y_shift_abs   # - пойдёт вправо
+
     # обновление высоты, исходя из количества строк
-    def _update_height(self, *args):
-        num_lines = int(self.index('end-1c').split('.')[0])  # определяем количество строк
-        self._update_coords(num_lines-1)
-        self.configure(height=num_lines)  # устанавливаем высоту
+    def _update_height(self):
+        self.num_lines = int(self.index('end-1c').split('.')[0])  # определяем количество строк
+
+        x_shift_abs = (self.num_lines-1)*11          # рассчёт модуля вертикального смещения
+        if self.vertical_pos == BOTTOM:         # если выравнивание по низу 
+            self.vertical_shift = -x_shift_abs  # поле пойдёт вверх при увеличении,
+        if self.vertical_pos == TOP:            # а если по верху
+            self.vertical_shift = x_shift_abs   # - пойдёт вниз
+
 
     # движение по вертикали при изменении количества строк
-    def _update_coords(self, steps):
-        if not self.default_coords:  # если поле ввода ещё не размещено
-            return
-        if self.side == CENTER:      # если выравнивание по центру,
-            return                   # - менять координаты не нужно.
-        if self.side == BOTTOM:      # если выравнивание по низу, 
-            steps = -steps           # - поле пойдёт вверх при увеличении
+    def _update_coords(self):
+        # если поле ввода ещё не размещено
+        if not self.default_coords:  
+            return  # менять координаты не нужно.
 
-        self.vertical_shift = steps*11  # рассчёт вертикального смещения        
         self.master.coords(
             self.id_on_canvas, 
-            self.default_coords[0], 
+            self.default_coords[0]+self.horisontal_shift, 
             self.default_coords[1]+self.vertical_shift
         )
 
-    # обновление ширины, исходя из самой длинной строки
-    def _update_width(self):
-        lines = self.get_text().split('\n')
-        longest = len(max(lines, key=lambda i: len(i)))
-        if longest < self.default_width:
-            self.config(width=self.default_width)
-            return
-        self.config(width=longest+2)
+        self.config(
+            width=self.default_width+self.extra_width, 
+            height=self.num_lines
+        )
 
 
 class Overlay:
     """Единичный оверлей на холсте, как сущность из
     прозрачного квадрата, лейбла, и поля ввода."""
     
-    def __init__(self, master: Canvas, text: str, horisontal_pos, vertical_pos):
+    def __init__(self, master: Canvas, text: str, horizontal_pos, vertical_pos):
 
         self.master = master
-        self.view_mode = master.view_mode
+        self.view_mode: bool = master.view_mode
+        self.horizontal_pos = horizontal_pos
+
+        self.empty = bool(text)
 
         # настройи прозрачного квадрата
         self.sq_size = 20
@@ -403,11 +434,12 @@ class Overlay:
         self.square_id = self.master.create_image(0, 0, image=self.alpha_square, anchor='nw')
 
         # добавление текста
-        self.label_id = self.master.create_text(0, 0, text=text, font=("Arial", 24), justify=horisontal_pos)
+        self.label_id = self.master.create_text(0, 0, text=text, font=("Arial", 24), justify=horizontal_pos)
         self.vertical_shift = 0  # смещение поля ввода и лейбла по вертикали
+        self.horizontal_shift = 0  # смещение по горизонтали
 
         # инициализация поля ввода
-        self.entry = ResizingField(self.master, width=10, font=("Arial", 14), side=vertical_pos)
+        self.entry = ResizingField(self.master, horizontal_pos, vertical_pos)
         self.entry_id = self.master.create_window(0, 0, window=self.entry, state='hidden', anchor=CENTER)
         self.entry.bind_self_id(self.entry_id)  # передача полю ввода своего id на холсте
         self.entry.set_text(text)
@@ -416,6 +448,27 @@ class Overlay:
         if not self.view_mode:
             self.master.tag_bind(self.label_id, "<Button-1>", self._show_entry)
             self.entry.bind("<FocusOut>", self._hide_entry)
+
+    # обновление смещений текста
+    def _update_shifts(self):
+        self.vertical_shift = self.entry.vertical_shift  # смещение по вертикали от поля ввода
+
+        if self.horizontal_pos == CENTER:  # если поле по центру
+            self.horizontal_shift = 0      # то никаких смещений не нужно
+            return
+
+        bbox = self.master.bbox(self.label_id)  # вычисляем размеры, которые
+        text_object_width = bbox[2]-bbox[0]     # лейбл занимает на холсте
+        shift_abs = text_object_width//2 - self.sq_size/2  # смещение 
+
+        if self.entry.get_text():               # если в поле ввода есть текст
+            shift_abs -= self.master.width//20  # смещаем его к краю на часть ширины холста
+
+        if self.horizontal_pos == RIGHT:        # если поле справа
+            self.horizontal_shift = shift_abs   # то смещение положительное
+        
+        if self.horizontal_pos == LEFT:         # если слева - 
+            self.horizontal_shift = -shift_abs  # отрицательное
 
     # обновляет текст лейбла и видимость квадрата
     def update_label(self):
@@ -427,13 +480,12 @@ class Overlay:
         if self.entry.get_text() or self.view_mode:  # если в поле ввода указан какой-то текст
             text = self.entry.get_text()             # этот текст будет указан в лейбле
             font = ("Arial", 16)                     # шрифт будет поменьше
-            square_state = 'hidden'             #     полупрозрачный квадрат будет скрыт
+            square_state = 'hidden'                  # полупрозрачный квадрат будет скрыт
 
-            dark_background = self.master.is_dark_background(self.label_id)      # проверится, тёмный ли фон у тейбла
+            dark_background = self.master.is_dark_background(self.label_id)  # проверится, тёмный ли фон у тейбла
             label_color = 'white' if dark_background else 'black'  # если тёмный - шрифт светлый, и наоборот
 
         try:
-            self.vertical_shift = self.entry.vertical_shift
             self.master.itemconfig(self.label_id, text=text, font=font, fill=label_color)  # придание тексту нужных параметров
             self.master.itemconfig(self.square_id, state=square_state)                     # скрытие или проявление квадрата
         except TclError:
@@ -444,8 +496,9 @@ class Overlay:
 
     # установка кординат для квадрата и лейбла
     def set_coords(self, coords: Tuple[int]):
+        self._update_shifts()
         self.master.coords(self.square_id, coords[0]-self.sq_size/2, coords[1]-self.sq_size/2) 
-        self.master.coords(self.label_id, coords[0], coords[1]+self.vertical_shift)
+        self.master.coords(self.label_id, coords[0]-self.horizontal_shift, coords[1]+self.vertical_shift)
 
     # создаёт картинку прозрачного квадрата
     def _create_alpha_square(self, size: int, fill: str, alpha: float):
@@ -490,13 +543,13 @@ class OverlaysUnion:
 
         # выравнивания виджетов, относительно расположения
         c, l, r, t, b = CENTER, LEFT, RIGHT, TOP, BOTTOM  # сокращения
-        horisontal_pos = (l, c, r, r, r, c, l, l)  # 8 позиций горизонтали
+        horizontal_pos = (l, c, r, r, r, c, l, l)  # 8 позиций горизонтали
         vertical_pos   = (t, t, t, c, b, b, b, c)  # 8 позиций вертикали
 
         # создание каждого оверлея
         for i in range(8):
             text = self.default_texts[i] if self.view_mode else ''
-            overlay = Overlay(self.master, text, horisontal_pos[i], vertical_pos[i])
+            overlay = Overlay(self.master, text, horizontal_pos[i], vertical_pos[i])
             self.overlays.append(overlay)
 
     # позиционирует и привязывает обработчики позиций
@@ -515,10 +568,10 @@ class OverlaysUnion:
         ]
 
         try:
-            # позиционирует каждый виджет, привязывает обработчик
+            # позиционирует каждый виджет и обновляет текст
             for i, pos in enumerate(positions):
                 self.overlays[i].set_coords(pos)
-            self._update_labels()
+                self.overlays[i].update_label()
         except TclError:
             pass
 
@@ -527,10 +580,6 @@ class OverlaysUnion:
         entries_text = map(lambda overlay: overlay.get_text(), self.overlays)
         return list(entries_text)
 
-    # обновление всех лейблов
-    def _update_labels(self):
-        for overlay in self.overlays:
-            overlay.update_label()
 
 
 class ImageComposite:
