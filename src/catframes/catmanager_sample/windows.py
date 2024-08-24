@@ -348,19 +348,19 @@ class NewTaskWindow(Toplevel, WindowMixin):
             background=self.task_config.get_color(),
         )
 
-        self.bottom_grid = Frame(self.main_pane)    # создание табличного фрейма ниже холста
-        self.main_pane.add(self.bottom_grid, stretch='never')
-        self.main_pane.paneconfig(self.bottom_grid, minsize=250)
+        self.menu_grid = Frame(self.main_pane)    # создание табличного фрейма меню
+        self.main_pane.add(self.menu_grid, stretch='never')
+        self.main_pane.paneconfig(self.menu_grid, minsize=250)
 
         self._bind_resize_events()
 
         self.dir_manager = DirectoryManager(
-            self.bottom_grid, 
+            self.menu_grid, 
             veiw_mode=self.view_mode,
             dirs=self.task_config.get_dirs() 
         )
 
-        self.settings_grid = Frame(self.bottom_grid)  # создание фрейма настроек в нижнем фрейме
+        self.settings_grid = Frame(self.menu_grid)  # создание фрейма настроек в нижнем фрейме
 
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -470,39 +470,39 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.main_pane.pack(expand=True, fill='both')
+        self.main_pane.pack(expand=True, fill=BOTH)
 
-        # упаковка нижнего фрейма для сетки
-        # self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=100)
-
-        for i in range(1):  # настройка веса столбцов
-            self.bottom_grid.columnconfigure(i, weight=1)
-
-        for i in range(2):  # настройка веса строк
-            self.bottom_grid.rowconfigure(i, weight=1)
+        # настройка столбцов и строк для правого меню
+        self.menu_grid.columnconfigure(0, weight=1)
+        self.menu_grid.rowconfigure(0, weight=2)
+        self.menu_grid.rowconfigure(1, weight=1)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.grid(row=0, column=0)    # левый столбец - менеджер директорий
-        self.settings_grid.grid(row=1, column=0)  # правый - фрейм настроек
+        self.dir_manager.grid(row=0, column=0, sticky='nsew', padx=(15,0), pady=10)  # менеджер директорий
+        self.settings_grid.grid(row=1, column=0)  # фрейм настроек
+
+        # настройка столбцов и строк для сетки лейблов/кнопок в меню
+        self.settings_grid.columnconfigure(0, weight=3)
+        self.settings_grid.columnconfigure(1, weight=1)
 
         # подпись и кнопка цвета       
-        self.widgets['lbColor'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_btColor'].grid(row=1, column=1, sticky='w', padx=7, pady=5)
+        self.widgets['lbColor'].grid(row=0, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_btColor'].grid(row=0, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         # подпись и комбобокс частоты
-        self.widgets['lbFramerate'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_cmbFramerate'].grid(row=2, column=1, sticky='w', padx=7, pady=5)
+        self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_cmbFramerate'].grid(row=1, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         # подпись и комбобокс качества
-        self.widgets['lbQuality'].grid(row=3, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['cmbQuality'].grid(row=3, column=1, sticky='w', padx=7, pady=5)
+        self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['cmbQuality'].grid(row=2, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         # в режиме просмотра
         if self.view_mode:  # подпись и кнопка копирования команды
             self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=10, pady=5)
-            self.widgets['btCopy'].grid(row=4, column=1, sticky='w', padx=7, pady=5)
+            self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
         else:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=4, column=1, sticky='w', padx=7, pady=5)
+            self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:

@@ -96,6 +96,7 @@ class Lang:
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
             'dirs.btRemDir': 'Remove',
+            'dirs.DirNotExists': "Doesn't exists. Removing...",
 
             'warn.title': 'Warning',
             'warn.lbWarn': 'Warning!',
@@ -145,6 +146,7 @@ class Lang:
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
             'dirs.btRemDir': 'Удалить',
+            'dirs.DirNotExists': 'Не существует. Удаление...',
             
             'warn.title': 'Внимание',
             'warn.lbWarn': 'Внимание!',
@@ -1645,6 +1647,7 @@ class DirectoryManager(ttk.Frame):
         self.veiw_mode = veiw_mode
         self._init_widgets()
         self._pack_widgets()
+        self.update_texts()
 
         self.dirs = dirs
         for dir in dirs:
@@ -1697,35 +1700,45 @@ class DirectoryManager(ttk.Frame):
         if not self.veiw_mode:
             self.listbox.bind('<Button-1>', self._start_drag)
             self.listbox.bind('<B1-Motion>', self._do_drag)
-
-        # добавление директории
-        def add_directory():
-            dir_name = filedialog.askdirectory(parent=self)
-            if not dir_name or dir_name in self.dirs:
-                return
-            
-            if not find_img_in_dir(dir_name):
-                return
-
-            self.listbox.insert(END, shrink_path(dir_name, 25))
-            self.dirs.append(dir_name)  # добавление в список директорий
-
-        # удаление выбранной директории из списка
-        def remove_directory():
-            selected = self.listbox.curselection()
-            if selected:
-                index = selected[0]
-                self.listbox.delete(index)
-                del self.dirs[index]
+        self.listbox.bind('<Double-Button-1>', self._on_double_click)
 
         self.button_frame = Frame(self)
 
         # создание кнопок для управления элементами списка
-        self.widgets['btAddDir'] = ttk.Button(self.button_frame, width=8, command=add_directory)
-        self.widgets['btRemDir'] = ttk.Button(self.button_frame, width=8, command=remove_directory)
-        # self.widgets['btUpDir'] = ttk.Button(self.button_frame, width=2, text="^", command=self._move_up)
-        # self.widgets['btDownDir'] = ttk.Button(self.button_frame, width=2, text="v", command=self._move_down)
+        self.widgets['btAddDir'] = ttk.Button(self.button_frame, width=8, command=self._add_directory)
+        self.widgets['btRemDir'] = ttk.Button(self.button_frame, width=8, command=self._remove_directory)
     
+    # размещение виджетов
+    def _pack_widgets(self):
+        self.top_frame.pack(side='top', fill=BOTH, expand=True)
+        self.widgets['lbDirList'].pack(side='top', anchor='w')
+        self.listbox.pack(side='left', fill=BOTH, expand=True)
+        self.scrollbar.pack(side='left', fill='y')
+
+        self.button_frame.pack(side='top', anchor='w', padx=(0, 15), fill='x', expand=True)
+
+        if not self.veiw_mode:
+            self.widgets['btAddDir'].pack(side='left', anchor='center', expand=True)
+            self.widgets['btRemDir'].pack(side='right', anchor='center', expand=True)
+
+    # добавление директории
+    def _add_directory(self):
+        dir_name = filedialog.askdirectory(parent=self)
+        if not dir_name or dir_name in self.dirs:
+            return
+        if not find_img_in_dir(dir_name):
+            return
+        self.listbox.insert(END, shrink_path(dir_name, 25))
+        self.dirs.append(dir_name)  # добавление в список директорий
+
+    # удаление выбранной директории из списка
+    def _remove_directory(self):
+        selected = self.listbox.curselection()
+        if selected:
+            index = selected[0]
+            self.listbox.delete(index)
+            del self.dirs[index]
+
     # начало перетаскивания элемента
     def _start_drag(self, event):
         self.drag_data["start_index"] = self.listbox.nearest(event.y)
@@ -1734,9 +1747,10 @@ class DirectoryManager(ttk.Frame):
     def _swap_dirs(self, index_old: int, index_new: int, text: str = None):
         if not text:
             text = self.listbox.get(index_old)
-        self.listbox.delete(index_old)
-        self.listbox.insert(index_new, text)
+        self.listbox.delete(index_old)        # удаляет старый элемент
+        self.listbox.insert(index_new, text)  # вставляет на его место новый
         self.dirs[index_old], self.dirs[index_new] = self.dirs[index_new], self.dirs[index_old]
+        self.listbox.select_set(index_new)    # выбирает новый элемент (чтобы остался подсвеченным)
 
     # процесс перетаскивания элемента
     def _do_drag(self, event):
@@ -1745,39 +1759,21 @@ class DirectoryManager(ttk.Frame):
             self._swap_dirs(self.drag_data["start_index"], new_index, self.drag_data["item"])
             self.drag_data["start_index"] = new_index
 
-    # перемещение выбранной директории вверх по списку
-    def _move_up(self):
-        selected = self.listbox.curselection()
-        if selected:
-            index = selected[0]
-            if index > 0:
-                self._swap_dirs(index, index-1)
-                self.listbox.select_set(index - 1)
-
-    # перемещение выбранной директории вниз по списку
-    def _move_down(self):
-        selected = self.listbox.curselection()
-        if selected:
-            index = selected[0]
-            if index < self.listbox.size() - 1:
-                self._swap_dirs(index, index+1)
-                self.listbox.select_set(index + 1)
-
-    # размещение виджетов
-    def _pack_widgets(self):
-        self.top_frame.pack(side='top', fill='x')
-        self.widgets['lbDirList'].pack(side='top', anchor='w')
-        self.listbox.pack(side='left', fill='x')
-        self.scrollbar.pack(side='left', fill='y')
-
-
-        self.button_frame.pack(side='top', anchor='w', pady=10)
-
-        if not self.veiw_mode:
-            self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
-            self.widgets['btRemDir'].pack(side='right')
-        # self.widgets['btUpDir'].pack(side='left')  # кнопки перетаскивания 
-        # self.widgets['btDownDir'].pack(side='left') # вверх и вниз, пока убрал
+    # открывает дитекторию по даблклику (если её не существует - удаляет)
+    def _on_double_click(self, event):
+        selected_index = self.listbox.curselection()
+        if not selected_index:
+            return
+        
+        index = selected_index[0]
+        dir_to_open = self.dirs[index]
+        try:
+            os.startfile(dir_to_open)
+        except:
+            self.listbox.delete(index)
+            self.listbox.insert(index, Lang.read('dirs.DirNotExists'))
+            self.after(2000, self.listbox.delete, index)
+            self._remove_directory()
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():
@@ -2134,19 +2130,19 @@ class NewTaskWindow(Toplevel, WindowMixin):
             background=self.task_config.get_color(),
         )
 
-        self.bottom_grid = Frame(self.main_pane)    # создание табличного фрейма ниже холста
-        self.main_pane.add(self.bottom_grid, stretch='never')
-        self.main_pane.paneconfig(self.bottom_grid, minsize=250)
+        self.menu_grid = Frame(self.main_pane)    # создание табличного фрейма меню
+        self.main_pane.add(self.menu_grid, stretch='never')
+        self.main_pane.paneconfig(self.menu_grid, minsize=250)
 
         self._bind_resize_events()
 
         self.dir_manager = DirectoryManager(
-            self.bottom_grid, 
+            self.menu_grid, 
             veiw_mode=self.view_mode,
             dirs=self.task_config.get_dirs() 
         )
 
-        self.settings_grid = Frame(self.bottom_grid)  # создание фрейма настроек в нижнем фрейме
+        self.settings_grid = Frame(self.menu_grid)  # создание фрейма настроек в нижнем фрейме
 
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -2256,39 +2252,39 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.main_pane.pack(expand=True, fill='both')
+        self.main_pane.pack(expand=True, fill=BOTH)
 
-        # упаковка нижнего фрейма для сетки
-        # self.bottom_grid.pack(side='bottom', fill='both', expand=True, pady=10, padx=100)
-
-        for i in range(1):  # настройка веса столбцов
-            self.bottom_grid.columnconfigure(i, weight=1)
-
-        for i in range(2):  # настройка веса строк
-            self.bottom_grid.rowconfigure(i, weight=1)
+        # настройка столбцов и строк для правого меню
+        self.menu_grid.columnconfigure(0, weight=1)
+        self.menu_grid.rowconfigure(0, weight=2)
+        self.menu_grid.rowconfigure(1, weight=1)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.grid(row=0, column=0)    # левый столбец - менеджер директорий
-        self.settings_grid.grid(row=1, column=0)  # правый - фрейм настроек
+        self.dir_manager.grid(row=0, column=0, sticky='nsew', padx=(15,0), pady=10)  # менеджер директорий
+        self.settings_grid.grid(row=1, column=0)  # фрейм настроек
+
+        # настройка столбцов и строк для сетки лейблов/кнопок в меню
+        self.settings_grid.columnconfigure(0, weight=3)
+        self.settings_grid.columnconfigure(1, weight=1)
 
         # подпись и кнопка цвета       
-        self.widgets['lbColor'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_btColor'].grid(row=1, column=1, sticky='w', padx=7, pady=5)
+        self.widgets['lbColor'].grid(row=0, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_btColor'].grid(row=0, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         # подпись и комбобокс частоты
-        self.widgets['lbFramerate'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_cmbFramerate'].grid(row=2, column=1, sticky='w', padx=7, pady=5)
+        self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_cmbFramerate'].grid(row=1, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         # подпись и комбобокс качества
-        self.widgets['lbQuality'].grid(row=3, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['cmbQuality'].grid(row=3, column=1, sticky='w', padx=7, pady=5)
+        self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['cmbQuality'].grid(row=2, column=1, sticky='ew', padx=(0, 5), pady=5)
 
         # в режиме просмотра
         if self.view_mode:  # подпись и кнопка копирования команды
             self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=10, pady=5)
-            self.widgets['btCopy'].grid(row=4, column=1, sticky='w', padx=7, pady=5)
+            self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
         else:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=4, column=1, sticky='w', padx=7, pady=5)
+            self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:

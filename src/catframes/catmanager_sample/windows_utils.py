@@ -832,6 +832,7 @@ class DirectoryManager(ttk.Frame):
         self.veiw_mode = veiw_mode
         self._init_widgets()
         self._pack_widgets()
+        self.update_texts()
 
         self.dirs = dirs
         for dir in dirs:
@@ -884,35 +885,45 @@ class DirectoryManager(ttk.Frame):
         if not self.veiw_mode:
             self.listbox.bind('<Button-1>', self._start_drag)
             self.listbox.bind('<B1-Motion>', self._do_drag)
-
-        # добавление директории
-        def add_directory():
-            dir_name = filedialog.askdirectory(parent=self)
-            if not dir_name or dir_name in self.dirs:
-                return
-            
-            if not find_img_in_dir(dir_name):
-                return
-
-            self.listbox.insert(END, shrink_path(dir_name, 25))
-            self.dirs.append(dir_name)  # добавление в список директорий
-
-        # удаление выбранной директории из списка
-        def remove_directory():
-            selected = self.listbox.curselection()
-            if selected:
-                index = selected[0]
-                self.listbox.delete(index)
-                del self.dirs[index]
+        self.listbox.bind('<Double-Button-1>', self._on_double_click)
 
         self.button_frame = Frame(self)
 
         # создание кнопок для управления элементами списка
-        self.widgets['btAddDir'] = ttk.Button(self.button_frame, width=8, command=add_directory)
-        self.widgets['btRemDir'] = ttk.Button(self.button_frame, width=8, command=remove_directory)
-        # self.widgets['btUpDir'] = ttk.Button(self.button_frame, width=2, text="^", command=self._move_up)
-        # self.widgets['btDownDir'] = ttk.Button(self.button_frame, width=2, text="v", command=self._move_down)
+        self.widgets['btAddDir'] = ttk.Button(self.button_frame, width=8, command=self._add_directory)
+        self.widgets['btRemDir'] = ttk.Button(self.button_frame, width=8, command=self._remove_directory)
     
+    # размещение виджетов
+    def _pack_widgets(self):
+        self.top_frame.pack(side='top', fill=BOTH, expand=True)
+        self.widgets['lbDirList'].pack(side='top', anchor='w')
+        self.listbox.pack(side='left', fill=BOTH, expand=True)
+        self.scrollbar.pack(side='left', fill='y')
+
+        self.button_frame.pack(side='top', anchor='w', padx=(0, 15), fill='x', expand=True)
+
+        if not self.veiw_mode:
+            self.widgets['btAddDir'].pack(side='left', anchor='center', expand=True)
+            self.widgets['btRemDir'].pack(side='right', anchor='center', expand=True)
+
+    # добавление директории
+    def _add_directory(self):
+        dir_name = filedialog.askdirectory(parent=self)
+        if not dir_name or dir_name in self.dirs:
+            return
+        if not find_img_in_dir(dir_name):
+            return
+        self.listbox.insert(END, shrink_path(dir_name, 25))
+        self.dirs.append(dir_name)  # добавление в список директорий
+
+    # удаление выбранной директории из списка
+    def _remove_directory(self):
+        selected = self.listbox.curselection()
+        if selected:
+            index = selected[0]
+            self.listbox.delete(index)
+            del self.dirs[index]
+
     # начало перетаскивания элемента
     def _start_drag(self, event):
         self.drag_data["start_index"] = self.listbox.nearest(event.y)
@@ -921,9 +932,10 @@ class DirectoryManager(ttk.Frame):
     def _swap_dirs(self, index_old: int, index_new: int, text: str = None):
         if not text:
             text = self.listbox.get(index_old)
-        self.listbox.delete(index_old)
-        self.listbox.insert(index_new, text)
+        self.listbox.delete(index_old)        # удаляет старый элемент
+        self.listbox.insert(index_new, text)  # вставляет на его место новый
         self.dirs[index_old], self.dirs[index_new] = self.dirs[index_new], self.dirs[index_old]
+        self.listbox.select_set(index_new)    # выбирает новый элемент (чтобы остался подсвеченным)
 
     # процесс перетаскивания элемента
     def _do_drag(self, event):
@@ -932,39 +944,21 @@ class DirectoryManager(ttk.Frame):
             self._swap_dirs(self.drag_data["start_index"], new_index, self.drag_data["item"])
             self.drag_data["start_index"] = new_index
 
-    # перемещение выбранной директории вверх по списку
-    def _move_up(self):
-        selected = self.listbox.curselection()
-        if selected:
-            index = selected[0]
-            if index > 0:
-                self._swap_dirs(index, index-1)
-                self.listbox.select_set(index - 1)
-
-    # перемещение выбранной директории вниз по списку
-    def _move_down(self):
-        selected = self.listbox.curselection()
-        if selected:
-            index = selected[0]
-            if index < self.listbox.size() - 1:
-                self._swap_dirs(index, index+1)
-                self.listbox.select_set(index + 1)
-
-    # размещение виджетов
-    def _pack_widgets(self):
-        self.top_frame.pack(side='top', fill='x')
-        self.widgets['lbDirList'].pack(side='top', anchor='w')
-        self.listbox.pack(side='left', fill='x')
-        self.scrollbar.pack(side='left', fill='y')
-
-
-        self.button_frame.pack(side='top', anchor='w', pady=10)
-
-        if not self.veiw_mode:
-            self.widgets['btAddDir'].pack(side='left', padx=(0, 10))
-            self.widgets['btRemDir'].pack(side='right')
-        # self.widgets['btUpDir'].pack(side='left')  # кнопки перетаскивания 
-        # self.widgets['btDownDir'].pack(side='left') # вверх и вниз, пока убрал
+    # открывает дитекторию по даблклику (если её не существует - удаляет)
+    def _on_double_click(self, event):
+        selected_index = self.listbox.curselection()
+        if not selected_index:
+            return
+        
+        index = selected_index[0]
+        dir_to_open = self.dirs[index]
+        try:
+            os.startfile(dir_to_open)
+        except:
+            self.listbox.delete(index)
+            self.listbox.insert(index, Lang.read('dirs.DirNotExists'))
+            self.after(2000, self.listbox.delete, index)
+            self._remove_directory()
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():

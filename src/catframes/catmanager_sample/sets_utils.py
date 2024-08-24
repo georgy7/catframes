@@ -64,6 +64,7 @@ class Lang:
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
             'dirs.btRemDir': 'Remove',
+            'dirs.DirNotExists': "Doesn't exists. Removing...",
 
             'warn.title': 'Warning',
             'warn.lbWarn': 'Warning!',
@@ -113,6 +114,7 @@ class Lang:
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
             'dirs.btRemDir': 'Удалить',
+            'dirs.DirNotExists': 'Не существует. Удаление...',
             
             'warn.title': 'Внимание',
             'warn.lbWarn': 'Внимание!',
