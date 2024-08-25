@@ -913,7 +913,7 @@ class ScrollableFrame(ttk.Frame):
         # создание надписи "здесь появятся Ваши проекты"
         self._empty_sign = ttk.Label(
             self.scrollable_frame,
-            justify='center',
+            justify=CENTER,
             font=("Arial", 18)
         )
 
@@ -1067,16 +1067,16 @@ class TaskBar(ttk.Frame):
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
-        self.widgets['_picture'].pack(side='left')
-        self.left_frame.pack(side='left')
+        self.widgets['_picture'].pack(side=LEFT)
+        self.left_frame.pack(side=LEFT)
 
-        self.widgets['_lbPath'].pack(side='top', fill='x', expand=True)
-        self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
-        self.mid_frame.pack(side='left')
+        self.widgets['_lbPath'].pack(side=TOP, fill=X, expand=True)
+        self.widgets['_lbData'].pack(side=TOP, fill=X, expand=True)
+        self.mid_frame.pack(side=LEFT)
 
-        self.widgets['_progressBar'].pack(side='top', expand=True)
-        self.widgets['btCancel'].pack(side='bottom')
-        self.right_frame.pack(side='left', expand=True)
+        self.widgets['_progressBar'].pack(side=TOP, expand=True)
+        self.widgets['btCancel'].pack(side=BOTTOM)
+        self.right_frame.pack(side=LEFT, expand=True)
 
         self.pack(pady=[0, 10])
 
@@ -1572,7 +1572,7 @@ class ImageCanvas(Canvas):
     def _create_init_text(self):
         self.init_text = self.create_text(          # то добавляет её 
             self.width/2, self.height/2,            # позиционирует по
-            font=("Arial", 24), justify='center',   # центру холста,
+            font=("Arial", 24), justify=CENTER,   # центру холста,
             state='hidden', fill='#cccccc')         # делает невидимым
         self.update_texts()                         # и обновляет тексты
 
@@ -1714,16 +1714,16 @@ class DirectoryManager(ttk.Frame):
     
     # размещение виджетов
     def _pack_widgets(self):
-        self.top_frame.pack(side='top', fill=BOTH, expand=True)
-        self.widgets['lbDirList'].pack(side='top', anchor='w')
-        self.listbox.pack(side='left', fill=BOTH, expand=True)
-        self.scrollbar.pack(side='left', fill='y')
+        self.top_frame.pack(side=TOP, fill=BOTH, expand=True)
+        self.widgets['lbDirList'].pack(side=TOP, anchor='w')
+        self.listbox.pack(side=LEFT, fill=BOTH, expand=True)
+        self.scrollbar.pack(side=LEFT, fill=Y)
 
-        self.button_frame.pack(side='top', anchor='w', padx=(0, 15), fill='x', expand=True)
+        self.button_frame.pack(side=TOP, anchor='w', padx=(0, 15), pady=10, fill=X)
 
         if not self.veiw_mode:
-            self.widgets['btAddDir'].pack(side='left', anchor='center', expand=True)
-            self.widgets['btRemDir'].pack(side='right', anchor='center', expand=True)
+            self.widgets['btAddDir'].pack(side=LEFT, anchor='e', padx=5, expand=True)
+            self.widgets['btRemDir'].pack(side=RIGHT, anchor='w', padx=5, expand=True)
 
     # добавление директории
     def _add_directory(self):
@@ -1859,11 +1859,11 @@ class RootWindow(Tk, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.upper_bar.pack(fill='x', padx=15, pady=15)
-        self.task_space.pack(fill='both', expand=True)
+        self.upper_bar.pack(fill=X, padx=15, pady=15)
+        self.task_space.pack(fill=BOTH, expand=True)
 
-        self.widgets['newTask'].pack(side='left')
-        self.widgets['openSets'].pack(side='right')
+        self.widgets['newTask'].pack(side=LEFT)
+        self.widgets['openSets'].pack(side=RIGHT)
         
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
@@ -1931,13 +1931,13 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets['lbPortRange'] = ttk.Label(self)
         self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
             self, 
-            justify='center', 
+            justify=CENTER, 
             validate='key', 
             validatecommand=v_numeric  # привязка валидации
         )
         self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
             self, 
-            justify='center', 
+            justify=CENTER, 
             validate='all',
             validatecommand=v_numeric  # привязка валидации
         )
@@ -2135,19 +2135,19 @@ class NewTaskWindow(Toplevel, WindowMixin):
             background=self.task_config.get_color(),
         )
 
-        self.menu_grid = Frame(self.main_pane)    # создание табличного фрейма меню
-        self.main_pane.add(self.menu_grid, stretch='never')
-        self.main_pane.paneconfig(self.menu_grid, minsize=250)
+        self.menu_frame = Frame(self.main_pane)    # создание табличного фрейма меню
+        self.main_pane.add(self.menu_frame, stretch='never')
+        self.main_pane.paneconfig(self.menu_frame, minsize=250)
 
         self._bind_resize_events()
 
         self.dir_manager = DirectoryManager(
-            self.menu_grid, 
+            self.menu_frame, 
             veiw_mode=self.view_mode,
             dirs=self.task_config.get_dirs() 
         )
 
-        self.settings_grid = Frame(self.menu_grid)  # создание фрейма настроек в нижнем фрейме
+        self.settings_grid = Frame(self.menu_frame)  # создание фрейма настроек в нижнем фрейме
 
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()   # сбор данных конфигурации с виджетов
@@ -2190,7 +2190,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.settings_grid,
             values=self.framerates, 
             state='readonly',
-            justify='center',
+            justify=CENTER,
             width=8,
         )
         self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
@@ -2200,7 +2200,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
             self.settings_grid,
             state='readonly',
-            justify='center',
+            justify=CENTER,
             width=8,
         )
 
@@ -2264,41 +2264,36 @@ class NewTaskWindow(Toplevel, WindowMixin):
     def _pack_widgets(self):
         self.main_pane.pack(expand=True, fill=BOTH)
 
-        # настройка столбцов и строк для правого меню
-        self.menu_grid.columnconfigure(0, weight=1)
-        self.menu_grid.rowconfigure(0, weight=2)
-        self.menu_grid.rowconfigure(1, weight=1)
-
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.grid(row=0, column=0, sticky='nsew', padx=(15,0), pady=(20, 0))  # менеджер директорий
-        self.settings_grid.grid(row=1, column=0, pady=20)  # фрейм настроек
+        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15,0), pady=(20, 0))  # менеджер директорий
+        self.settings_grid.pack(pady=20)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
         self.settings_grid.columnconfigure(0, weight=3)
         self.settings_grid.columnconfigure(1, weight=1)
 
         # подпись и кнопка цвета       
-        self.widgets['lbColor'].grid(row=0, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_btColor'].grid(row=0, column=1, sticky='ew', padx=(0, 5), pady=5)
+        self.widgets['lbColor'].grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_btColor'].grid(row=0, column=1, sticky='ew', padx=5, pady=5)
 
         # подпись и комбобокс частоты
-        self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_cmbFramerate'].grid(row=1, column=1, sticky='ew', padx=(0, 5), pady=5)
+        self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_cmbFramerate'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
 
         # подпись и комбобокс качества
-        self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['cmbQuality'].grid(row=2, column=1, sticky='ew', padx=(0, 5), pady=5)
+        self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['cmbQuality'].grid(row=2, column=1, sticky='ew', padx=5, pady=5)
 
         # подпись и кнопка выбора пути
-        self.widgets['lbSaveAs'].grid(row=3, column=0, sticky='e', padx=10, pady=5)
-        self.widgets['_btPath'].grid(row=3, column=1, sticky='ew', padx=(0, 5), pady=5)
+        self.widgets['lbSaveAs'].grid(row=3, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_btPath'].grid(row=3, column=1, sticky='ew', padx=5, pady=5)
 
         # в режиме просмотра
         if self.view_mode:  # подпись и кнопка копирования команды
-            self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=10, pady=5)
-            self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
+            self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=5, pady=5)
+            self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
         else:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
+            self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
 
 
     # расширение метода обновления текстов
@@ -2351,12 +2346,12 @@ class WarningWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.widgets['lbWarn'].pack(side='top')
-        self.widgets['lbText'].pack(side='top')
+        self.widgets['lbWarn'].pack(side=TOP)
+        self.widgets['lbText'].pack(side=TOP)
 
-        self.widgets['btBack'].pack(side='left', anchor='w', padx=5)
-        self.widgets['btExit'].pack(side='left', anchor='w', padx=5)
-        self.choise_frame.pack(side='bottom', pady=10)
+        self.widgets['btBack'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btExit'].pack(side=LEFT, anchor='w', padx=5)
+        self.choise_frame.pack(side=BOTTOM, pady=10)
 
 
 class NotifyWindow(Toplevel, WindowMixin):
@@ -2388,12 +2383,12 @@ class NotifyWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.widgets['lbWarn'].pack(side='top')
-        self.widgets['lbText'].pack(side='top')
-        self.widgets['lbText2'].pack(side='top')
+        self.widgets['lbWarn'].pack(side=TOP)
+        self.widgets['lbText'].pack(side=TOP)
+        self.widgets['lbText2'].pack(side=TOP)
 
         self.widgets['_btOk'].pack(anchor='w', padx=5)
-        self.frame.pack(side='bottom', pady=10)
+        self.frame.pack(side=BOTTOM, pady=10)
 
 
 

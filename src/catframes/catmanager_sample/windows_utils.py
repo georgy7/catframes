@@ -96,7 +96,7 @@ class ScrollableFrame(ttk.Frame):
         # создание надписи "здесь появятся Ваши проекты"
         self._empty_sign = ttk.Label(
             self.scrollable_frame,
-            justify='center',
+            justify=CENTER,
             font=("Arial", 18)
         )
 
@@ -250,16 +250,16 @@ class TaskBar(ttk.Frame):
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
-        self.widgets['_picture'].pack(side='left')
-        self.left_frame.pack(side='left')
+        self.widgets['_picture'].pack(side=LEFT)
+        self.left_frame.pack(side=LEFT)
 
-        self.widgets['_lbPath'].pack(side='top', fill='x', expand=True)
-        self.widgets['_lbData'].pack(side='top', fill='x', expand=True)
-        self.mid_frame.pack(side='left')
+        self.widgets['_lbPath'].pack(side=TOP, fill=X, expand=True)
+        self.widgets['_lbData'].pack(side=TOP, fill=X, expand=True)
+        self.mid_frame.pack(side=LEFT)
 
-        self.widgets['_progressBar'].pack(side='top', expand=True)
-        self.widgets['btCancel'].pack(side='bottom')
-        self.right_frame.pack(side='left', expand=True)
+        self.widgets['_progressBar'].pack(side=TOP, expand=True)
+        self.widgets['btCancel'].pack(side=BOTTOM)
+        self.right_frame.pack(side=LEFT, expand=True)
 
         self.pack(pady=[0, 10])
 
@@ -755,7 +755,7 @@ class ImageCanvas(Canvas):
     def _create_init_text(self):
         self.init_text = self.create_text(          # то добавляет её 
             self.width/2, self.height/2,            # позиционирует по
-            font=("Arial", 24), justify='center',   # центру холста,
+            font=("Arial", 24), justify=CENTER,   # центру холста,
             state='hidden', fill='#cccccc')         # делает невидимым
         self.update_texts()                         # и обновляет тексты
 
@@ -897,16 +897,16 @@ class DirectoryManager(ttk.Frame):
     
     # размещение виджетов
     def _pack_widgets(self):
-        self.top_frame.pack(side='top', fill=BOTH, expand=True)
-        self.widgets['lbDirList'].pack(side='top', anchor='w')
-        self.listbox.pack(side='left', fill=BOTH, expand=True)
-        self.scrollbar.pack(side='left', fill='y')
+        self.top_frame.pack(side=TOP, fill=BOTH, expand=True)
+        self.widgets['lbDirList'].pack(side=TOP, anchor='w')
+        self.listbox.pack(side=LEFT, fill=BOTH, expand=True)
+        self.scrollbar.pack(side=LEFT, fill=Y)
 
-        self.button_frame.pack(side='top', anchor='w', padx=(0, 15), fill='x', expand=True)
+        self.button_frame.pack(side=TOP, anchor='w', padx=(0, 15), pady=10, fill=X)
 
         if not self.veiw_mode:
-            self.widgets['btAddDir'].pack(side='left', anchor='center', expand=True)
-            self.widgets['btRemDir'].pack(side='right', anchor='center', expand=True)
+            self.widgets['btAddDir'].pack(side=LEFT, anchor='e', padx=5, expand=True)
+            self.widgets['btRemDir'].pack(side=RIGHT, anchor='w', padx=5, expand=True)
 
     # добавление директории
     def _add_directory(self):
