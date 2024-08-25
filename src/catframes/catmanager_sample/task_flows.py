@@ -51,7 +51,7 @@ class TaskConfig:
         self._quality: str                            # качество видео
         self._quality_index: int = 0                  # номер значения качества
         self._limit: int                              # предел видео в секундах
-        self._filepath: str                           # путь к итоговому файлу
+        self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
         self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
@@ -87,7 +87,7 @@ class TaskConfig:
 
     def get_filepath(self) -> str:
         return self._filepath
-    
+
     def get_dirs(self) -> list:
         return self._dirs[:]
     

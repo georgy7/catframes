@@ -89,6 +89,7 @@ class Lang:
             'task.lbQuality': 'Quality:',
             'task.cmbQuality': ('high', 'medium', 'poor'),
             'task.lbResolution': 'Render resolution:',
+            'task.lbSaveAs': 'Save as:',
             'task.btCreate': 'Create',
             'task.lbCopy': 'Copy cli command:',
             'task.btCopy': 'Copy',
@@ -139,6 +140,7 @@ class Lang:
             'task.lbQuality': 'Качество:',
             'task.cmbQuality': ('высокое', 'среднее', 'низкое'),
             'task.lbResolution': 'Разрешение рендера:',
+            'task.lbSaveAs': 'Сохранить как:',
             'task.btCreate': 'Создать',
             'task.lbCopy': 'Команда терминала:',
             'task.btCopy': 'Копировать',
@@ -254,7 +256,7 @@ class TaskConfig:
         self._quality: str                            # качество видео
         self._quality_index: int = 0                  # номер значения качества
         self._limit: int                              # предел видео в секундах
-        self._filepath: str                           # путь к итоговому файлу
+        self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
         self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
@@ -290,7 +292,7 @@ class TaskConfig:
 
     def get_filepath(self) -> str:
         return self._filepath
-    
+
     def get_dirs(self) -> list:
         return self._dirs[:]
     
@@ -2082,8 +2084,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
                 defaultextension=".mp4"                                     # стандартное расширение
         )
-        self.task_config.set_filepath(filepath)
-        return bool(filepath)  # если путь выбран, вернёт true
+        if filepath:
+            self.task_config.set_filepath(filepath)
+            self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -2154,7 +2157,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             dirs = self.dir_manager.get_dirs()
             self.task_config.set_dirs(dirs)
 
-            if not self._set_filepath():  # если путь сохранения не выбирается,
+            if not self.task_config.get_filepath():  # если путь сохранения не выбран,
                 return                    # дальнейшие действия не произойдут
             self._create_task_instance()  # cоздание и запуск задачи
             self.close()                  # закрытие окна создания задачи
@@ -2175,6 +2178,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbColor'] = ttk.Label(self.settings_grid)
         self.widgets['lbFramerate'] = ttk.Label(self.settings_grid)
         self.widgets['lbQuality'] = ttk.Label(self.settings_grid)
+        self.widgets['lbSaveAs'] = ttk.Label(self.settings_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
         self.widgets['_btColor'] = Button(self.settings_grid, command=ask_color, text=DEFAULT_CANVAS_COLOR, width=7)
@@ -2199,6 +2203,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
             justify='center',
             width=8,
         )
+
+        path = self.task_config.get_filepath()
+        file_name = path.split('/')[-1] if path else '-'
+        self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=self._set_filepath, text=file_name)
 
         self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task)
 
@@ -2262,8 +2270,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.menu_grid.rowconfigure(1, weight=1)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.grid(row=0, column=0, sticky='nsew', padx=(15,0), pady=10)  # менеджер директорий
-        self.settings_grid.grid(row=1, column=0)  # фрейм настроек
+        self.dir_manager.grid(row=0, column=0, sticky='nsew', padx=(15,0), pady=(20, 0))  # менеджер директорий
+        self.settings_grid.grid(row=1, column=0, pady=20)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
         self.settings_grid.columnconfigure(0, weight=3)
@@ -2281,12 +2289,17 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=10, pady=5)
         self.widgets['cmbQuality'].grid(row=2, column=1, sticky='ew', padx=(0, 5), pady=5)
 
+        # подпись и кнопка выбора пути
+        self.widgets['lbSaveAs'].grid(row=3, column=0, sticky='e', padx=10, pady=5)
+        self.widgets['_btPath'].grid(row=3, column=1, sticky='ew', padx=(0, 5), pady=5)
+
         # в режиме просмотра
         if self.view_mode:  # подпись и кнопка копирования команды
             self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=10, pady=5)
             self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
         else:  # кнопка создания задачи
             self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=(0, 5), pady=5)
+
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
