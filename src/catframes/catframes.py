@@ -3,7 +3,7 @@
 """
 Catframes
 
-© Устинов Г.М., 2022–2024
+© Георгий Устинов, 2022–2024
 
 Данное програмное обеспечение предоставляется «как есть», без каких-либо явных или подразумеваемых
 гарантий. Ни в каком случае авторы не несут ответственность за любые убытки, возникшие в результате
@@ -57,11 +57,8 @@ import sys
 import tempfile
 import threading
 import textwrap
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 from collections import deque
-
-from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
-from socketserver import ThreadingMixIn
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -85,176 +82,9 @@ DESCRIPTION = f"""{TITLE}
 
   License: {__license__}
 
-  Documentation: http://itustinov.ru/cona/latest/docs/html/catframes.html
-
-  This package source code: https://github.com/georgy7/catframes
-  My collection of scripts: https://gitflic.ru/project/georgy7/cona
-  Self-hosted Git bundle: http://itustinov.ru/cona/latest/cona.pack
+  Source code: https://github.com/georgy7/catframes
 
 """
-
-HTTPService = Callable[[dict, Callable], Iterable[bytes]]
-"""A function that is similar to HttpServlet in Java.
-
-The first argument is WSGI environment (includes all information about the request),
-the second is the response start function, which accepts the status of the HTTP response
-and a list of HTTP headers.
-
-Read more in the official documentation: :py:func:`wsgiref.simple_server.make_server`.
-"""
-
-HTTPClient = Callable[[int], None]
-"""A function that uses a local HTTP service. The argument is the port number."""
-
-
-@dataclass(frozen=True)
-class TheChestParameterSet:
-    min_http_port: int
-    max_http_port: int
-
-    def __post_init__(self):
-        assert self.min_http_port > 0
-        assert self.max_http_port > 0
-        assert self.min_http_port <= self.max_http_port
-
-
-class TwoFromTheChest:
-    """Two from the chest, at my behest! Is that true, you'll do anything for me?
-
-    This is from the cartoon Vovka in the Far-Around Kingdom (1965).
-
-    It is an HTTP-based interprocess communication mechanism that works like a web server, providing data,
-    while simultaneously starting a data recipient and waiting for it to complete.
-    It is assumed that it is used to run an external process that can read data over the network.
-    FFmpeg can read images either from disk (as files) or over the network (as URLs).
-    If it is necessary to process the images before giving them to this program, it is faster to send them
-    over the network than to save them to disk. It also reduces disc wear.
-
-    For security reasons:
-
-    1. You should use a firewall on your computer.
-    2. It is better not to send URL lists over the HTTP channel.
-
-    :param giver: The function that responds to HTTP requests.
-    :param eater: The function that controls the source of HTTP requests. It runs synchronously and
-        only once. Exceptions thrown from here will be re-thrown from the method :meth:`start`.
-    :param options: System settings.
-    """
-    def __init__(self, giver: HTTPService, eater: HTTPClient, options: TheChestParameterSet):
-        self._giver: HTTPService = giver
-        self._eater: HTTPClient = eater
-        self._options = options
-        self._eater_error: Union[Exception, None] = None
-
-    def start(self):
-        """It waits until the eater is full.
-
-        :raises Exception: thrown by the eater.
-        """
-        while not self._was_running():
-            print('Trying different port...', flush=True)
-        if self._eater_error:
-            raise self._eater_error
-
-    def _eat(self, http_port):
-        try:
-            self._eater(http_port)
-        except Exception as exc:
-            # Catching a general exception is justified:
-            # I stop the server and then re-throw this exception.
-            self._eater_error = exc
-
-    def _was_running(self) -> bool:
-        http_port = random.randint(
-            self._options.min_http_port,
-            self._options.max_http_port
-        )
-        print(f"\nPort: {http_port}\n", flush=True)
-
-        server_log = deque(maxlen=20)
-
-        class ClosureHandler(WSGIRequestHandler):
-            def log_message(self, format, *args):
-                server_log.append("%s - - [%s] %s\n" %
-                                  (self.address_string(),
-                                   self.log_date_time_string(),
-                                   format % args))
-
-        class ThreadedServer(ThreadingMixIn, WSGIServer):
-            daemon_threads = True
-
-        def print_log():
-            print('Web-server log:', flush=True)
-            print('\n'.join([x.rstrip() for x in server_log]), flush=True)
-            print(flush=True)
-
-        try:
-            httpd = make_server(host='', port=http_port, app=self._giver,
-                                handler_class=ClosureHandler, server_class=ThreadedServer)
-
-            try:
-                web_thread = threading.Thread(target=httpd.serve_forever)
-                web_thread.daemon = True
-                web_thread.start()
-                self._eat(http_port)
-            finally:
-                httpd.shutdown()        # Exit loop.
-                httpd.server_close()    # Clean up the server.
-
-            return True
-        except OSError:
-            return False
-        finally:
-            print_log()
-
-
-class _TwoFromTheChestTest(TestCase):
-    def test_get(self):
-        """Сервер должен ждать завершения работ. Здесь используются GET-запросы и ASCII-пути."""
-
-        content = 'Hello World'.encode("utf-8")
-
-        def service(environ, start_response):
-            method: str = environ['REQUEST_METHOD']
-            pathname: str = environ['PATH_INFO']
-
-            if method == 'GET' and pathname == '/abc.txt':
-                status = '200 OK'
-                headers = [('Content-type', 'text/plain; charset=utf-8')]
-                start_response(status, headers)
-                return [content]
-
-            if method == 'GET' and pathname.startswith('/Item'):
-                status = '200 OK'
-                headers = [('Content-type', 'text/plain; charset=utf-8')]
-                start_response(status, headers)
-                return [pathname.encode("utf-8")]
-
-            status = '404 Not Found'
-            headers = [('Content-type', 'text/plain; charset=utf-8')]
-            start_response(status, headers)
-            return ['Not found.'.encode("utf-8")]
-
-        def client(port):
-            base_url = f'localhost:{port}'
-
-            def read(pathname):
-                conn = http.client.HTTPConnection(base_url)
-                conn.request('GET', pathname)
-                response = conn.getresponse()
-                return (response.status, response.read())
-
-            self.assertEqual(read('/abc.txt'), (200, content))
-            self.assertEqual(read('/wrong')[0], 404)
-            sleep(1)
-            self.assertEqual(read('/abc.txt'), (200, content))
-
-            self.assertEqual(
-                read('/Item/123'),
-                (200, '/Item/123'.encode("utf-8")))
-
-        these_guys = TwoFromTheChest(service, client, TheChestParameterSet(10240, 65535))
-        these_guys.start()
 
 
 class FileUtils:
@@ -406,8 +236,7 @@ class FileUtils:
 
 class _FileUtilsTest(TestCase):
     def test_checksum(self):
-        """Работает как sha1sum в Linux. У папок и несуществующих файлов возвращает None.
-        """
+        """Works like sha1sum on Linux. For folders and non-existent files, it returns None."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
             self.assertEqual(FileUtils.get_checksum(file_path), None)
@@ -429,7 +258,8 @@ class _FileUtilsTest(TestCase):
             self.assertEqual(FileUtils.get_checksum(file_path), expected)
 
     def test_mtime(self):
-        """Выдаёт местное время модификации, если файл не существует — None.
+        """Returns the local time of the modification, and
+        if the file does not exist, returns None.
         """
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
@@ -447,8 +277,7 @@ class _FileUtilsTest(TestCase):
             self.assertLess((mtime - start).seconds, 10)
 
     def test_file_size(self):
-        """У папок и несуществующих файлов возвращает None.
-        """
+        """For folders and non-existent files, it returns None."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
             self.assertEqual(FileUtils.get_file_size(file_path), None)
@@ -463,9 +292,7 @@ class _FileUtilsTest(TestCase):
             self.assertEqual(FileUtils.get_file_size(file_path), 5)
 
     def test_is_symlink(self):
-        """Для несуществующих файлов возвращает False. Для существующих тоже. Не создаю симлинки
-        в этом тесте, т.к. некоторые системы могут это запрещать непривилегированным пользователям.
-        """
+        """For non-existent files, it returns False. For existing ones too."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
             self.assertEqual(FileUtils.is_symlink(file_path), False)
@@ -476,8 +303,6 @@ class _FileUtilsTest(TestCase):
             self.assertEqual(FileUtils.is_symlink(file_path), False)
 
     def test_list_images_1(self):
-        """В папке есть только файлы JPEG и PNG.
-        """
         filenames = [
             '123.jpg',
             '456.JPEG',
@@ -499,8 +324,6 @@ class _FileUtilsTest(TestCase):
                 self.assertIn(x, filenames)
 
     def test_list_images_2(self):
-        """В папке есть картинки и другие файлы (exe, звуковые и т.п.).
-        """
         filenames = [
             '123.jpg',
             '456.JPEG',
@@ -545,17 +368,17 @@ class _FileUtilsTest(TestCase):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_forbidden_folder(self):
-        # только на юникс-подобных системах
+        # on Unix-like systems
         pass # TODO
 
     def test_natural_sort_of_empty_list(self):
-        """Не должно падать при сортировке пустых списков файлов."""
+        """It must not crash when sorting empty file lists."""
         items = []
         FileUtils.sort_natural(items)
         self.assertSequenceEqual([], items)
 
     def test_natural_sort_of_letters(self):
-        """Не должно падать, когда в именах файлов нет цифр."""
+        """It must not crash when there are no numbers in the filenames."""
         folder_a, folder_b = 'some_folder', 'another_folder'
         expected = [
             Path(folder_a, 'A.JPG'),
@@ -574,7 +397,7 @@ class _FileUtilsTest(TestCase):
         self.assertSequenceEqual(expected, items)
 
     def test_natural_sort_of_digital_camera_images(self):
-        """Экстремальный пример для демонстрации."""
+        """An extreme example to demonstrate."""
         folder_a, folder_b = 'some_folder', 'another_folder'
         expected = [
             Path(folder_a, 'IMG_.JPG'),
@@ -601,7 +424,7 @@ class _FileUtilsTest(TestCase):
         self.assertSequenceEqual(expected, items)
 
     def test_natural_sort_of_iso_dates(self):
-        """Показывает, что ведущие нули не мешают натуральной сортировке."""
+        """The example shows that leading zeros do not interfere with natural sorting."""
         folder_a, folder_b = 'some_folder', 'another_folder'
         expected = [
             Path(folder_a, '20211231T235959.jpg'),
@@ -623,7 +446,7 @@ class _FileUtilsTest(TestCase):
         self.assertSequenceEqual(expected, items)
 
     def test_natural_sort(self):
-        """Базовый случай, на который натуральная сортировка рассчитана."""
+        """The basic case for which natural sorting is designed."""
         folders = 'some_folder', 'another_folder'
         expected = []
         for i in range(1, 201):
@@ -744,7 +567,7 @@ class Frame:
 
 class _ResolutionTest(TestCase):
     def test_eq(self):
-        """Равенство у разрешений — равенство значений, а не ссылок."""
+        """It's equality of values, not references."""
         first = Resolution(640, 480)
         second = Resolution(640, 480)
         self.assertEqual(first, second)
@@ -809,28 +632,24 @@ class _FrameTest(TestCase):
 
 
 class ResolutionUtils:
-    """Модуль вспомогательных функций, связанных с разрешениями."""
+    """Useful functions related to resolution."""
 
     @staticmethod
     def round(value: float) -> int:
-        """Округляет вычисленный размер стороны. Поддерживаемые форматы видео могут иметь
-        ограничения, поэтому это округление не обязательно идёт до ближайшего целого. Имеет смысл
-        использовать как финальный этап выбора разрешения видео.
-        """
-        # H264 требует чётные размеры.
+        """There are always encoders that can't handle odd frame side sizes."""
         return math.floor(value/2)*2
 
     @staticmethod
     def get_scale_size(src: Resolution, goal: Resolution) -> Optional[Resolution]:
-        """Пропорционально меняет разрешение, чтобы исходник вписался в целевое разрешение без
-        зазора. None означает либо рекомендацию кадрировать картинку вместо масштабирования, либо
-        что она уже идеально вписывается.
+        """Changes the resolution proportionally so that the source fits into the goal resolution
+        without gap. A returned None means a recommendation to crop the image instead of scaling,
+        or a signal that it already fits perfectly.
+        Going out of bounds by one pixel does not count: cropping will be applied later.
+        Cropping an odd pixel instead of zooming out entire frame reduces the loss of sharpness.
         """
-        max_crop = 1    # Значение связано с принципом работы метода round.
-
         should_zoom_out = \
-            (src.width > goal.width + max_crop) or \
-            (src.height > goal.height + max_crop)
+            (src.width > goal.width + 1) or \
+            (src.height > goal.height + 1)
 
         should_zoom_in = (src.width < goal.width) and (src.height < goal.height)
 
@@ -846,9 +665,7 @@ class ResolutionUtils:
 
     @staticmethod
     def get_crop_size(src: Resolution, goal: Resolution) -> Resolution:
-        """Следует применять только если :meth:`get_scale_size` вернул None. Если соотношение
-        сторон отличается, размер будет меньше целевого по одной стороне.
-        """
+        """It should be used only if :meth:`get_scale_size` returned None."""
         width = src.width if src.width < goal.width else goal.width
         height = src.height if src.height < goal.height else goal.height
         return Resolution(width, height)
@@ -1465,24 +1282,20 @@ class _ResolutionStatisticsTest(TestCase):
             self.assertEqual(str(Resolution(718, 1190)), str(resolution))
 
 
-class FrameResponse(NamedTuple):
-    """Ответ сервера на запрос кадра. Предполагается, что раз ответ есть, это HTTP OK."""
-    data: bytes
-    content_type: str
-
-
 class FrameView(ABC):
-    """Абстрактное представление кадра. Отвечает как за подгонку разрешения (обязательно), а также
-    за любую другую обработку: добавление надписей, подстраивание яркости и контрастности и т.п.
+    """Appearance of a frame. It is responsible for adjusting the resolution, as well as for
+    any other processing: adding inscriptions, adjusting brightness and contrast, etc.
     """
     def __init__(self, resolution: Resolution):
         self.resolution = resolution
 
     @abstractmethod
-    def apply(self, frame: Frame) -> FrameResponse:
-        """Получить оформленный кадр как набор байт. Выбрасывание исключений здесь приведёт
-        к пятисотой ошибке в HTTP-ответе.
-        """
+    def apply(self, frame: Frame) -> bytes:
+        """It returns raw data in RGB24."""
+
+    @abstractmethod
+    def get_recent_thumbnail(self) -> Optional[bytes]:
+        """It returns a thumbnail of the recently processed frame in JPEG format."""
 
 
 class Quality(Enum):
@@ -1521,58 +1334,6 @@ class Quality(Enum):
 
     def get_pix_fmt(self) -> str:
         return self.value[2]
-
-
-class FrameProcessor:
-    def __init__(self, view: FrameView):
-        # Не так важно, какой размер у очередей, ведь узкое место -
-        # сжатие видео, а не обработка кадров. Главное - чтобы
-        # поток, сжимающий видео, доходя до момента получения результатов,
-        # вытягивал в себя сразу всё содержимое очереди вывода.
-        self._input: Queue = Queue(maxsize = 5)
-        self._output: Queue = Queue(maxsize = 7)
-        self._view: FrameView = view
-        self._alive: bool = True
-
-        def process_frames():
-            while self._alive:
-                try:
-                    # Нельзя использовать блокирующий get -
-                    # процесс зависнет после последнего кадра.
-                    i, frame = self._input.get(timeout=0.2)
-                    self._output.put((i, self._view.apply(frame)))
-                except Empty:
-                    pass
-
-        threading.Thread(target=process_frames, daemon=False).start()
-
-    def request_frame(self, frame_index: int, frame: Frame):
-        self._input.put((frame_index, frame))
-
-    @property
-    def empty(self) -> bool:
-        return self._output.empty()
-
-    def get_next(self):
-        return self._output.get_nowait()
-
-    def wait_next(self, seconds, default_value):
-        try:
-            return self._output.get(timeout=seconds)
-        except Empty:
-            return default_value
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, x_type, x_val, x_tb):
-        self._alive = False
-
-
-class ImageProvider(ABC):
-    @abstractmethod
-    def get_image(self) -> Optional[Image.Image]:
-        """Do you want some?"""
 
 
 @dataclass(frozen=True)
@@ -1628,26 +1389,10 @@ class OutputOptions:
             frames = frames[:(self.limit_seconds*self.frame_rate)]
         return frames
 
-    def make(self, frames: Sequence[Frame], \
-             frame_processor: FrameProcessor, \
-             server_options: TheChestParameterSet, \
-             preview_provider: ImageProvider):
-
-        # На случай отсутствия файрвола, адреса не должны быть предсказуемыми. При таком смещении,
-        # шанс угадать URL одного кадра 24-часового видео с 60 fps — 1:2e12 на 64-битной машине.
-        offset: int = random.randint(0, max(0, sys.maxsize - len(frames)))
-
-        render_results = deque(maxlen = 10)
-
-        # Чтобы случайно не запрашивать по сто раз один и тот же кадр.
-        requested = deque(maxlen = 3)
+    def make(self, view: FrameView, frames: Sequence[Frame]):
 
         processed_frame_count = 0
         processed_per_cent = -1
-
-        last_preview = None
-        last_preview_time = monotonic()
-
 
         def set_processed(count):
             nonlocal processed_frame_count
@@ -1661,153 +1406,89 @@ class OutputOptions:
             if last_processed < processed_per_cent:
                 print(f'Progress: {processed_per_cent}%', flush=True)
 
+        ffmpeg_options = [
+            'ffmpeg', '-f', 'rawvideo', '-c:v', 'rawvideo', '-pix_fmt', 'rgb24',
+            '-s', str(view.resolution),
+            '-r', str(self.frame_rate),
+            '-i', '-'
+        ]
 
-        def get_render_result(frame_index):
-            while not frame_processor.empty:
-                render_results.append(frame_processor.get_next())
+        suffix = self.destination.suffix
+        if suffix == '.mp4':
+            ffmpeg_options.extend(self._get_h264_options())
+        elif suffix == '.webm':
+            ffmpeg_options.extend(self._get_vp9_options())
+        else:
+            raise ValueError('Unsupported file name suffix.')
 
-            result = next((x[1] for x in render_results if frame_index==x[0]), None)
+        ffmpeg_options.extend([
+            '-r', str(self.frame_rate),
+            ('-y' if self.overwrite else '-n'),
+            str(self.destination.expanduser())
+        ])
 
-            # Preloading:
-            next_index = frame_index + 1
-            if (next_index < len(frames)) and not (next_index in requested):
-                requested.append(next_index)
-                frame_processor.request_frame(next_index, frames[next_index])
+        set_processed(0)
 
-            if result is None:
-                requested.append(frame_index)
-                frame_processor.request_frame(frame_index, frames[frame_index])
+        with tempfile.TemporaryDirectory() as logs_path_string:
+            logs_path = Path(logs_path_string)
 
-                while result is None:
-                    x = frame_processor.wait_next(0.2, None)
-                    if None != x:
-                        render_results.append(x)
-                        if frame_index == x[0]:
-                            result = x[1]
+            errors_path = logs_path / 'error.txt'
+            catched = None
 
-            return result
+            process = subprocess.Popen(ffmpeg_options,
+                bufsize=1,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT
+            )
 
-        def service(environ, start_response):
-            nonlocal last_preview
-            nonlocal last_preview_time
+            write_thread_messages: Queue = Queue(maxsize = 10)
 
-            method: str = environ['REQUEST_METHOD']
-            pathname: str = environ['PATH_INFO']
+            def write_pixels(items, pipe, queue):
+                for index in range(len(items)):
+                    item = items[index]
+                    pipe.write(view.apply(item))
 
-            http_get = (method == 'GET')
-            img_page = re.fullmatch(r'/img/(\d+)', pathname)
+                    if not queue.full():
+                        queue.put(1 + index, block=False)
 
-            if http_get and img_page:
-                frame_index = int(img_page.groups()[0]) - offset
-                if frame_index in range(len(frames)):
-                    status = '200 OK'
-                    render_result = get_render_result(frame_index)
-                    set_processed(1 + frame_index)
-                    headers = [('Content-type', render_result.content_type)]
-                    start_response(status, headers)
-                    return [render_result.data]
-            elif http_get and ('/progress' == pathname):
-                status = '200 OK'
-                headers = [('Content-type', 'application/json')]
-                start_response(status, headers)
-                return [json.dumps({
-                    "framesTotal": len(frames),
-                    "framesEncoded": processed_frame_count,
-                    "percentage": processed_per_cent
-                }, sort_keys=True).encode('utf-8')]
-            elif http_get and ('/livePreview' == pathname):
-                if (None == last_preview) or (monotonic() - last_preview_time >= 0.33):
-                    preview = preview_provider.get_image()
-                    if preview:
-                        preview_jpeg = io.BytesIO()
-                        preview.save(preview_jpeg, 'JPEG', quality=98, subsampling=0)
-                        last_preview_time = monotonic()
-                        last_preview = preview_jpeg.getvalue()
+                pipe.close()
 
-                if last_preview:
-                    status = '200 OK'
-                    headers = [('Content-type', 'image/jpeg')]
-                    start_response(status, headers)
-                    return [last_preview]
-                else:
-                    status = '202 Accepted'
-                    headers = [('Content-type', 'text/plain; charset=utf-8')]
-                    start_response(status, headers)
-                    return ['Not ready yet.'.encode("utf-8")]
+            input_thread = threading.Thread(
+                target=write_pixels,
+                args=[frames, process.stdin, write_thread_messages],
+                daemon=False
+            )
 
-            status = '404 Not Found'
-            headers = [('Content-type', 'text/plain; charset=utf-8')]
-            start_response(status, headers)
-            return ['Not found.'.encode("utf-8")]
+            input_thread.start()
 
-        def client(port: int):
-            base_url = f'http://localhost:{port}/img/'
+            def clear_write_thread_messages():
+                while not write_thread_messages.empty():
+                    message = write_thread_messages.get_nowait()
+                    if int == type(message):
+                        set_processed(message)
 
-            with tempfile.TemporaryDirectory() as folder_path_string:
-                folder_path = Path(folder_path_string)
-                list_path = folder_path / 'list.txt'
+            with process.stdout:
+                ret_code = process.poll()
+                while None == ret_code:
+                    clear_write_thread_messages()
+                    chunk = process.stdout.read(64)
 
-                duration = 1 / self.frame_rate
+                    #print(chunk.decode('utf-8'), flush='True', end='')
+                    #print('.', flush='True', end='')
 
-                with list_path.open('w') as list_file:
-                    for frame_index in range(len(frames)):
-                        shifted_index = offset + frame_index
-                        list_file.write(f"file '{base_url}{shifted_index}'\n")
-                        list_file.write(f"duration {duration:.10f}\n")
+                    # I want this code to work in Python 3.7.
+                    # The operator := requires 3.8.
+                    ret_code = process.poll()
 
-                ffmpeg_options = [
-                    'ffmpeg', '-f', 'concat',
-                    '-safe', '0',
-                    '-protocol_whitelist', 'file,http,tcp',
-                    '-i', str(list_path)
-                ]
+                print(f'FFmpeg exited with {ret_code}.', flush='True', end='')
 
-                suffix = self.destination.suffix
-                if suffix == '.mp4':
-                    ffmpeg_options.extend(self._get_h264_options())
-                elif suffix == '.webm':
-                    ffmpeg_options.extend(self._get_vp9_options())
-                else:
-                    raise ValueError('Unsupported file name suffix.')
-
-                ffmpeg_options.extend([
-                    '-r', str(self.frame_rate),
-                    ('-y' if self.overwrite else '-n'),
-                    str(self.destination.expanduser())
-                ])
-
-                set_processed(0)
-
-                with tempfile.TemporaryDirectory() as logs_path_string:
-                    logs_path = Path(logs_path_string)
-
-                    output_path = logs_path / 'output.txt'
-                    errors_path = logs_path / 'error.txt'
-                    catched = None
-
-                    with output_path.open(mode='w') as output_file:
-                        with errors_path.open(mode='w') as errors_file:
-                            try:
-                                subprocess.run(
-                                    ffmpeg_options, check=True,
-                                    stdout=output_file,
-                                    stderr=errors_file)
-                            except Exception as exc:
-                                catched = exc
-
-                    if catched:
-                        print('\nFFmpeg output:', flush=True)
-                        print(FileUtils.tail(output_path, 10), flush=True)
-                        print('\nFFmpeg errors:', flush=True)
-                        print(FileUtils.tail(errors_path, 10), flush=True)
-
-        these_guys = TwoFromTheChest(service, client, server_options)
-        these_guys.start()
+            input_thread.join()
 
 
 class PillowFrameView(FrameView):
-    """Каркас для гарантированно однопоточного рендеринга библиотекой Pillow. Синхронизация
-    позволяет использовать один и тот же холст многократно, не нагружая кучу и сборщик мусора.
+    """For guaranteed single-threaded rendering by the Pillow library. This allows you
+    to use the same canvas multiple times without loading heap and GC.
     """
     def __init__(self, resolution: Resolution):
         super().__init__(resolution)
@@ -1815,20 +1496,43 @@ class PillowFrameView(FrameView):
         self._lock = threading.Lock()
 
         self._image: Image.Image = Image.new('RGB', (resolution.width, resolution.height))
-        """Холст для заполнения методом render."""
+        """The canvas to fill with :meth:`_render`."""
 
         self._draw: ImageDraw.ImageDraw = ImageDraw.Draw(self._image)
-        """2D-контекст для рисования на холсте."""
+        """The 2D context for drawing on this canvas."""
 
-    def apply(self, frame: Frame) -> FrameResponse:
-        """Создаёт картинку прямо в ОЗУ."""
+        self._frame_counter: int = 0
+        self._thumbnail_counter: int = 0
+
+        self._thumbnail_time: float = monotonic()
+        self._thumbnail_jpeg: Optional[bytes] = None
+
+    def apply(self, frame: Frame) -> bytes:
         with self._lock:
             self._render(frame)
             assert self._image.size[0] == self.resolution.width
             assert self._image.size[1] == self.resolution.height
-            result = io.BytesIO()
-            self._image.save(result, 'JPEG', quality=95, subsampling=0)
-            return FrameResponse(result.getvalue(), 'image/jpeg')
+            self._frame_counter += 1
+            return self._image.tobytes()
+
+    def get_recent_thumbnail(self) -> Optional[bytes]:
+        subtle_delay: float = 0.1
+        behind: bool = self._frame_counter > self._thumbnail_counter
+
+        if behind and (monotonic() - self._thumbnail_time >= subtle_delay):
+            with self._lock:
+                thumbnail_size = (80, 60)
+                thumbnail = self._image.resize(
+                    thumbnail_size,
+                    resample=Image.Resampling.BICUBIC,
+                    reducing_gap=2.0)
+
+                result = io.BytesIO()
+                thumbnail.save(result, 'JPEG', quality=95, subsampling=0)
+                self._thumbnail_jpeg = result.getvalue()
+                self._thumbnail_counter += 1
+
+        return self._thumbnail_jpeg
 
     @abstractmethod
     def _render(self, frame: Frame):
@@ -2011,7 +1715,7 @@ class Layout:
         return len([x for x in self._cells if x])
 
 
-class DefaultFrameView(PillowFrameView, ImageProvider):
+class DefaultFrameView(PillowFrameView):
     """Масштабирует, добавляет поля при необходимости, накладывает текстовые индикаторы, а если
     файл внезапно стал недоступен, создаёт красный кадр-заглушку с названием ошибки по центру.
 
@@ -2210,11 +1914,18 @@ class _DefaultFrameViewTest(TestCase):
             draw.ellipse([(100, 140), (300, 340)], fill=image_color)
             transparent.save(transparent_path)
 
-            response_1: FrameResponse = view.apply(Frame(non_transparent_path))
-            response_2: FrameResponse = view.apply(Frame(transparent_path))
+            response_1: bytes = view.apply(Frame(non_transparent_path))
+            response_2: bytes = view.apply(Frame(transparent_path))
 
-        from_rgb_src = Image.open(io.BytesIO(response_1.data)).convert('RGB').load()
-        from_rgba_src = Image.open(io.BytesIO(response_2.data)).convert('RGB').load()
+        from_rgb_src = Image.frombytes(
+            mode='RGB',
+            size=(view.resolution.width, view.resolution.height),
+            data=response_1).load()
+
+        from_rgba_src = Image.frombytes(
+            mode='RGB',
+            size=(view.resolution.width, view.resolution.height),
+            data=response_2).load()
 
         def assert_close(rgb_a, rgb_b, threshold=10):
             msg = f'{rgb_a} != {rgb_b}'
@@ -2805,7 +2516,6 @@ class ConsoleInterface:
         self._add_input_arguments(parser)
         self._add_rendering_arguments(parser)
         self._add_output_arguments(parser)
-        self._add_system_arguments(parser)
 
         parser.add_argument('--resolutions', action='store_true',
             help='show the resolution choosing process and exit')
@@ -2968,27 +2678,6 @@ class ConsoleInterface:
         video_arguments.add_argument('-f', '--force', action='store_true',
             help='overwrite video file if exists')
 
-    @classmethod
-    def _add_system_arguments(cls, parser: ArgumentParser):
-        def port_range_validator(arg):
-            tip = 'It must be written in the format MinPort:MaxPort.'
-            min_port = 1024
-            if re.match('^\d+:\d+$', arg):
-                nums = list(map(lambda x: int(x), arg.split(':')))
-                if nums[0] > nums[1]:
-                    raise ArgumentTypeError(tip)
-                if min(nums) < min_port:
-                    raise ArgumentTypeError(f'Port number must not be less than {min_port}.')
-                return nums
-            else:
-                raise ArgumentTypeError(tip)
-
-        system_arguments = parser.add_argument_group('System')
-        system_arguments.add_argument('-p', '--port-range', metavar='X',
-            default='10240:65535', type=port_range_validator,
-            help='а range of ports that are allowed to be used ' + 
-                'to interact with FFmpeg (default: %(default)s)')
-
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
         print(flush=True)
@@ -3104,12 +2793,6 @@ class ConsoleInterface:
             quality=quality,
             frame_rate=self._args.frame_rate)
 
-    def get_server_options(self) -> TheChestParameterSet:
-        return TheChestParameterSet(
-            self._args.port_range[0],
-            self._args.port_range[1]
-        )
-
     @property
     def statistics_only(self) -> bool:
         """Пользователь не хочет пока делать видео, только посмотреть логику выбора разрешения."""
@@ -3177,8 +2860,7 @@ def main():
         view: DefaultFrameView = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         frames = output_options.limit_frames(frames)
 
-        with FrameProcessor(view) as frame_processor:
-            output_options.make(frames, frame_processor, cli.get_server_options(), view)
+        output_options.make(view, frames)
 
         print(f'\nFinished in {int(monotonic() - processing_start)} seconds.', flush=True)
 
