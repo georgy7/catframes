@@ -320,7 +320,17 @@ class Task:
         self.stop_flag = True
         TaskManager.reg_finish(self)
         self._process_thread.kill()        # убивает процесс
+        self.delete_file()
         self.gui_callback.delete(self.id)  # сигнал о завершении задачи
+
+    # удаляет файл в системе
+    def delete_file(self):
+        for i in range(20):  # делает 20 попыток
+            try:
+                os.remove(self.config.get_filepath())
+                return
+            except:              # если не получилось
+                time.sleep(0.2)  # ждёт чуток, и пробует ещё 
 
     def delete(self):
         TaskManager.wipe(self)
