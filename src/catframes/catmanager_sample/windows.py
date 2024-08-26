@@ -272,7 +272,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             index = (index + 1) % len(images_to_show)  # инкремент
             time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
 
-        time.sleep(0.1)
+        time.sleep(0.5)  # чтобы не было глича при одновременном открытии окна и картинки
         while True:
             check_images_change()
             try:

@@ -254,7 +254,7 @@ class TaskConfig:
         self._color: str = DEFAULT_CANVAS_COLOR       # цвет отступов и фона
         self._framerate: int                          # частота кадров
         self._quality: str                            # качество видео
-        self._quality_index: int = 0                  # номер значения качества
+        self._quality_index: int = 1                  # номер значения качества
         self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
@@ -2058,7 +2058,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             index = (index + 1) % len(images_to_show)  # инкремент
             time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
 
-        time.sleep(0.1)
+        time.sleep(0.5)  # чтобы не было глича при одновременном открытии окна и картинки
         while True:
             check_images_change()
             try:
