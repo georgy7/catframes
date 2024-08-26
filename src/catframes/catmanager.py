@@ -1779,6 +1779,44 @@ class DirectoryManager(ttk.Frame):
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
 
 
+class ToolTip: 
+    """Подсказка при наведении на виджет.
+    Лейбл с текстом поверх всего, 
+    коорый появляется при наведении, 
+    и исчизает при уходе курсора"""
+
+    def __init__(self, widget: Widget, get_text: Callable):
+        self.widget = widget      # виджет, к которому привязывается подсказка
+        self.get_text = get_text  # функция, по которой получим текст подсказки
+        self.tip_window = None
+        self.widget.bind("<Enter>", self.show_tip)
+        self.widget.bind("<Leave>", self.hide_tip)
+ 
+    # показать "подсказку"
+    def show_tip(self, event=None):
+        text = self.get_text()  # достаём текст по функции из инъекции
+        if not text:            # если текста нет - ничего не делаем
+            return
+        
+        # вычисляем координаты окна
+        x_shift = len(text)*2
+        x = self.widget.winfo_rootx() - x_shift
+        y = self.widget.winfo_rooty() + 30
+
+        # создание окна для подсказки 
+        self.tip_window = Toplevel(self.widget)
+        self.tip_window.wm_overrideredirect(True)  # убрать системную рамку окна
+        self.tip_window.wm_geometry(f"+{x}+{y}")
+ 
+        label = Label(self.tip_window, text=text, relief="solid", borderwidth=1)
+        label.pack()
+ 
+    # спрятать подсказку
+    def hide_tip(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+ 
 
 
 
@@ -2218,6 +2256,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         path = self.task_config.get_filepath()
         file_name = path.split('/')[-1] if path else Lang.read('task.btPathChoose')
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
+        ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
         self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task, style='Create.Task.TButton')
 

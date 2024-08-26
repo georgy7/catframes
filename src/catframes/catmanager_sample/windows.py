@@ -1,6 +1,6 @@
 from _prefix import *
 from sets_utils import Lang, PortSets
-from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager, is_dark_color
+from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager, ToolTip, is_dark_color
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
 
@@ -438,6 +438,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         path = self.task_config.get_filepath()
         file_name = path.split('/')[-1] if path else Lang.read('task.btPathChoose')
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
+        ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
         self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task, style='Create.Task.TButton')
 
