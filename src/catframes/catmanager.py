@@ -83,6 +83,7 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.title.view': 'Task settings view',
             'task.initText': 'Add a directory\nof images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
@@ -135,6 +136,7 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.title.view': 'Просмотр настроек задачи',
             'task.initText': 'Добавьте папку\nс изображениями',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
@@ -260,7 +262,7 @@ class TaskConfig:
         # self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
-        self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
+        # self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
     # установка директорий
     def set_dirs(self, dirs) -> list:
@@ -327,7 +329,7 @@ class TaskConfig:
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")
 
-        command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
+        # command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
             command.append(dir)
@@ -1938,7 +1940,8 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 200
+        self.size = 250, 150
+        # self.size = 250, 200
         self.resizable(False, False)
 
         super()._default_set_up()
@@ -1955,24 +1958,24 @@ class SettingsWindow(Toplevel, WindowMixin):
             width=7,
         )
 
-        def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
-            return new_value.isnumeric() or not new_value
+        # def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
+        #     return new_value.isnumeric() or not new_value
         
-        v_numeric = (self.register(validate_numeric), '%P')  # регистрация валидации
+        # v_numeric = (self.register(validate_numeric), '%P')  # регистрация валидации
 
-        self.widgets['lbPortRange'] = ttk.Label(self)
-        self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
-            self, 
-            justify=CENTER, 
-            validate='key', 
-            validatecommand=v_numeric  # привязка валидации
-        )
-        self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
-            self, 
-            justify=CENTER, 
-            validate='all',
-            validatecommand=v_numeric  # привязка валидации
-        )
+        # self.widgets['lbPortRange'] = ttk.Label(self)
+        # self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
+        #     self, 
+        #     justify=CENTER, 
+        #     validate='key', 
+        #     validatecommand=v_numeric  # привязка валидации
+        # )
+        # self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
+        #     self, 
+        #     justify=CENTER, 
+        #     validate='all',
+        #     validatecommand=v_numeric  # привязка валидации
+        # )
         
         # применение настроек
         def apply_settings():
@@ -1980,17 +1983,17 @@ class SettingsWindow(Toplevel, WindowMixin):
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
-            try:  # проверка введённых значений, если всё ок - сохранение
-                port_first = int(self.widgets['_entrPortFirst'].get())
-                port_last = int(self.widgets['_entrPortLast'].get())
-                assert(port_last-port_first >= 100)         # диапазон не меньше 100 портов
-                assert(port_first >= 10240)                 # начальный порт не ниже 10240
-                assert(port_last <= 65025)                  # конечный порт не выше 65025
-                PortSets.set_range(port_first, port_last)   # сохранение настроек
+            # try:  # проверка введённых значений, если всё ок - сохранение
+            #     port_first = int(self.widgets['_entrPortFirst'].get())
+            #     port_last = int(self.widgets['_entrPortLast'].get())
+            #     assert(port_last-port_first >= 100)         # диапазон не меньше 100 портов
+            #     assert(port_first >= 10240)                 # начальный порт не ниже 10240
+            #     assert(port_last <= 65025)                  # конечный порт не выше 65025
+            #     PortSets.set_range(port_first, port_last)   # сохранение настроек
 
-            except:  # если какое-то из условий не выполнено
-                self._set_ports_default()  # возврат предыдущих значений виджетов
-                LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
+            # except:  # если какое-то из условий не выполнено
+            #     self._set_ports_default()  # возврат предыдущих значений виджетов
+            #     LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
 
         # сохранение настроек (применение + закрытие)
         def save_settings():
@@ -2000,12 +2003,12 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
         self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
 
-    # установка полей ввода портов в последнее сохранённое состояние
-    def _set_ports_default(self):
-        self.widgets['_entrPortFirst'].delete(0, 'end')
-        self.widgets['_entrPortFirst'].insert(0, PortSets.get_range()[0])
-        self.widgets['_entrPortLast'].delete(0, 'end')
-        self.widgets['_entrPortLast'].insert(0, PortSets.get_range()[1])
+    # # установка полей ввода портов в последнее сохранённое состояние
+    # def _set_ports_default(self):
+    #     self.widgets['_entrPortFirst'].delete(0, 'end')
+    #     self.widgets['_entrPortFirst'].insert(0, PortSets.get_range()[0])
+    #     self.widgets['_entrPortLast'].delete(0, 'end')
+    #     self.widgets['_entrPortLast'].insert(0, PortSets.get_range()[1])
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -2015,14 +2018,14 @@ class SettingsWindow(Toplevel, WindowMixin):
         for r in range(7): 
             self.rowconfigure(index=r, weight=1)
         
-        self.widgets['lbLang'].grid(row=0, column=0, sticky='ws', padx=15)
-        self.widgets['_cmbLang'].grid(columnspan=1, row=1, column=0, sticky='wne', padx=(15 ,5))
+        self.widgets['lbLang'].grid(row=1, column=0, sticky='e', padx=15, pady=5)
+        self.widgets['_cmbLang'].grid(row=1, column=1, sticky='w', padx=(15 ,5), pady=5)
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
-        self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
-        self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))
-        self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
-        self._set_ports_default()  # заполняем поля ввода портов
+        # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
+        # self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))
+        # self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
+        # self._set_ports_default()  # заполняем поля ввода портов
 
         self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
         self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
@@ -2354,6 +2357,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.image_canvas.update_texts()
         # установка начального значения в выборе качества
         self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
+        if self.view_mode:
+            self.title(Lang.read(f'task.title.view'))
+        if not self.task_config.get_filepath():
+            self.widgets['_btPath'].configure(text=Lang.read('task.btPathChoose'))
 
     @staticmethod  # открытие окна в режиме просмотра
     def open_view(task_config: TaskConfig):

@@ -51,6 +51,7 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
+            'task.title.view': 'Task settings view',
             'task.initText': 'Add a directory\nof images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
@@ -103,6 +104,7 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
+            'task.title.view': 'Просмотр настроек задачи',
             'task.initText': 'Добавьте папку\nс изображениями',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',

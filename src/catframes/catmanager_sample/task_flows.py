@@ -53,7 +53,7 @@ class TaskConfig:
         # self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
-        self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
+        # self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
     # установка директорий
     def set_dirs(self, dirs) -> list:
@@ -120,7 +120,7 @@ class TaskConfig:
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")
 
-        command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
+        # command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
             command.append(dir)
