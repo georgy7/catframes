@@ -47,10 +47,10 @@ class TaskConfig:
         self._dirs: List[str] = []                    # пути к директориям с изображениями
         self._overlays: Dict[str, str] = {}           # словарь надписей
         self._color: str = DEFAULT_CANVAS_COLOR       # цвет отступов и фона
-        self._framerate: int                          # частота кадров
-        self._quality: str                            # качество видео
+        self._framerate: int = 30                     # частота кадров
+        self._quality: str = 'medium'                 # качество видео
         self._quality_index: int = 1                  # номер значения качества
-        self._limit: int                              # предел видео в секундах
+        # self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
         self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
@@ -61,10 +61,6 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
-        # if any(s == "" for s in overlays_texts):
-        #     empty = overlays_texts.index("")
-        #     overlays_texts[empty] = "warn"
-
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
     # установка цвета
@@ -118,8 +114,8 @@ class TaskConfig:
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
 
-        if self._limit:                                     # ограничение времени, если есть
-            command.append(f"--limit={self._limit}")
+        # if self._limit:                                     # ограничение времени, если есть
+        #     command.append(f"--limit={self._limit}")
 
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")

@@ -668,6 +668,14 @@ class ImageComposite:
         self.master.itemconfig(self.id, image=self.tk)     # замена тк-картинки на холсте
 
 
+# проверка, тёмный цвет, или светлый
+def is_dark_color(r: int, g: int, b: int) -> bool:
+    if r > 256 or g > 256 or b > 256:               # если значение в широкой палитре цветов (два байта на цвет)
+        r, g, b = r//256, g//256, b//256            # то округляются до узкой палитры (один байт на цвет)
+    brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
+    return brightness < 128
+
+
 class ImageCanvas(Canvas):
     """Объект холста с картинкой в окне создания задачи.
     на которой отображаются "умные" поля ввода.
@@ -788,8 +796,7 @@ class ImageCanvas(Canvas):
             r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
             r, g, b = r/255, g/255, b/255               # выбранного фона холста
         
-        brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
-        return brightness < 128                         # сравнение яркости
+        return is_dark_color(r, g, b)                   # вычисление, тёмный цвет, или светлый
 
     # обновляет разрешение холста
     def update_resolution(self, width: int, height: int, resize_image: bool):
@@ -824,12 +831,13 @@ class DirectoryManager(ttk.Frame):
     Даёт возможность добавлять, удалять директории, 
     и менять порядок кнопками и перетаскиванием"""
 
-    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list):
+    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list, on_change: Callable):
         super().__init__(master)
         self.name = 'dirs'
 
         self.widgets: Dict[str, Widget] = {}
         self.drag_data = {"start_index": None, "item": None}
+        self.on_change: Callable = on_change
 
         self.veiw_mode = veiw_mode
         self._init_widgets()
@@ -849,29 +857,7 @@ class DirectoryManager(ttk.Frame):
         for dir in self.dirs:
             images += find_img_in_dir(dir, full_path=True)
         return images
-
-    # подсветка виджета пути цветом предупреждения
-    def _highlight_invalid_path(self, path_number: list):
-        print(f'TODO подсветка несуществующего пути {path_number}')
-
-    # подсветка кнопки добавления пути цветом предупреждения
-    def _highlight_empty_path(self):
-        print(f'TODO подсветка кнопки добавления пути')
     
-    # проверка путей на валидность, передача в конфиг
-    def validate_dirs(self) -> bool:
-        if not self.dirs:
-            self._highlight_empty_path()
-            return False
-        
-        ok_flag = True  # вызовет подсветку несуществующих путей
-        for i, dir in enumerate(self.dirs):
-            if not os.path.isdir(dir):
-                self._highlight_invalid_path(i)
-                ok_flag = False
-
-        return ok_flag
-
     # инициализация виджетов
     def _init_widgets(self):
 
@@ -917,6 +903,7 @@ class DirectoryManager(ttk.Frame):
             return
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)  # добавление в список директорий
+        self.on_change(self.dirs[:])
 
     # удаление выбранной директории из списка
     def _remove_directory(self):
@@ -925,6 +912,7 @@ class DirectoryManager(ttk.Frame):
             index = selected[0]
             self.listbox.delete(index)
             del self.dirs[index]
+            self.on_change(self.dirs[:])
 
     # начало перетаскивания элемента
     def _start_drag(self, event):

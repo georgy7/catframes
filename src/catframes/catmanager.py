@@ -83,7 +83,7 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
-            'task.initText': 'Add a directory of images',
+            'task.initText': 'Add a directory\nof images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
             'task.lbQuality': 'Quality:',
@@ -91,7 +91,8 @@ class Lang:
             'task.lbResolution': 'Render resolution:',
             'task.lbSaveAs': 'Save as:',
             'task.btCreate': 'Create',
-            'task.lbCopy': 'Copy cli command:',
+            'task.btPathChoose': 'choose',
+            'task.lbCopy': 'Сli command:',
             'task.btCopy': 'Copy',
 
             'dirs.lbDirList': 'List of source directories:',
@@ -134,7 +135,7 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
-            'task.initText': 'Добавьте папку изображений',
+            'task.initText': 'Добавьте папку\nс изображениями',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
@@ -142,7 +143,8 @@ class Lang:
             'task.lbResolution': 'Разрешение рендера:',
             'task.lbSaveAs': 'Сохранить как:',
             'task.btCreate': 'Создать',
-            'task.lbCopy': 'Команда терминала:',
+            'task.btPathChoose': 'выбрать',
+            'task.lbCopy': 'Команда cli:',
             'task.btCopy': 'Копировать',
 
             'dirs.lbDirList': 'Список директорий источников:',
@@ -252,10 +254,10 @@ class TaskConfig:
         self._dirs: List[str] = []                    # пути к директориям с изображениями
         self._overlays: Dict[str, str] = {}           # словарь надписей
         self._color: str = DEFAULT_CANVAS_COLOR       # цвет отступов и фона
-        self._framerate: int                          # частота кадров
-        self._quality: str                            # качество видео
+        self._framerate: int = 30                     # частота кадров
+        self._quality: str = 'medium'                 # качество видео
         self._quality_index: int = 1                  # номер значения качества
-        self._limit: int                              # предел видео в секундах
+        # self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
         self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
@@ -266,10 +268,6 @@ class TaskConfig:
 
     # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
-        # if any(s == "" for s in overlays_texts):
-        #     empty = overlays_texts.index("")
-        #     overlays_texts[empty] = "warn"
-
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
     # установка цвета
@@ -323,8 +321,8 @@ class TaskConfig:
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
 
-        if self._limit:                                     # ограничение времени, если есть
-            command.append(f"--limit={self._limit}")
+        # if self._limit:                                     # ограничение времени, если есть
+        #     command.append(f"--limit={self._limit}")
 
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")
@@ -791,6 +789,14 @@ class WindowMixin(ABC):
             style.configure(f'{status}.Task.TFrame', background=color)
             style.configure(f'{status}.Task.TLabel', background=color)
             style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
+
+        style.map(
+            "Create.Task.TButton", 
+            background=[
+                ("active", 'blue'),
+                ("!disabled", 'blue')
+            ]
+        )
 
         x, y = self.size                   # забираем объявленные размеры окна
         # x, y = int(x*scale), int(y*scale)  # масштабируем их
@@ -1485,6 +1491,14 @@ class ImageComposite:
         self.master.itemconfig(self.id, image=self.tk)     # замена тк-картинки на холсте
 
 
+# проверка, тёмный цвет, или светлый
+def is_dark_color(r: int, g: int, b: int) -> bool:
+    if r > 256 or g > 256 or b > 256:               # если значение в широкой палитре цветов (два байта на цвет)
+        r, g, b = r//256, g//256, b//256            # то округляются до узкой палитры (один байт на цвет)
+    brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
+    return brightness < 128
+
+
 class ImageCanvas(Canvas):
     """Объект холста с картинкой в окне создания задачи.
     на которой отображаются "умные" поля ввода.
@@ -1605,8 +1619,7 @@ class ImageCanvas(Canvas):
             r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
             r, g, b = r/255, g/255, b/255               # выбранного фона холста
         
-        brightness = (r*299 + g*587 + b*114) / 1000     # вычисление яркости пикселя по весам
-        return brightness < 128                         # сравнение яркости
+        return is_dark_color(r, g, b)                   # вычисление, тёмный цвет, или светлый
 
     # обновляет разрешение холста
     def update_resolution(self, width: int, height: int, resize_image: bool):
@@ -1641,12 +1654,13 @@ class DirectoryManager(ttk.Frame):
     Даёт возможность добавлять, удалять директории, 
     и менять порядок кнопками и перетаскиванием"""
 
-    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list):
+    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list, on_change: Callable):
         super().__init__(master)
         self.name = 'dirs'
 
         self.widgets: Dict[str, Widget] = {}
         self.drag_data = {"start_index": None, "item": None}
+        self.on_change: Callable = on_change
 
         self.veiw_mode = veiw_mode
         self._init_widgets()
@@ -1666,29 +1680,7 @@ class DirectoryManager(ttk.Frame):
         for dir in self.dirs:
             images += find_img_in_dir(dir, full_path=True)
         return images
-
-    # подсветка виджета пути цветом предупреждения
-    def _highlight_invalid_path(self, path_number: list):
-        print(f'TODO подсветка несуществующего пути {path_number}')
-
-    # подсветка кнопки добавления пути цветом предупреждения
-    def _highlight_empty_path(self):
-        print(f'TODO подсветка кнопки добавления пути')
     
-    # проверка путей на валидность, передача в конфиг
-    def validate_dirs(self) -> bool:
-        if not self.dirs:
-            self._highlight_empty_path()
-            return False
-        
-        ok_flag = True  # вызовет подсветку несуществующих путей
-        for i, dir in enumerate(self.dirs):
-            if not os.path.isdir(dir):
-                self._highlight_invalid_path(i)
-                ok_flag = False
-
-        return ok_flag
-
     # инициализация виджетов
     def _init_widgets(self):
 
@@ -1734,6 +1726,7 @@ class DirectoryManager(ttk.Frame):
             return
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)  # добавление в список директорий
+        self.on_change(self.dirs[:])
 
     # удаление выбранной директории из списка
     def _remove_directory(self):
@@ -1742,6 +1735,7 @@ class DirectoryManager(ttk.Frame):
             index = selected[0]
             self.listbox.delete(index)
             del self.dirs[index]
+            self.on_change(self.dirs[:])
 
     # начало перетаскивания элемента
     def _start_drag(self, event):
@@ -2068,7 +2062,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 return
 
     # сбор данных из виджетов, создание конфигурации
-    def _collect_task_config(self) -> None:
+    def _collect_task_config(self):
         overlays = self.image_canvas.fetch_entries_text()       # достаёт тексты оверлеев из виджетов,
         self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
 
@@ -2076,17 +2070,14 @@ class NewTaskWindow(Toplevel, WindowMixin):
             framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
             quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
         )
-    
-    # выбор пути для сохранения файла
-    def _set_filepath(self) -> bool:
-        filepath = filedialog.asksaveasfilename(
-                parent=self,                                                # открытие окна сохранения файла
-                filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
-                defaultextension=".mp4"                                     # стандартное расширение
-        )
-        if filepath:
-            self.task_config.set_filepath(filepath)
-            self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
+
+    # попытка проверяет, есть ли директории и путь сохранения файла
+    def _validate_task_config(self):
+        state = 'disabled'
+        if self.task_config.get_dirs() and self.task_config.get_filepath():
+            state = 'enabled'
+        self.widgets['btCreate'].configure(state=state)
+        self.widgets['btCopy'].configure(state=state)
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -2141,35 +2132,48 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self._bind_resize_events()
 
+        # передача дитекротий в конфиг, валидация
+        def set_dirs_to_task_config(dirs):   # внешняя ручка, вызываемая 
+            self.task_config.set_dirs(dirs)  # менеджером директорий после
+            self._validate_task_config()     # добавления/удаления директории
+
         self.dir_manager = DirectoryManager(
             self.menu_frame, 
             veiw_mode=self.view_mode,
-            dirs=self.task_config.get_dirs() 
+            dirs=self.task_config.get_dirs(),
+            on_change=set_dirs_to_task_config,  # передача ручки
         )
 
         self.settings_grid = Frame(self.menu_frame)  # создание фрейма настроек в нижнем фрейме
 
         def add_task():  # обработка кнопки добавления задачи
-            self._collect_task_config()   # сбор данных конфигурации с виджетов
-            if not self.dir_manager.validate_dirs(): # если каких-то директорий нет,
-                return                    # дальнейшие действия не произойдут
-            
-            dirs = self.dir_manager.get_dirs()
-            self.task_config.set_dirs(dirs)
-
-            if not self.task_config.get_filepath():  # если путь сохранения не выбран,
-                return                    # дальнейшие действия не произойдут
+            self._collect_task_config()
             self._create_task_instance()  # cоздание и запуск задачи
             self.close()                  # закрытие окна создания задачи
 
         def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
+            if not color:
+                return
             self.image_canvas.update_background_color(color)
             self.canvas_frame.config(background=color)
             self.task_config.set_color(color)  # установка цвета в конфиге
-            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+            text_color = 'white' if is_dark_color(*self.winfo_rgb(color)) else 'black'
+            self.widgets['_btColor'].configure(bg=color, text=color, fg=text_color)  # цвет кнопки
+
+        def set_filepath():  # выбор пути для сохранения файла
+            filepath = filedialog.asksaveasfilename(
+                    parent=self,                                                # открытие окна сохранения файла
+                    filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
+                    defaultextension=".mp4"                                     # стандартное расширение
+            )
+            if filepath:
+                self.task_config.set_filepath(filepath)
+                self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
+                self._validate_task_config()
 
         def copy_to_clip():  # копирование команды в буфер обмена
+            self._collect_task_config()
             command = ' '.join(self.task_config.convert_to_command())
             self.clipboard_clear()
             self.clipboard_append(command)
@@ -2181,10 +2185,17 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbSaveAs'] = ttk.Label(self.settings_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(self.settings_grid, command=ask_color, text=DEFAULT_CANVAS_COLOR, width=7)
-        if self.view_mode:
-            color = self.task_config.get_color()
-            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+        self.widgets['_btColor'] = Button(
+            self.settings_grid, 
+            command=ask_color, 
+            text=DEFAULT_CANVAS_COLOR, 
+            width=7,
+            bg=self.task_config.get_color(),
+            fg='white',
+            borderwidth=1,
+            relief='solid',
+            highlightcolor='grey',
+        )
 
         self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
             self.settings_grid,
@@ -2194,7 +2205,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=8,
         )
         self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
-            self.task_config.get_framerate() if self.view_mode else 30
+            self.task_config.get_framerate()
         )
 
         self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
@@ -2205,10 +2216,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         path = self.task_config.get_filepath()
-        file_name = path.split('/')[-1] if path else '-'
-        self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=self._set_filepath, text=file_name)
+        file_name = path.split('/')[-1] if path else Lang.read('task.btPathChoose')
+        self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
 
-        self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task)
+        self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task, style='Create.Task.TButton')
 
         # лейбл и кнопка копирования команды
         self.widgets['lbCopy'] = ttk.Label(self.settings_grid)
@@ -2259,14 +2270,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.bind("<Configure>", on_resize)  # для изменения размеров окна
         self.main_pane.bind("<Configure>", on_resize)  # для отпускания лкм на шторке
 
-
     # расположение виджетов
     def _pack_widgets(self):
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
         self.dir_manager.pack(expand=True, fill=BOTH, padx=(15,0), pady=(20, 0))  # менеджер директорий
-        self.settings_grid.pack(pady=20)  # фрейм настроек
+        self.settings_grid.pack(pady=10)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
         self.settings_grid.columnconfigure(0, weight=3)
@@ -2287,13 +2297,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
         # подпись и кнопка выбора пути
         self.widgets['lbSaveAs'].grid(row=3, column=0, sticky='e', padx=5, pady=5)
         self.widgets['_btPath'].grid(row=3, column=1, sticky='ew', padx=5, pady=5)
+        
+        # подпись и кнопка копирования команды
+        self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
 
-        # в режиме просмотра
-        if self.view_mode:  # подпись и кнопка копирования команды
-            self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=5, pady=5)
-            self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
-        else:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
+        if not self.view_mode:  # кнопка создания задачи
+            self.widgets['btCreate'].grid(row=5, column=1, sticky='ew', padx=5, pady=5)
+
+        self._validate_task_config()
 
 
     # расширение метода обновления текстов

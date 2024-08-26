@@ -196,6 +196,14 @@ class WindowMixin(ABC):
             style.configure(f'{status}.Task.TLabel', background=color)
             style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
 
+        style.map(
+            "Create.Task.TButton", 
+            background=[
+                ("active", 'blue'),
+                ("!disabled", 'blue')
+            ]
+        )
+
         x, y = self.size                   # забираем объявленные размеры окна
         # x, y = int(x*scale), int(y*scale)  # масштабируем их
         self.geometry(f'{x}x{y}')          # и присваиваем их окну

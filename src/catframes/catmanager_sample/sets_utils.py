@@ -51,7 +51,7 @@ class Lang:
             'sets.btSave': 'Save',
 
             'task.title': 'New Task',
-            'task.initText': 'Add a directory of images',
+            'task.initText': 'Add a directory\nof images',
             'task.lbColor': 'Background:',
             'task.lbFramerate': 'Framerate:',
             'task.lbQuality': 'Quality:',
@@ -59,7 +59,8 @@ class Lang:
             'task.lbResolution': 'Render resolution:',
             'task.lbSaveAs': 'Save as:',
             'task.btCreate': 'Create',
-            'task.lbCopy': 'Copy cli command:',
+            'task.btPathChoose': 'choose',
+            'task.lbCopy': 'Сli command:',
             'task.btCopy': 'Copy',
 
             'dirs.lbDirList': 'List of source directories:',
@@ -102,7 +103,7 @@ class Lang:
             'sets.btSave': 'Сохранить',
 
             'task.title': 'Новая задача',
-            'task.initText': 'Добавьте папку изображений',
+            'task.initText': 'Добавьте папку\nс изображениями',
             'task.lbColor': 'Цвет фона:',
             'task.lbFramerate': 'Частота кадров:',
             'task.lbQuality': 'Качество:',
@@ -110,7 +111,8 @@ class Lang:
             'task.lbResolution': 'Разрешение рендера:',
             'task.lbSaveAs': 'Сохранить как:',
             'task.btCreate': 'Создать',
-            'task.lbCopy': 'Команда терминала:',
+            'task.btPathChoose': 'выбрать',
+            'task.lbCopy': 'Команда cli:',
             'task.btCopy': 'Копировать',
 
             'dirs.lbDirList': 'Список директорий источников:',

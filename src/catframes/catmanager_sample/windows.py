@@ -1,6 +1,6 @@
 from _prefix import *
 from sets_utils import Lang, PortSets
-from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager
+from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager, is_dark_color
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
 
@@ -282,7 +282,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 return
 
     # сбор данных из виджетов, создание конфигурации
-    def _collect_task_config(self) -> None:
+    def _collect_task_config(self):
         overlays = self.image_canvas.fetch_entries_text()       # достаёт тексты оверлеев из виджетов,
         self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
 
@@ -290,17 +290,14 @@ class NewTaskWindow(Toplevel, WindowMixin):
             framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
             quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
         )
-    
-    # выбор пути для сохранения файла
-    def _set_filepath(self) -> bool:
-        filepath = filedialog.asksaveasfilename(
-                parent=self,                                                # открытие окна сохранения файла
-                filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
-                defaultextension=".mp4"                                     # стандартное расширение
-        )
-        if filepath:
-            self.task_config.set_filepath(filepath)
-            self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
+
+    # попытка проверяет, есть ли директории и путь сохранения файла
+    def _validate_task_config(self):
+        state = 'disabled'
+        if self.task_config.get_dirs() and self.task_config.get_filepath():
+            state = 'enabled'
+        self.widgets['btCreate'].configure(state=state)
+        self.widgets['btCopy'].configure(state=state)
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -355,35 +352,48 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self._bind_resize_events()
 
+        # передача дитекротий в конфиг, валидация
+        def set_dirs_to_task_config(dirs):   # внешняя ручка, вызываемая 
+            self.task_config.set_dirs(dirs)  # менеджером директорий после
+            self._validate_task_config()     # добавления/удаления директории
+
         self.dir_manager = DirectoryManager(
             self.menu_frame, 
             veiw_mode=self.view_mode,
-            dirs=self.task_config.get_dirs() 
+            dirs=self.task_config.get_dirs(),
+            on_change=set_dirs_to_task_config,  # передача ручки
         )
 
         self.settings_grid = Frame(self.menu_frame)  # создание фрейма настроек в нижнем фрейме
 
         def add_task():  # обработка кнопки добавления задачи
-            self._collect_task_config()   # сбор данных конфигурации с виджетов
-            if not self.dir_manager.validate_dirs(): # если каких-то директорий нет,
-                return                    # дальнейшие действия не произойдут
-            
-            dirs = self.dir_manager.get_dirs()
-            self.task_config.set_dirs(dirs)
-
-            if not self.task_config.get_filepath():  # если путь сохранения не выбран,
-                return                    # дальнейшие действия не произойдут
+            self._collect_task_config()
             self._create_task_instance()  # cоздание и запуск задачи
             self.close()                  # закрытие окна создания задачи
 
         def ask_color():  # вызов системного окна по выбору цвета
             color = colorchooser.askcolor(parent=self)[-1]
+            if not color:
+                return
             self.image_canvas.update_background_color(color)
             self.canvas_frame.config(background=color)
             self.task_config.set_color(color)  # установка цвета в конфиге
-            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+            text_color = 'white' if is_dark_color(*self.winfo_rgb(color)) else 'black'
+            self.widgets['_btColor'].configure(bg=color, text=color, fg=text_color)  # цвет кнопки
+
+        def set_filepath():  # выбор пути для сохранения файла
+            filepath = filedialog.asksaveasfilename(
+                    parent=self,                                                # открытие окна сохранения файла
+                    filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
+                    defaultextension=".mp4"                                     # стандартное расширение
+            )
+            if filepath:
+                self.task_config.set_filepath(filepath)
+                self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
+                self._validate_task_config()
 
         def copy_to_clip():  # копирование команды в буфер обмена
+            self._collect_task_config()
             command = ' '.join(self.task_config.convert_to_command())
             self.clipboard_clear()
             self.clipboard_append(command)
@@ -395,10 +405,17 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbSaveAs'] = ttk.Label(self.settings_grid)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(self.settings_grid, command=ask_color, text=DEFAULT_CANVAS_COLOR, width=7)
-        if self.view_mode:
-            color = self.task_config.get_color()
-            self.widgets['_btColor'].configure(background=color, text=color)  # цвет кнопки
+        self.widgets['_btColor'] = Button(
+            self.settings_grid, 
+            command=ask_color, 
+            text=DEFAULT_CANVAS_COLOR, 
+            width=7,
+            bg=self.task_config.get_color(),
+            fg='white',
+            borderwidth=1,
+            relief='solid',
+            highlightcolor='grey',
+        )
 
         self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
             self.settings_grid,
@@ -408,7 +425,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=8,
         )
         self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
-            self.task_config.get_framerate() if self.view_mode else 30
+            self.task_config.get_framerate()
         )
 
         self.widgets['cmbQuality'] = ttk.Combobox(  # виджет выбора качества
@@ -419,10 +436,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         path = self.task_config.get_filepath()
-        file_name = path.split('/')[-1] if path else '-'
-        self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=self._set_filepath, text=file_name)
+        file_name = path.split('/')[-1] if path else Lang.read('task.btPathChoose')
+        self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
 
-        self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task)
+        self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task, style='Create.Task.TButton')
 
         # лейбл и кнопка копирования команды
         self.widgets['lbCopy'] = ttk.Label(self.settings_grid)
@@ -473,14 +490,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.bind("<Configure>", on_resize)  # для изменения размеров окна
         self.main_pane.bind("<Configure>", on_resize)  # для отпускания лкм на шторке
 
-
     # расположение виджетов
     def _pack_widgets(self):
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
         self.dir_manager.pack(expand=True, fill=BOTH, padx=(15,0), pady=(20, 0))  # менеджер директорий
-        self.settings_grid.pack(pady=20)  # фрейм настроек
+        self.settings_grid.pack(pady=10)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
         self.settings_grid.columnconfigure(0, weight=3)
@@ -501,13 +517,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
         # подпись и кнопка выбора пути
         self.widgets['lbSaveAs'].grid(row=3, column=0, sticky='e', padx=5, pady=5)
         self.widgets['_btPath'].grid(row=3, column=1, sticky='ew', padx=5, pady=5)
+        
+        # подпись и кнопка копирования команды
+        self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
 
-        # в режиме просмотра
-        if self.view_mode:  # подпись и кнопка копирования команды
-            self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=5, pady=5)
-            self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
-        else:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
+        if not self.view_mode:  # кнопка создания задачи
+            self.widgets['btCreate'].grid(row=5, column=1, sticky='ew', padx=5, pady=5)
+
+        self._validate_task_config()
 
 
     # расширение метода обновления текстов
