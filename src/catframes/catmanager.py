@@ -1691,25 +1691,37 @@ class DirectoryManager(ttk.Frame):
         self.update_texts()
 
         self.dirs = dirs
-        for dir in dirs:
-            self.listbox.insert(END, shrink_path(dir, 35))
+        self._update_listbox(30)
 
     # возвращает список директорий
     def get_dirs(self) -> list:
         return self.dirs[:]
     
+    # возвращает все картинки во всех директориях
     def get_all_imgs(self) -> list:
         images = []
         for dir in self.dirs:
             images += find_img_in_dir(dir, full_path=True)
         return images
     
+    # меняет "ужатость" каждой директории в списке
+    def _update_listbox(self, max_length):
+        self.listbox.delete(0, END)
+        for path in self.dirs:
+            shrinked = shrink_path(path, max_length)
+            self.listbox.insert(END, shrinked)
+
     # инициализация виджетов
     def _init_widgets(self):
 
         self.top_frame = Frame(self)
 
         self.widgets['lbDirList'] = ttk.Label(self.top_frame)  # надпись "Список директорий:"
+
+        # при растягивании фрейма
+        def on_resize(event):
+            max_length = int(event.width // 8)  # максимальная длина имени директории
+            self._update_listbox(max_length)    # обновление длины строк для всего списка
 
         # создание списка и полосы прокрутки
         self.listbox = Listbox(self.top_frame, selectmode=SINGLE, width=20, height=8)
@@ -1719,6 +1731,7 @@ class DirectoryManager(ttk.Frame):
         if not self.veiw_mode:
             self.listbox.bind('<Button-1>', self._start_drag)
             self.listbox.bind('<B1-Motion>', self._do_drag)
+        self.top_frame.bind('<Configure>', on_resize)
         self.listbox.bind('<Double-Button-1>', self._on_double_click)
 
         self.button_frame = Frame(self)
@@ -1777,7 +1790,11 @@ class DirectoryManager(ttk.Frame):
     def _do_drag(self, event):
         new_index = self.listbox.nearest(event.y)
         if new_index != self.drag_data["start_index"]:
-            self._swap_dirs(self.drag_data["start_index"], new_index, self.drag_data["item"])
+            self._swap_dirs(
+                self.drag_data["start_index"], 
+                new_index, 
+                self.drag_data["item"]
+            )
             self.drag_data["start_index"] = new_index
 
     # открывает дитекторию по даблклику (если её не существует - удаляет)
