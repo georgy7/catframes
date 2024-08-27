@@ -19,6 +19,15 @@ from PIL import Image, ImageTk
 
 DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 
+# Цвета для главного окна
+MAIN_TOOLBAR_COLOR = '#E0E0E0'
+MAIN_TASKLIST_COLOR = '#CDCDCD'
+MAIN_TASKBAR_COLORS = {
+    'Running': '#E0E0E0', 
+    'Error': '#FF9B9B', 
+    'Success': '#6AFB84'
+}
+
 # константы имён ошибок
 INTERNAL_ERROR = 'internal'
 NO_FFMPEG_ERROR = 'noffmpeg'
@@ -795,9 +804,10 @@ class WindowMixin(ABC):
         style.configure(style='.', font=_font)  # шрифт текста в кнопке
         self.option_add("*Font", _font)  # шрифты остальных виджетов
 
+        style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+
         # создание стилей фона таскбара для разных состояний
-        taskbar_colors = {'Running': '#cccccc', 'Error': '#ffcccc', 'Success': '#9afcab'}
-        for status, color in taskbar_colors.items():
+        for status, color in MAIN_TASKBAR_COLORS.items():
             style.configure(f'{status}.Task.TFrame', background=color)
             style.configure(f'{status}.Task.TLabel', background=color)
             style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
@@ -890,33 +900,33 @@ class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
 
     def __init__(self, root_window, *args, **kwargs):
-        super().__init__(root_window, *args, **kwargs)
+        super().__init__(root_window, *args, **kwargs, style='Main.TFrame')
         
         self.root = root_window
-        self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
+        self.canvas = Canvas(self, highlightthickness=0, bg=MAIN_TASKLIST_COLOR)  # объект "холста"
         self.canvas.bind(           # привязка к виджету холста
             "<Configure>",          # обработчика событий, чтобы внутренний фрейм
             self._on_resize_window  # менял размер, если холст растягивается
-            )
-
+        )
         self.scrollbar = ttk.Scrollbar(  # полоса прокрутки
             self, orient="vertical",     # установка в вертикальное положение
             command=self.canvas.yview,   # передача управления вертикальной прокруткой холста
         )  
-
-        self.scrollable_frame = ttk.Frame(self.canvas, padding=[15, 0])  # фрейм для контента (внутренних виджетов)
+        self.scrollable_frame = ttk.Frame(  # фрейм для контента (внутренних виджетов)
+            self.canvas, 
+            padding=[15, 0], 
+            style='Main.TaskList.TFrame'
+        )
         self.scrollable_frame.bind(  # привязка к виджету фрейма 
             "<Configure>",           # обработчика событий <Configure>, чтобы полоса
             self._on_frame_update,   # прокрутки менялась, когда обновляется фрейм 
         )
-
         # привязка холста к верхнему левому углу, получение id фрейма
         self.frame_id = self.canvas.create_window(
             (0, 0), 
             window=self.scrollable_frame, 
             anchor="nw"
         )
-
         # передача управления полосы прокрутки, когда холст движется от колёсика
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
@@ -928,12 +938,12 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.bind("<Enter>", self._bind_mousewheel)
         self.canvas.bind("<Leave>", self._unbind_mousewheel)
 
-        # создание надписи "здесь появятся Ваши проекты"
-        self._empty_sign = ttk.Label(
-            self.scrollable_frame,
-            justify=CENTER,
-            font=("Arial", 18)
-        )
+        # # создание надписи "здесь появятся Ваши проекты"
+        # self._empty_sign = ttk.Label(
+        #     self.scrollable_frame,
+        #     justify=CENTER,
+        #     font=("Arial", 18)
+        # )
 
         # первичное обновление полосы, чтобы сразу её не было видно
         self._update_scrollbar_visibility()
@@ -941,17 +951,18 @@ class ScrollableFrame(ttk.Frame):
     # отрабатываывает при добавлении/удалении таскбаров в фрейм
     def _on_frame_update(self, event):
         self._update_scrollbar(event)
-        self._update_empty_sign()
+        # self._update_empty_sign()
 
     # обновление видимости надписи "здесь появятся Ваши проекты" 
-    def _update_empty_sign(self):
-        if '!taskbar' in self.scrollable_frame.children.keys():
-            self._empty_sign.pack_forget()  # если есть таскбары, удалить надпись
-        else:
-            self._empty_sign.pack(pady=80)  # если их нет - покажет её
+    # def _update_empty_sign(self):
+    #     if '!taskbar' in self.scrollable_frame.children.keys():
+    #         self._empty_sign.pack_forget()  # если есть таскбары, удалить надпись
+    #     else:
+    #         self._empty_sign.pack(pady=80)  # если их нет - покажет её
 
     def update_texts(self):
-        self._empty_sign.config(text=Lang.read('bar.lbEmpty'))
+        pass
+    #     self._empty_sign.config(text=Lang.read('bar.lbEmpty'))
 
     # изменение размеров фрейма внутри холста
     def _on_resize_window(self, event):
@@ -989,7 +1000,7 @@ class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
     def __init__(self, master: ttk.Frame, task: Task, **kwargs):
-        super().__init__(master, borderwidth=1, padding=5)
+        super().__init__(master, borderwidth=1, padding=5, style='Scroll.Task.TFrame')
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
@@ -1090,13 +1101,13 @@ class TaskBar(ttk.Frame):
 
         self.widgets['_lbPath'].pack(side=TOP, fill=X, expand=True)
         self.widgets['_lbData'].pack(side=TOP, fill=X, expand=True)
-        self.mid_frame.pack(side=LEFT)
+        self.mid_frame.pack(side=LEFT, fill=X, expand=True)
 
-        self.widgets['_progressBar'].pack(side=TOP, expand=True)
-        self.widgets['btCancel'].pack(side=BOTTOM)
+        self.widgets['_progressBar'].pack(side=TOP, expand=True, fill=X)
+        self.widgets['btCancel'].pack(side=BOTTOM, expand=True, fill=X)
         self.right_frame.pack(side=LEFT, expand=True)
 
-        self.pack(pady=[0, 10])
+        self.pack(pady=[10, 0], fill=X, expand=True)
 
     # изменение бара на "завершённое" состояние
     def finish(self):
@@ -1893,7 +1904,7 @@ class RootWindow(Tk, WindowMixin):
             LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
-        self.upper_bar = upperBar = ttk.Frame(self)  # верхний бар с кнопками
+        self.upper_bar = upperBar = Frame(self, background=MAIN_TOOLBAR_COLOR)  # верхний бар с кнопками
         self.task_space = ScrollableFrame(self)  # пространство с прокруткой
         self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 
@@ -1903,11 +1914,11 @@ class RootWindow(Tk, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.upper_bar.pack(fill=X, padx=15, pady=15)
+        self.upper_bar.pack(fill=X)
         self.task_space.pack(fill=BOTH, expand=True)
 
-        self.widgets['newTask'].pack(side=LEFT)
-        self.widgets['openSets'].pack(side=RIGHT)
+        self.widgets['newTask'].pack(side=LEFT, padx=10, pady=10)
+        self.widgets['openSets'].pack(side=RIGHT, padx=10, pady=10)
         
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:

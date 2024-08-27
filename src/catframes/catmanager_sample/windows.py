@@ -63,7 +63,7 @@ class RootWindow(Tk, WindowMixin):
             LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
-        self.upper_bar = upperBar = ttk.Frame(self)  # верхний бар с кнопками
+        self.upper_bar = upperBar = Frame(self, background=MAIN_TOOLBAR_COLOR)  # верхний бар с кнопками
         self.task_space = ScrollableFrame(self)  # пространство с прокруткой
         self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 
@@ -73,11 +73,11 @@ class RootWindow(Tk, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.upper_bar.pack(fill=X, padx=15, pady=15)
+        self.upper_bar.pack(fill=X)
         self.task_space.pack(fill=BOTH, expand=True)
 
-        self.widgets['newTask'].pack(side=LEFT)
-        self.widgets['openSets'].pack(side=RIGHT)
+        self.widgets['newTask'].pack(side=LEFT, padx=10, pady=10)
+        self.widgets['openSets'].pack(side=RIGHT, padx=10, pady=10)
         
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:

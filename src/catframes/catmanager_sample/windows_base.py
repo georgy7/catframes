@@ -189,9 +189,10 @@ class WindowMixin(ABC):
         style.configure(style='.', font=_font)  # шрифт текста в кнопке
         self.option_add("*Font", _font)  # шрифты остальных виджетов
 
+        style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+
         # создание стилей фона таскбара для разных состояний
-        taskbar_colors = {'Running': '#cccccc', 'Error': '#ffcccc', 'Success': '#9afcab'}
-        for status, color in taskbar_colors.items():
+        for status, color in MAIN_TASKBAR_COLORS.items():
             style.configure(f'{status}.Task.TFrame', background=color)
             style.configure(f'{status}.Task.TLabel', background=color)
             style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)

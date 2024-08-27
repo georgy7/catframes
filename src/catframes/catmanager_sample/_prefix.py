@@ -19,6 +19,15 @@ from PIL import Image, ImageTk
 
 DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 
+# Цвета для главного окна
+MAIN_TOOLBAR_COLOR = '#E0E0E0'
+MAIN_TASKLIST_COLOR = '#CDCDCD'
+MAIN_TASKBAR_COLORS = {
+    'Running': '#E0E0E0', 
+    'Error': '#FF9B9B', 
+    'Success': '#6AFB84'
+}
+
 # константы имён ошибок
 INTERNAL_ERROR = 'internal'
 NO_FFMPEG_ERROR = 'noffmpeg'
