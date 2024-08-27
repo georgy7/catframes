@@ -11,7 +11,7 @@ requires-python = ">=3.7"
 
 authors = [
   {name = "Georgy Ustinov", email = "inbox@itustinov.ru" },
-  {name = "Bogdan Syrovatsky", email = "bogdansir1807@gmail.com" },,
+  {name = "Bogdan Syrovatsky", email = "bogdansir1807@gmail.com" },
   {name = "Evgeny Ockatiev", email = "evgeny.ockatiev@gmail.com" }
 ]
 
