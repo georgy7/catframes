@@ -1453,6 +1453,7 @@ class OutputOptions:
                     if not queue.full():
                         queue.put(1 + index, block=False)
 
+                queue.put(len(items))
                 pipe.close()
 
             input_thread = threading.Thread(
