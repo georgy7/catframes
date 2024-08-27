@@ -17,7 +17,22 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
 
-DEFAULT_COLOR = '#888888'  # цвет стандартного фона изображения
+DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
+
+# Цвета для главного окна
+MAIN_TOOLBAR_COLOR = '#E0E0E0'
+MAIN_TASKLIST_COLOR = '#CDCDCD'
+MAIN_TASKBAR_COLORS = {
+    'Running': '#E0E0E0', 
+    'Error': '#FF9B9B', 
+    'Success': '#6AFB84'
+}
+
+# константы имён ошибок
+INTERNAL_ERROR = 'internal'
+NO_FFMPEG_ERROR = 'noffmpeg'
+NO_CATFRAMES_ERROR = 'nocatframes'
+START_FAILED_ERROR = 'failed'
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.

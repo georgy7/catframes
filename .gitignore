@@ -8,6 +8,7 @@ src/catframes.egg-info/
 .DS_Store
 .venv/
 
+/test/
 .directory
 *.kate-swp
 *~
