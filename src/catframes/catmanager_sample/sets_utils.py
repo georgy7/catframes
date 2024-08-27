@@ -43,6 +43,9 @@ class Lang:
             'bar.error.nocatframes': 'Error! Catframes not found!',
             'bar.error.internal': 'Internal process error!',
             'bar.error.failed': 'Error! Process start failed!',
+            'bar.lbQuality': 'Quality:',
+            'bar.lbFramerate': 'Framerate:',
+            'bar.lbColor': 'Color:',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
@@ -96,6 +99,9 @@ class Lang:
             'bar.error.nocatframes': 'Ошибка! Catframes не найден!',
             'bar.error.internal': 'Внутренняя ошибка процесса!',
             'bar.error.failed': 'Ошибка при старте процесса!',
+            'bar.lbQuality': 'Качество:',
+            'bar.lbFramerate': 'Частота:',
+            'bar.lbColor': 'Цвет:',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',

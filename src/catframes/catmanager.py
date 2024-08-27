@@ -84,6 +84,9 @@ class Lang:
             'bar.error.nocatframes': 'Error! Catframes not found!',
             'bar.error.internal': 'Internal process error!',
             'bar.error.failed': 'Error! Process start failed!',
+            'bar.lbQuality': 'Quality:',
+            'bar.lbFramerate': 'Framerate:',
+            'bar.lbColor': 'Color:',
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
@@ -137,6 +140,9 @@ class Lang:
             'bar.error.nocatframes': 'Ошибка! Catframes не найден!',
             'bar.error.internal': 'Внутренняя ошибка процесса!',
             'bar.error.failed': 'Ошибка при старте процесса!',
+            'bar.lbQuality': 'Качество:',
+            'bar.lbFramerate': 'Частота:',
+            'bar.lbColor': 'Цвет:',
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
@@ -890,9 +896,16 @@ def shrink_path(path: str, limit: int) -> str:
     shrink = [dirs.pop(0), dirs.pop()] 
     while dirs and len(s.join(shrink) + dirs[-1]) + 4 < limit:  # если лимит не будет превышен,
         shrink.insert(1, dirs.pop())                            # добавить элемент с конца
-    
+
+    try:
+        addit = limit - len(f"{shrink[0]}{s}...{s}{s.join(shrink[1:])}")  # вычисляем недостающую длину
+        start = len(dirs[-1]) - addit         # берём стартовый индекс для невлазящей директории 
+        shrink.insert(1, dirs[-1][start::])   # берём последнюю часть невлазящей директории
+    except:
+        pass
+
     # сборка строки нового пути, передача её, если она короче изначальной
-    new_path = f"{shrink[0]}{s}...{s}{s.join(shrink[1:])}"
+    new_path = f"{shrink[0]}{s}...{s.join(shrink[1:])}"
     return new_path if len(new_path) < len(path) else path
 
 
@@ -1006,11 +1019,14 @@ class TaskBar(ttk.Frame):
         self.task: Task = task
         self.progress: float = 0
         self.image: Image
+        self.length: int = 520
+        self.error: str = None
         self.open_view: Callable = kwargs.get('view')  # достаёт ручку для открытия окна просмотра
 
         self._init_widgets()
         self.update_texts()
         self._pack_widgets()
+        self._update_labels()
 
     # установка стиля для прогрессбара
     def _set_style(self, style_id: int):
@@ -1052,19 +1068,12 @@ class TaskBar(ttk.Frame):
         self.widgets['_lbPath'] = ttk.Label(  
             self.mid_frame, 
             font=bigger_font, padding=5,
-            text=shrink_path(self.task.config.get_filepath(), 32), 
+            text=shrink_path(self.task.config.get_filepath(), 30), 
         )
-
-        # создание локализованых строк "качество: высокое | частота кадров: 50"
-        quality_index = self.task.config.get_quality()
-        quality = Lang.read('task.cmbQuality')[quality_index]
-        quality_text = f"{Lang.read('task.lbQuality')} {quality}  |  "
-        framerate_text = f"{Lang.read('task.lbFramerate')} {self.task.config.get_framerate()}"
 
         self.widgets['_lbData'] = ttk.Label(
             self.mid_frame, 
             font='14', padding=5,
-            text=quality_text+framerate_text, 
         )
 
         # создание правой части бара
@@ -1073,7 +1082,7 @@ class TaskBar(ttk.Frame):
         # кнопка "отмена"
         self.widgets['btCancel'] = ttk.Button(
             self.right_frame, 
-            width=8, 
+            width=10, 
             command=lambda: self.task.cancel()
         )
         
@@ -1087,12 +1096,50 @@ class TaskBar(ttk.Frame):
 
         self._set_style(0)
 
+        # при растягивании фрейма
+        def on_resize(event):
+            self.length = event.width  # максимальная длина имени директории
+            
+            self._update_labels()
+
+        self.bind('<Configure>', on_resize)
+
         # каждый элемент таскбара при нажатии будет вызывать окно просмотра задачи
         self.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
         for w_name, w in self.widgets.items():
             if not 'bt' in w_name:  # привязка действий ко всем виджетам, кроме кнопок
                 w.bind("<Button-1>", lambda x: self.open_view(task_config=self.task.config))
 
+    # обновление лейблов пути и информации на виджете
+    def _update_labels(self):
+        # вычисляем символьную длинну для лейбла пути, ужимаем путь, присваиваем текст
+        lb_path_length = int(self.length // 10)-23
+        lb_path_text = shrink_path(self.task.config.get_filepath(), lb_path_length)
+        self.widgets['_lbPath'].configure(text=lb_path_text)
+
+        # если есть ошибка, то лейбл информации заполняем текстом этой ошибки
+        if self.error:
+            self.widgets['_lbData'].config(text=Lang.read(f'bar.error.{self.error}'))
+            return            
+
+        # если нет ошибки, то создаём локализованую строку "качество: высокое | частота кадров: 50"
+        lb_data_list = []
+        
+        # собираем информацию про качество
+        quality = Lang.read('task.cmbQuality')[self.task.config.get_quality()]
+        quality_text = f"{Lang.read('bar.lbQuality')} {quality}"
+        lb_data_list.append(quality_text)
+
+        # информацию про фреймрейт
+        framerate_text = f"{Lang.read('bar.lbFramerate')} {self.task.config.get_framerate()}"
+        lb_data_list.append(framerate_text)
+
+        if self.length > 600:  # и если ширина фрейма больше 600, то и информацию про цвет
+            color_text = f"{Lang.read('bar.lbColor')} {self.task.config.get_color()}"
+            lb_data_list.append(color_text)
+
+        # присваиваем всё это дело лейблу информации через резделитель ' | '
+        self.widgets['_lbData'].configure(text=' | '.join(lb_data_list))
 
     # упаковка всех виджетов бара
     def _pack_widgets(self):
@@ -1105,7 +1152,7 @@ class TaskBar(ttk.Frame):
 
         self.widgets['_progressBar'].pack(side=TOP, expand=True, fill=X)
         self.widgets['btCancel'].pack(side=BOTTOM, expand=True, fill=X)
-        self.right_frame.pack(side=LEFT, expand=True)
+        self.right_frame.pack(side=LEFT)
 
         self.pack(pady=[10, 0], fill=X, expand=True)
 
@@ -1125,7 +1172,7 @@ class TaskBar(ttk.Frame):
         self.widgets['btDelete'].config(
             command=lambda: self.task.delete(),  # переопределение поведения кнопки
         )
-        self.widgets['_lbData'].config(text=Lang.read(f'bar.error.{error}'))
+        self.error = error
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
@@ -1148,6 +1195,7 @@ class TaskBar(ttk.Frame):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
                 widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+        self._update_labels()
 
 
 class ResizingField(Text):
