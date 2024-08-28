@@ -2518,6 +2518,7 @@ class ConsoleInterface:
         self._add_input_arguments(parser)
         self._add_rendering_arguments(parser)
         self._add_output_arguments(parser)
+        self._add_system_arguments(parser)
 
         parser.add_argument('--resolutions', action='store_true',
             help='show the resolution choosing process and exit')
@@ -2679,6 +2680,13 @@ class ConsoleInterface:
             help='to try different options')
         video_arguments.add_argument('-f', '--force', action='store_true',
             help='overwrite video file if exists')
+
+    @classmethod
+    def _add_system_arguments(cls, parser: ArgumentParser):
+        system_arguments = parser.add_argument_group('System')
+        system_arguments.add_argument('-p', '--port-range', metavar='X',
+            default='10240:65535',
+            help='deprecated and will be removed soon')
 
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
