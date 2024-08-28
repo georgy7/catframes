@@ -66,7 +66,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
 
-import http.client
+import base64
 from time import sleep, monotonic
 from unittest import TestCase
 
@@ -1349,6 +1349,7 @@ class OutputOptions:
     destination: Path
     overwrite: bool
     limit_seconds: Union[int, None]
+    live_preview: bool
 
     def __post_init__(self):
         assert 1 <= self.frame_rate <= 60
@@ -1470,20 +1471,30 @@ class OutputOptions:
                     if int == type(message):
                         set_processed(message)
 
+            last_thumbnail_time = monotonic()
+            last_thumbnail = None
+
             with process.stdout:
                 ret_code = process.poll()
                 while None == ret_code:
                     clear_write_thread_messages()
                     chunk = process.stdout.read(64)
 
-                    #print(chunk.decode('utf-8'), flush='True', end='')
-                    #print('.', flush='True', end='')
+                    if self.live_preview and (monotonic() - last_thumbnail_time >= 0.2):
+                        thumbnail: Optional[bytes] = view.get_recent_thumbnail()
+                        if thumbnail and (last_thumbnail != thumbnail):
+                            print('Preview: ' + base64.b64encode(thumbnail).decode('utf-8'), flush=True)
+                            last_thumbnail = thumbnail
+                        last_thumbnail_time = monotonic()
+
+                    #print(chunk.decode('utf-8'), flush=True, end='')
+                    #print('.', flush=True, end='')
 
                     # I want this code to work in Python 3.7.
                     # The operator := requires 3.8.
                     ret_code = process.poll()
 
-                print(f'FFmpeg exited with {ret_code}.', flush='True', end='')
+                print(f'FFmpeg exited with {ret_code}.', flush=True, end='')
 
             input_thread.join()
 
@@ -2688,6 +2699,9 @@ class ConsoleInterface:
             default='10240:65535',
             help='deprecated and will be removed soon')
 
+        system_arguments.add_argument('--live-preview', action='store_true',
+            help='print base64 encoded JPEG thumbnails')
+
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
         print(flush=True)
@@ -2800,6 +2814,7 @@ class ConsoleInterface:
             destination=destination,
             overwrite=bool(self._args.force),
             limit_seconds=self._args.limit,
+            live_preview=self._args.live_preview,
             quality=quality,
             frame_rate=self._args.frame_rate)
 
