@@ -166,11 +166,12 @@ class ScrollableFrame(ttk.Frame):
 class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
-    def __init__(self, master: ttk.Frame, task: Task, **kwargs):
+    def __init__(self, master: ttk.Frame, task: Task, cancel_def: Callable, **kwargs):
         super().__init__(master, borderwidth=1, padding=5, style='Scroll.Task.TFrame')
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
+        self.cancel_def = cancel_def
         self.progress: float = 0
         self.image: Image
         self.length: int = 520
@@ -226,12 +227,12 @@ class TaskBar(ttk.Frame):
 
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5)
-       
+        
         # кнопка "отмена"
         self.widgets['btCancel'] = ttk.Button(
             self.right_frame, 
             width=10, 
-            command=lambda: self.task.cancel()
+            command=self.cancel_def
         )
         
         # полоса прогресса

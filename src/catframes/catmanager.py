@@ -114,11 +114,17 @@ class Lang:
             'dirs.btRemDir': 'Remove',
             'dirs.DirNotExists': "Doesn't exists. Removing...",
 
-            'warn.title': 'Warning',
-            'warn.lbWarn': 'Warning!',
-            'warn.lbText': 'Incomplete tasks!',
-            'warn.btBack': 'Back',
-            'warn.btExit': 'Leave',
+            'warn.exit.title': 'Warning',
+            'warn.exit.lbWarn': 'Warning!',
+            'warn.exit.lbText': 'Incomplete tasks!',
+            'warn.exit.btAccept': 'Leave',
+            'warn.exit.btDeny': 'Back',
+
+            'warn.cancel.title': 'Warning',
+            'warn.cancel.lbWarn': 'Are you sure',
+            'warn.cancel.lbText': 'You want to cancel the task?',
+            'warn.cancel.btAccept': 'Yes',
+            'warn.cancel.btDeny': 'Back',
 
             'noti.title': 'Error',
             'noti.lbWarn': 'Invalid port range!',
@@ -170,11 +176,17 @@ class Lang:
             'dirs.btRemDir': 'Удалить',
             'dirs.DirNotExists': 'Не существует. Удаление...',
             
-            'warn.title': 'Внимание',
-            'warn.lbWarn': 'Внимание!',
-            'warn.lbText': 'Задачи не завершены!',
-            'warn.btBack': 'Назад',
-            'warn.btExit': 'Выйти',
+            'warn.exit.title': 'Внимание',
+            'warn.exit.lbWarn': 'Внимание!',
+            'warn.exit.lbText': 'Задачи не завершены!',
+            'warn.exit.btAccept': 'Выйти',
+            'warn.exit.btDeny': 'Назад',
+
+            'warn.cancel.title': 'Внимание',
+            'warn.cancel.lbWarn': 'Вы уверены,',
+            'warn.cancel.lbText': 'Что хотите отменить задачу?',
+            'warn.cancel.btAccept': 'Да',
+            'warn.cancel.btDeny': 'Назад',
 
             'noti.title': 'Ошибка',
             'noti.lbWarn': 'Неверный диапазон портов!',
@@ -1014,11 +1026,12 @@ class ScrollableFrame(ttk.Frame):
 class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
-    def __init__(self, master: ttk.Frame, task: Task, **kwargs):
+    def __init__(self, master: ttk.Frame, task: Task, cancel_def: Callable, **kwargs):
         super().__init__(master, borderwidth=1, padding=5, style='Scroll.Task.TFrame')
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
+        self.cancel_def = cancel_def
         self.progress: float = 0
         self.image: Image
         self.length: int = 520
@@ -1074,12 +1087,12 @@ class TaskBar(ttk.Frame):
 
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5)
-       
+        
         # кнопка "отмена"
         self.widgets['btCancel'] = ttk.Button(
             self.right_frame, 
             width=10, 
-            command=lambda: self.task.cancel()
+            command=self.cancel_def
         )
         
         # полоса прогресса
@@ -1956,9 +1969,15 @@ class RootWindow(Tk, WindowMixin):
 
     # при закрытии окна
     def close(self):
+        
+        def accept_uncomlete_exit():
+            for task in TaskManager.running_list():
+                task.cancel()
+            self.destroy()
+
         if TaskManager.running_list():  # если есть активные задачи
             # открытие окна с новой задачей (и/или переключение на него)
-            return LocalWM.open(WarningWindow, 'warn').focus()
+            return LocalWM.open(WarningWindow, 'warn', self, type='exit', accept_def=accept_uncomlete_exit).focus()
         self.destroy()
 
     # создание и настройка виджетов
@@ -1991,7 +2010,9 @@ class RootWindow(Tk, WindowMixin):
         
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
-        task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
+        # сборка функции для открытия диалога при попытке отмены задачи
+        cancel_def = lambda: LocalWM.open(WarningWindow, 'warn', self, type='cancel', accept_def=task.cancel)
+        task_bar = TaskBar(self.taskList, task, cancel_def=cancel_def, **params)  # создаёт бар задачи
         self.task_bars[task.id] = task_bar  # регистрирует в словаре
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
@@ -2459,11 +2480,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
 class WarningWindow(Toplevel, WindowMixin):
     """Окно предупреждения при выходе"""
 
-    def __init__(self, root: RootWindow):
+    def __init__(self, root: RootWindow, **kwargs):
         super().__init__(master=root)
         self.name = 'warn'
-        self.widgets: Dict[str, Widget] = {}
+        self.type: str = kwargs.get('type')
+        self.accept_def: Callable = kwargs.get('accept_def')
 
+        self.widgets: Dict[str, Widget] = {}
         self.size = 260, 130
         self.resizable(False, False)
 
@@ -2471,14 +2494,6 @@ class WarningWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
-        
-        def back():
-            self.close()
-
-        def exit():
-            for task in TaskManager.running_list():
-                task.cancel()
-            self.master.destroy()
 
         _font = font.Font(size=16)
 
@@ -2488,17 +2503,22 @@ class WarningWindow(Toplevel, WindowMixin):
 
         # кнопки "назад" и "выйти"
         self.choise_frame = ttk.Frame(self)
-        self.widgets['btBack'] = ttk.Button(self.choise_frame, command=back)
-        self.widgets['btExit'] = ttk.Button(self.choise_frame, command=exit)
+        self.widgets['btAccept'] = ttk.Button(self.choise_frame, command=self.accept_def)
+        self.widgets['btDeny'] = ttk.Button(self.choise_frame, command=self.close)
 
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['lbWarn'].pack(side=TOP)
         self.widgets['lbText'].pack(side=TOP)
 
-        self.widgets['btBack'].pack(side=LEFT, anchor='w', padx=5)
-        self.widgets['btExit'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btAccept'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btDeny'].pack(side=LEFT, anchor='w', padx=5)
         self.choise_frame.pack(side=BOTTOM, pady=10)
+
+    def update_texts(self):
+        for w_name, widget in self.widgets.items():
+            new_text_data = Lang.read(f'{self.name}.{self.type}.{w_name}')            
+            widget.config(text=new_text_data)
 
 
 class NotifyWindow(Toplevel, WindowMixin):
