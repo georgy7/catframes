@@ -2026,7 +2026,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 150
+        self.size = 250, 100
         # self.size = 250, 200
         self.resizable(False, False)
 
@@ -2034,11 +2034,12 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        self.main_frame = Frame(self)
 
         # создание виджетов, привязывание функций
-        self.widgets['lbLang'] = ttk.Label(self)
+        self.widgets['lbLang'] = ttk.Label( self.main_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
-            self,
+             self.main_frame,
             values=Lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
@@ -2064,10 +2065,12 @@ class SettingsWindow(Toplevel, WindowMixin):
         # )
         
         # применение настроек
-        def apply_settings():
+        def apply_settings(event):
             Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
+
+        self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
 
             # try:  # проверка введённых значений, если всё ок - сохранение
             #     port_first = int(self.widgets['_entrPortFirst'].get())
@@ -2081,13 +2084,13 @@ class SettingsWindow(Toplevel, WindowMixin):
             #     self._set_ports_default()  # возврат предыдущих значений виджетов
             #     LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
 
-        # сохранение настроек (применение + закрытие)
-        def save_settings():
-            apply_settings()
-            self.close()
+        # # сохранение настроек (применение + закрытие)
+        # def save_settings():
+        #     apply_settings()
+        #     self.close()
 
-        self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
-        self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
+        # self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
+        # self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
 
     # # установка полей ввода портов в последнее сохранённое состояние
     # def _set_ports_default(self):
@@ -2098,14 +2101,10 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_frame.pack(padx=10, pady=30)
 
-        for c in range(2): 
-            self.columnconfigure(index=c, weight=1)
-        for r in range(7): 
-            self.rowconfigure(index=r, weight=1)
-        
-        self.widgets['lbLang'].grid(row=1, column=0, sticky='e', padx=15, pady=5)
-        self.widgets['_cmbLang'].grid(row=1, column=1, sticky='w', padx=(15 ,5), pady=5)
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
         # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
@@ -2113,8 +2112,8 @@ class SettingsWindow(Toplevel, WindowMixin):
         # self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
         # self._set_ports_default()  # заполняем поля ввода портов
 
-        self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
-        self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
+        # self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
+        # self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -2286,7 +2285,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.canvas_frame.config(background=color)
             self.task_config.set_color(color)  # установка цвета в конфиге
             text_color = 'white' if is_dark_color(*self.winfo_rgb(color)) else 'black'
-            self.widgets['_btColor'].configure(bg=color, text=color, fg=text_color)  # цвет кнопки
+            self.widgets['_btColor'].configure(bg=color, text=color+'  ', fg=text_color)  # цвет кнопки
 
         def set_filepath():  # выбор пути для сохранения файла
             filepath = filedialog.asksaveasfilename(
@@ -2315,7 +2314,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_btColor'] = Button(
             self.settings_grid, 
             command=ask_color, 
-            text=DEFAULT_CANVAS_COLOR, 
+            text=DEFAULT_CANVAS_COLOR+'  ', 
             width=7,
             bg=self.task_config.get_color(),
             fg='white',
@@ -2403,11 +2402,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15,0), pady=(20, 0))  # менеджер директорий
-        self.settings_grid.pack(pady=10)  # фрейм настроек
+        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15, 0), pady=(20, 0))  # менеджер директорий
+        self.settings_grid.pack(fill=X, pady=10, padx=10)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
-        self.settings_grid.columnconfigure(0, weight=3)
+        self.settings_grid.columnconfigure(0, weight=0)
         self.settings_grid.columnconfigure(1, weight=1)
 
         # подпись и кнопка цвета       
@@ -2431,7 +2430,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
 
         if not self.view_mode:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=5, column=1, sticky='ew', padx=5, pady=5)
+            self.widgets['btCreate'].grid(row=5, column=1, sticky='e', padx=5, pady=5)
 
         self._validate_task_config()
 
