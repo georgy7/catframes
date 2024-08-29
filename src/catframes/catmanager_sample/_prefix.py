@@ -9,6 +9,7 @@ import sys
 import os
 import io
 import re
+import base64
 # import requests
 
 from tkinter import *

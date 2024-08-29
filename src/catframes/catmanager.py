@@ -9,6 +9,7 @@ import sys
 import os
 import io
 import re
+import base64
 # import requests
 
 from tkinter import *
@@ -324,7 +325,7 @@ class TaskConfig:
         return self._color
 
     # создание консольной команды в виде списка
-    def convert_to_command(self) -> List[str]:
+    def convert_to_command(self, for_user: bool = False) -> List[str]:
         command = ['catframes']
         if sys.platform == "win32":
             command = ['catframes.exe']
@@ -347,9 +348,15 @@ class TaskConfig:
         # command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
+            if for_user:
+                dir = f'"{dir}"'
             command.append(dir)
         
         command.append(self._filepath)                      # добавление полного пути файла    
+
+        if not for_user:                                    # если не для пользователя, то ключ превью
+            command.append('--live-preview')
+
         return command                                      # возврат собранной команды
 
 
@@ -371,8 +378,8 @@ class GuiCallback:
         
     
     @staticmethod  # метод из TaskBar
-    def update(progress: float, delta: bool = False):
-        """обновление полосы прогресса в окне"""
+    def update(progress: float, delta: bool = False, base64_img: str = ''):
+        """обновление полосы прогресса и превью в окне"""
         ...
 
     @staticmethod  # метод из RootWindow
@@ -412,50 +419,39 @@ class CatframesProcess:
 
         self.error: Optional[str] = None
         self._progress = 0.0
+        self._image_base64 = ''
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
         # self._port = 0
         # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
-        pattern = re.compile(r'Progress: +[0-9]+')
+        progress_pattern = re.compile(r'Progress: +[0-9]+')
+        image_base64_pattern = re.compile(r'Preview: [a-zA-Z0-9+=/]+')
 
         for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
             if 'FFmpeg not found' in line:
                 self.error = NO_FFMPEG_ERROR
 
-            data = re.search(pattern, line)                 # ищет в строке процент прогресса
-            if data:
-                progress_percent = int(data.group().split()[1])  # если находит, забирает число
+            progress_data = re.search(progress_pattern, line)                 # ищет в строке процент прогресса
+            if progress_data:
+                progress_percent = int(progress_data.group().split()[1])  # если находит, забирает число
                 if self._progress != 100:                  # если процент 100 - предерживает его
                     self._progress = progress_percent/100  # переводит чистый процент в сотые
 
+            image_data = re.search(image_base64_pattern, line)
+            if image_data:
+                self._image_base64 = image_data.group().split()[1]
+
         if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
             self.error = INTERNAL_ERROR   # текст последней строки
-
         self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):
         return self._progress
+    
+    def get_image_base64(self):
+        return self._image_base64
 
-    # # получение порта api процесса
-    # def _recognize_port(self):
-    #     while not self._port:
-    #         text = self.process.stdout.readline()
-    #         if not 'port' in text:
-    #             continue
-    #         self._port = int(text.replace('port:', '').strip())
-
-    # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
-    # def get_progress(self) -> float:
-    #     if not self._port:  # если порт ещё не определён
-    #         return 0.0
-
-    #     try: # делает запрос на сервер, возвращает прогресс
-    #         data = requests.get(f'http://127.0.0.1:{self._port}/progress', timeout=1).json()        
-    #         return data['framesEncoded'] / data['framesTotal']
-    #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
-    #         return 1.0
-        
     # убивает процесс (для экстренной остановки)
     def kill(self):
         if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
@@ -517,7 +513,8 @@ class Task:
         while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
             time.sleep(0.2)
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
-            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+            image = self._process_thread.get_image_base64()
+            self.gui_callback.update(progress, base64_img=image)  # через ручку коллбека обновить прогрессбар
 
             if self._process_thread.error and not self.stop_flag:      # если процесс прервался не из-за юзера
                 return self.handle_error(self._process_thread.error)   # обработает ошибку             
@@ -879,6 +876,11 @@ def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
         img_list = list(map(lambda x: f'{dir}/{x}', img_list))  # добавляет путь к названию
     return img_list
 
+# переводчит base64 картинку в tk
+def base64_to_tk(image_base64):
+    image_data = base64.b64decode(image_base64)   # декодируем base64
+    image = Image.open(io.BytesIO(image_data))    # обрабатываем, как файл
+    return ImageTk.PhotoImage(image)              # переводим в тк
 
 # сокращает строку пути, расставляя многоточия внутри
 def shrink_path(path: str, limit: int) -> str:
@@ -1043,21 +1045,15 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5)
 
-        img_dir = self.task.config.get_dirs()[0]              # достаём первую директорию
-        img_paths = find_img_in_dir(img_dir, full_path=True)  # берём все картинки из неё
-        if len(img_paths) > 1:
-            img_path = img_paths[len(img_paths)//2]           # выбираем центральную
-        else:
-            img_path = img_paths[0]
+        img_dir = self.task.config.get_dirs()[0]                # достаём первую директорию
+        img_path = find_img_in_dir(img_dir, full_path=True)[0]  # берём первую картинку
 
         image = Image.open(img_path)
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
-        image_tk = ImageTk.PhotoImage(image)
+        self.image_tk = ImageTk.PhotoImage(image)
 
-        self.widgets['_picture'] = ttk.Label(self.left_frame, image=image_tk)
-        self.widgets['_picture'].image = image_tk
-
+        self.widgets['_picture'] = ttk.Label(self.left_frame, image=self.image_tk)
 
         # создании средней части бара
         self.mid_frame = ttk.Frame(self, padding=5)
@@ -1176,7 +1172,7 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
-    def update_progress(self, progress: float, delta: bool = False):
+    def update_progress(self, progress: float, delta: bool = False, base64_img: str = ''):
         if delta:  # прогресс будет дополняться на переданное значение
             self.progress += progress
         else:  # прогресс будет принимать переданное значение
@@ -1185,6 +1181,14 @@ class TaskBar(ttk.Frame):
             self.widgets['_progressBar'].config(value=self.progress)
         except:  # после удаления виджета вылетает ошибка из-за большой вложенности
             pass  # она ни на что не влияет, поэтому отлавливается и гасится
+
+        if base64_img:  # если передана картинка base64
+            try:        # пытается преобразовать её в картинку тк
+                image_tk = base64_to_tk(base64_img)  # и заменить на баре
+                self.widgets['_picture'].config(image=image_tk)
+                self.image_tk = image_tk
+            except:
+                pass
 
     # удаление бара
     def delete(self):
@@ -2300,7 +2304,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         def copy_to_clip():  # копирование команды в буфер обмена
             self._collect_task_config()
-            command = ' '.join(self.task_config.convert_to_command())
+            command = ' '.join(self.task_config.convert_to_command(for_user=True))
             self.clipboard_clear()
             self.clipboard_append(command)
 

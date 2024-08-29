@@ -100,7 +100,7 @@ class TaskConfig:
         return self._color
 
     # создание консольной команды в виде списка
-    def convert_to_command(self) -> List[str]:
+    def convert_to_command(self, for_user: bool = False) -> List[str]:
         command = ['catframes']
         if sys.platform == "win32":
             command = ['catframes.exe']
@@ -123,9 +123,15 @@ class TaskConfig:
         # command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
+            if for_user:
+                dir = f'"{dir}"'
             command.append(dir)
         
         command.append(self._filepath)                      # добавление полного пути файла    
+
+        if not for_user:                                    # если не для пользователя, то ключ превью
+            command.append('--live-preview')
+
         return command                                      # возврат собранной команды
 
 
@@ -147,8 +153,8 @@ class GuiCallback:
         
     
     @staticmethod  # метод из TaskBar
-    def update(progress: float, delta: bool = False):
-        """обновление полосы прогресса в окне"""
+    def update(progress: float, delta: bool = False, base64_img: str = ''):
+        """обновление полосы прогресса и превью в окне"""
         ...
 
     @staticmethod  # метод из RootWindow
@@ -188,50 +194,39 @@ class CatframesProcess:
 
         self.error: Optional[str] = None
         self._progress = 0.0
+        self._image_base64 = ''
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
         # self._port = 0
         # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
-        pattern = re.compile(r'Progress: +[0-9]+')
+        progress_pattern = re.compile(r'Progress: +[0-9]+')
+        image_base64_pattern = re.compile(r'Preview: [a-zA-Z0-9+=/]+')
 
         for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
             if 'FFmpeg not found' in line:
                 self.error = NO_FFMPEG_ERROR
 
-            data = re.search(pattern, line)                 # ищет в строке процент прогресса
-            if data:
-                progress_percent = int(data.group().split()[1])  # если находит, забирает число
+            progress_data = re.search(progress_pattern, line)                 # ищет в строке процент прогресса
+            if progress_data:
+                progress_percent = int(progress_data.group().split()[1])  # если находит, забирает число
                 if self._progress != 100:                  # если процент 100 - предерживает его
                     self._progress = progress_percent/100  # переводит чистый процент в сотые
 
+            image_data = re.search(image_base64_pattern, line)
+            if image_data:
+                self._image_base64 = image_data.group().split()[1]
+
         if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
             self.error = INTERNAL_ERROR   # текст последней строки
-
         self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):
         return self._progress
+    
+    def get_image_base64(self):
+        return self._image_base64
 
-    # # получение порта api процесса
-    # def _recognize_port(self):
-    #     while not self._port:
-    #         text = self.process.stdout.readline()
-    #         if not 'port' in text:
-    #             continue
-    #         self._port = int(text.replace('port:', '').strip())
-
-    # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
-    # def get_progress(self) -> float:
-    #     if not self._port:  # если порт ещё не определён
-    #         return 0.0
-
-    #     try: # делает запрос на сервер, возвращает прогресс
-    #         data = requests.get(f'http://127.0.0.1:{self._port}/progress', timeout=1).json()        
-    #         return data['framesEncoded'] / data['framesTotal']
-    #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
-    #         return 1.0
-        
     # убивает процесс (для экстренной остановки)
     def kill(self):
         if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
@@ -293,7 +288,8 @@ class Task:
         while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
             time.sleep(0.2)
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
-            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+            image = self._process_thread.get_image_base64()
+            self.gui_callback.update(progress, base64_img=image)  # через ручку коллбека обновить прогрессбар
 
             if self._process_thread.error and not self.stop_flag:      # если процесс прервался не из-за юзера
                 return self.handle_error(self._process_thread.error)   # обработает ошибку             

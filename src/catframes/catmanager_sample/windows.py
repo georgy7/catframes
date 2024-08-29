@@ -394,7 +394,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         def copy_to_clip():  # копирование команды в буфер обмена
             self._collect_task_config()
-            command = ' '.join(self.task_config.convert_to_command())
+            command = ' '.join(self.task_config.convert_to_command(for_user=True))
             self.clipboard_clear()
             self.clipboard_append(command)
 

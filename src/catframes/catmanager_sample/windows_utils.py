@@ -28,6 +28,11 @@ def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
         img_list = list(map(lambda x: f'{dir}/{x}', img_list))  # добавляет путь к названию
     return img_list
 
+# переводчит base64 картинку в tk
+def base64_to_tk(image_base64):
+    image_data = base64.b64decode(image_base64)   # декодируем base64
+    image = Image.open(io.BytesIO(image_data))    # обрабатываем, как файл
+    return ImageTk.PhotoImage(image)              # переводим в тк
 
 # сокращает строку пути, расставляя многоточия внутри
 def shrink_path(path: str, limit: int) -> str:
@@ -192,21 +197,15 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5)
 
-        img_dir = self.task.config.get_dirs()[0]              # достаём первую директорию
-        img_paths = find_img_in_dir(img_dir, full_path=True)  # берём все картинки из неё
-        if len(img_paths) > 1:
-            img_path = img_paths[len(img_paths)//2]           # выбираем центральную
-        else:
-            img_path = img_paths[0]
+        img_dir = self.task.config.get_dirs()[0]                # достаём первую директорию
+        img_path = find_img_in_dir(img_dir, full_path=True)[0]  # берём первую картинку
 
         image = Image.open(img_path)
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
-        image_tk = ImageTk.PhotoImage(image)
+        self.image_tk = ImageTk.PhotoImage(image)
 
-        self.widgets['_picture'] = ttk.Label(self.left_frame, image=image_tk)
-        self.widgets['_picture'].image = image_tk
-
+        self.widgets['_picture'] = ttk.Label(self.left_frame, image=self.image_tk)
 
         # создании средней части бара
         self.mid_frame = ttk.Frame(self, padding=5)
@@ -325,7 +324,7 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
-    def update_progress(self, progress: float, delta: bool = False):
+    def update_progress(self, progress: float, delta: bool = False, base64_img: str = ''):
         if delta:  # прогресс будет дополняться на переданное значение
             self.progress += progress
         else:  # прогресс будет принимать переданное значение
@@ -334,6 +333,14 @@ class TaskBar(ttk.Frame):
             self.widgets['_progressBar'].config(value=self.progress)
         except:  # после удаления виджета вылетает ошибка из-за большой вложенности
             pass  # она ни на что не влияет, поэтому отлавливается и гасится
+
+        if base64_img:  # если передана картинка base64
+            try:        # пытается преобразовать её в картинку тк
+                image_tk = base64_to_tk(base64_img)  # и заменить на баре
+                self.widgets['_picture'].config(image=image_tk)
+                self.image_tk = image_tk
+            except:
+                pass
 
     # удаление бара
     def delete(self):
