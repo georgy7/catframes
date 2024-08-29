@@ -1454,7 +1454,6 @@ class OutputOptions:
                     if not queue.full():
                         queue.put(1 + index, block=False)
 
-                queue.put(len(items))
                 pipe.close()
 
             input_thread = threading.Thread(
@@ -1494,7 +1493,12 @@ class OutputOptions:
                     # The operator := requires 3.8.
                     ret_code = process.poll()
 
-                print(f'FFmpeg exited with {ret_code}.', flush=True, end='')
+                print(f'FFmpeg exited with {ret_code}.', flush=True)
+
+                if 0 == ret_code:
+                    set_processed(len(frames))
+                else:
+                    sys.exit(15) # == F(Fmpeg)
 
             input_thread.join()
 
