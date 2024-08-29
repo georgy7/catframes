@@ -1290,13 +1290,12 @@ class FrameView(ABC):
     def __init__(self, resolution: Resolution):
         self.resolution = resolution
 
+        self.thumbnail: Queue = Queue(maxsize = 1)
+        """A thread-safe channel for getting a thumbnail of a recently processed frame."""
+
     @abstractmethod
     def apply(self, frame: Frame) -> bytes:
         """It returns raw data in RGB24."""
-
-    @abstractmethod
-    def get_recent_thumbnail(self) -> Optional[bytes]:
-        """It returns a thumbnail of the recently processed frame in JPEG format."""
 
 
 class Quality(Enum):
@@ -1477,14 +1476,10 @@ class OutputOptions:
                 ret_code = process.poll()
                 while None == ret_code:
                     clear_write_thread_messages()
-                    chunk = process.stdout.read(64)
+                    chunk = process.stdout.read(32)
 
-                    if self.live_preview and (monotonic() - last_thumbnail_time >= 0.2):
-                        thumbnail: Optional[bytes] = view.get_recent_thumbnail()
-                        if thumbnail and (last_thumbnail != thumbnail):
-                            print('Preview: ' + base64.b64encode(thumbnail).decode('utf-8'), flush=True)
-                            last_thumbnail = thumbnail
-                        last_thumbnail_time = monotonic()
+                    if self.live_preview and not view.thumbnail.empty():
+                        print('Preview: ' + view.thumbnail.get_nowait(), flush=True)
 
                     #print(chunk.decode('utf-8'), flush=True, end='')
                     #print('.', flush=True, end='')
@@ -1518,38 +1513,33 @@ class PillowFrameView(FrameView):
         self._draw: ImageDraw.ImageDraw = ImageDraw.Draw(self._image)
         """The 2D context for drawing on this canvas."""
 
-        self._frame_counter: int = 0
-        self._thumbnail_counter: int = 0
-
         self._thumbnail_time: float = monotonic()
-        self._thumbnail_jpeg: Optional[bytes] = None
+
+    def _make_jpeg_base64_thumbnail(self) -> str:
+        """For use with self._lock only!"""
+        thumbnail_size = (80, 60)
+        thumbnail = self._image.resize(
+            thumbnail_size,
+            resample=Image.Resampling.BICUBIC,
+            reducing_gap=2.0)
+
+        result = io.BytesIO()
+        thumbnail.save(result, 'JPEG', quality=95, subsampling=0)
+        return base64.b64encode(result.getvalue()).decode('utf-8')
 
     def apply(self, frame: Frame) -> bytes:
         with self._lock:
             self._render(frame)
             assert self._image.size[0] == self.resolution.width
             assert self._image.size[1] == self.resolution.height
-            self._frame_counter += 1
+
+            subtle_delay: float = 0.3
+            it_is_time = (monotonic() - self._thumbnail_time) >= subtle_delay
+            if it_is_time and not self.thumbnail.full():
+                b64_thumbnail = self._make_jpeg_base64_thumbnail()
+                self.thumbnail.put(b64_thumbnail, block=False)
+
             return self._image.tobytes()
-
-    def get_recent_thumbnail(self) -> Optional[bytes]:
-        subtle_delay: float = 0.1
-        behind: bool = self._frame_counter > self._thumbnail_counter
-
-        if behind and (monotonic() - self._thumbnail_time >= subtle_delay):
-            with self._lock:
-                thumbnail_size = (80, 60)
-                thumbnail = self._image.resize(
-                    thumbnail_size,
-                    resample=Image.Resampling.BICUBIC,
-                    reducing_gap=2.0)
-
-                result = io.BytesIO()
-                thumbnail.save(result, 'JPEG', quality=95, subsampling=0)
-                self._thumbnail_jpeg = result.getvalue()
-                self._thumbnail_counter += 1
-
-        return self._thumbnail_jpeg
 
     @abstractmethod
     def _render(self, frame: Frame):
@@ -1756,8 +1746,6 @@ class DefaultFrameView(PillowFrameView):
         self.network_name = platform.node()
         self.message_text_wrapper = textwrap.TextWrapper(width=70)
 
-        self._live_preview: Union[Image.Image, None] = None
-
     def _make_overlay_model(self, frame: Frame, source_size: Tuple[int, int]) -> OverlayModel:
         file_checksum = FileUtils.get_checksum(frame.path)
         if file_checksum == frame.checksum:
@@ -1899,14 +1887,6 @@ class DefaultFrameView(PillowFrameView):
                         template(overlay_model),
                         get_text_stroke_color,
                         get_text_fill_color)
-
-            self._live_preview = self._image.resize(
-                thumbnail_size,
-                resample=Image.Resampling.BICUBIC,
-                reducing_gap=2.0)
-
-    def get_image(self) -> Optional[Image.Image]:
-        return self._live_preview
 
 
 class _DefaultFrameViewTest(TestCase):
