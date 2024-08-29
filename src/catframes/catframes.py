@@ -1469,9 +1469,6 @@ class OutputOptions:
                     if int == type(message):
                         set_processed(message)
 
-            last_thumbnail_time = monotonic()
-            last_thumbnail = None
-
             with process.stdout:
                 ret_code = process.poll()
                 while None == ret_code:
@@ -1533,11 +1530,12 @@ class PillowFrameView(FrameView):
             assert self._image.size[0] == self.resolution.width
             assert self._image.size[1] == self.resolution.height
 
-            subtle_delay: float = 0.3
+            subtle_delay: float = 0.2
             it_is_time = (monotonic() - self._thumbnail_time) >= subtle_delay
             if it_is_time and not self.thumbnail.full():
                 b64_thumbnail = self._make_jpeg_base64_thumbnail()
                 self.thumbnail.put(b64_thumbnail, block=False)
+                self._thumbnail_time = monotonic()
 
             return self._image.tobytes()
 
