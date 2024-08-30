@@ -69,7 +69,7 @@ class RootWindow(Tk, WindowMixin):
             LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
-        self.upper_bar = upperBar = Frame(self, background=MAIN_TOOLBAR_COLOR)  # верхний бар с кнопками
+        self.upper_bar = upperBar = ttk.Frame(self, style='Main.ToolBar.TFrame')  # верхний бар с кнопками
         self.task_space = ScrollableFrame(self)  # пространство с прокруткой
         self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 

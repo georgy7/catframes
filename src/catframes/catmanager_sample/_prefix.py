@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import subprocess
 import threading
+import platform
 import random
 import time
 import signal

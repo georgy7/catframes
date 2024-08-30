@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import subprocess
 import threading
+import platform
 import random
 import time
 import signal
@@ -459,9 +460,9 @@ class CatframesProcess:
     def kill(self):
         if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
             try:
-                os.kill(self.process.pid, signal.CTRL_C_EVENT)
+                os.kill(self.process.pid, signal.CTRL_C_EVENT)  # отправляет ctrl-C в процесс
                 time.sleep(0.1)
-            except KeyboardInterrupt:
+            except KeyboardInterrupt:                           # ловит ctrl-C
                 pass
         else:
             os.kill(self.process.pid, signal.SIGTERM)
@@ -810,6 +811,7 @@ class WindowMixin(ABC):
         self.option_add("*Font", _font)  # шрифты остальных виджетов
 
         style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+        style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
 
         # создание стилей фона таскбара для разных состояний
         for status, color in MAIN_TASKBAR_COLORS.items():
@@ -920,7 +922,9 @@ class ScrollableFrame(ttk.Frame):
         super().__init__(root_window, *args, **kwargs, style='Main.TFrame')
         
         self.root = root_window
-        self.canvas = Canvas(self, highlightthickness=0, bg=MAIN_TASKLIST_COLOR)  # объект "холста"
+        self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
+        if not platform.system() == 'Darwin':  # если это не macos, добавить холсту цвет
+            self.canvas.config(bg=MAIN_TASKLIST_COLOR)
         self.canvas.bind(           # привязка к виджету холста
             "<Configure>",          # обработчика событий, чтобы внутренний фрейм
             self._on_resize_window  # менял размер, если холст растягивается
@@ -1982,7 +1986,7 @@ class RootWindow(Tk, WindowMixin):
             LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
-        self.upper_bar = upperBar = Frame(self, background=MAIN_TOOLBAR_COLOR)  # верхний бар с кнопками
+        self.upper_bar = upperBar = ttk.Frame(self, style='Main.ToolBar.TFrame')  # верхний бар с кнопками
         self.task_space = ScrollableFrame(self)  # пространство с прокруткой
         self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 

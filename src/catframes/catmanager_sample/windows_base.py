@@ -190,6 +190,7 @@ class WindowMixin(ABC):
         self.option_add("*Font", _font)  # шрифты остальных виджетов
 
         style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+        style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
 
         # создание стилей фона таскбара для разных состояний
         for status, color in MAIN_TASKBAR_COLORS.items():

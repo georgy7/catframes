@@ -70,7 +70,9 @@ class ScrollableFrame(ttk.Frame):
         super().__init__(root_window, *args, **kwargs, style='Main.TFrame')
         
         self.root = root_window
-        self.canvas = Canvas(self, highlightthickness=0, bg=MAIN_TASKLIST_COLOR)  # объект "холста"
+        self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
+        if not platform.system() == 'Darwin':  # если это не macos, добавить холсту цвет
+            self.canvas.config(bg=MAIN_TASKLIST_COLOR)
         self.canvas.bind(           # привязка к виджету холста
             "<Configure>",          # обработчика событий, чтобы внутренний фрейм
             self._on_resize_window  # менял размер, если холст растягивается
