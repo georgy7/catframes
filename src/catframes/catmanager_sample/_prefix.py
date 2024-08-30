@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import subprocess
 import threading
+import platform
 import random
 import time
 import signal
@@ -9,6 +10,7 @@ import sys
 import os
 import io
 import re
+import base64
 # import requests
 
 from tkinter import *

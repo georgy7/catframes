@@ -46,9 +46,15 @@ class RootWindow(Tk, WindowMixin):
 
     # при закрытии окна
     def close(self):
+        
+        def accept_uncomlete_exit():
+            for task in TaskManager.running_list():
+                task.cancel()
+            self.destroy()
+
         if TaskManager.running_list():  # если есть активные задачи
             # открытие окна с новой задачей (и/или переключение на него)
-            return LocalWM.open(WarningWindow, 'warn').focus()
+            return LocalWM.open(WarningWindow, 'warn', self, type='exit', accept_def=accept_uncomlete_exit).focus()
         self.destroy()
 
     # создание и настройка виджетов
@@ -63,7 +69,7 @@ class RootWindow(Tk, WindowMixin):
             LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
-        self.upper_bar = upperBar = Frame(self, background=MAIN_TOOLBAR_COLOR)  # верхний бар с кнопками
+        self.upper_bar = upperBar = ttk.Frame(self, style='Main.ToolBar.TFrame')  # верхний бар с кнопками
         self.task_space = ScrollableFrame(self)  # пространство с прокруткой
         self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 
@@ -81,7 +87,9 @@ class RootWindow(Tk, WindowMixin):
         
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
-        task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
+        # сборка функции для открытия диалога при попытке отмены задачи
+        cancel_def = lambda: LocalWM.open(WarningWindow, 'warn', self, type='cancel', accept_def=task.cancel)
+        task_bar = TaskBar(self.taskList, task, cancel_def=cancel_def, **params)  # создаёт бар задачи
         self.task_bars[task.id] = task_bar  # регистрирует в словаре
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
@@ -120,7 +128,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 150
+        self.size = 250, 100
         # self.size = 250, 200
         self.resizable(False, False)
 
@@ -128,11 +136,12 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        self.main_frame = Frame(self)
 
         # создание виджетов, привязывание функций
-        self.widgets['lbLang'] = ttk.Label(self)
+        self.widgets['lbLang'] = ttk.Label( self.main_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
-            self,
+             self.main_frame,
             values=Lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
@@ -158,10 +167,12 @@ class SettingsWindow(Toplevel, WindowMixin):
         # )
         
         # применение настроек
-        def apply_settings():
+        def apply_settings(event):
             Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
+
+        self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
 
             # try:  # проверка введённых значений, если всё ок - сохранение
             #     port_first = int(self.widgets['_entrPortFirst'].get())
@@ -175,13 +186,13 @@ class SettingsWindow(Toplevel, WindowMixin):
             #     self._set_ports_default()  # возврат предыдущих значений виджетов
             #     LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
 
-        # сохранение настроек (применение + закрытие)
-        def save_settings():
-            apply_settings()
-            self.close()
+        # # сохранение настроек (применение + закрытие)
+        # def save_settings():
+        #     apply_settings()
+        #     self.close()
 
-        self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
-        self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
+        # self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
+        # self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
 
     # # установка полей ввода портов в последнее сохранённое состояние
     # def _set_ports_default(self):
@@ -192,14 +203,10 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_frame.pack(padx=10, pady=30)
 
-        for c in range(2): 
-            self.columnconfigure(index=c, weight=1)
-        for r in range(7): 
-            self.rowconfigure(index=r, weight=1)
-        
-        self.widgets['lbLang'].grid(row=1, column=0, sticky='e', padx=15, pady=5)
-        self.widgets['_cmbLang'].grid(row=1, column=1, sticky='w', padx=(15 ,5), pady=5)
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
         # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
@@ -207,8 +214,8 @@ class SettingsWindow(Toplevel, WindowMixin):
         # self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
         # self._set_ports_default()  # заполняем поля ввода портов
 
-        self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
-        self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
+        # self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
+        # self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -380,7 +387,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.canvas_frame.config(background=color)
             self.task_config.set_color(color)  # установка цвета в конфиге
             text_color = 'white' if is_dark_color(*self.winfo_rgb(color)) else 'black'
-            self.widgets['_btColor'].configure(bg=color, text=color, fg=text_color)  # цвет кнопки
+            self.widgets['_btColor'].configure(bg=color, text=color+'  ', fg=text_color)  # цвет кнопки
 
         def set_filepath():  # выбор пути для сохранения файла
             filepath = filedialog.asksaveasfilename(
@@ -395,7 +402,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         def copy_to_clip():  # копирование команды в буфер обмена
             self._collect_task_config()
-            command = ' '.join(self.task_config.convert_to_command())
+            command = ' '.join(self.task_config.convert_to_command(for_user=True))
             self.clipboard_clear()
             self.clipboard_append(command)
 
@@ -409,7 +416,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_btColor'] = Button(
             self.settings_grid, 
             command=ask_color, 
-            text=DEFAULT_CANVAS_COLOR, 
+            text=DEFAULT_CANVAS_COLOR+'  ', 
             width=7,
             bg=self.task_config.get_color(),
             fg='white',
@@ -497,11 +504,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15,0), pady=(20, 0))  # менеджер директорий
-        self.settings_grid.pack(pady=10)  # фрейм настроек
+        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15, 0), pady=(20, 0))  # менеджер директорий
+        self.settings_grid.pack(fill=X, pady=10, padx=10)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
-        self.settings_grid.columnconfigure(0, weight=3)
+        self.settings_grid.columnconfigure(0, weight=0)
         self.settings_grid.columnconfigure(1, weight=1)
 
         # подпись и кнопка цвета       
@@ -525,7 +532,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
 
         if not self.view_mode:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=5, column=1, sticky='ew', padx=5, pady=5)
+            self.widgets['btCreate'].grid(row=5, column=1, sticky='e', padx=5, pady=5)
 
         self._validate_task_config()
 
@@ -550,11 +557,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
 class WarningWindow(Toplevel, WindowMixin):
     """Окно предупреждения при выходе"""
 
-    def __init__(self, root: RootWindow):
+    def __init__(self, root: RootWindow, **kwargs):
         super().__init__(master=root)
         self.name = 'warn'
-        self.widgets: Dict[str, Widget] = {}
+        self.type: str = kwargs.get('type')
+        self.accept_def: Callable = kwargs.get('accept_def')
 
+        self.widgets: Dict[str, Widget] = {}
         self.size = 260, 130
         self.resizable(False, False)
 
@@ -562,14 +571,6 @@ class WarningWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
-        
-        def back():
-            self.close()
-
-        def exit():
-            for task in TaskManager.running_list():
-                task.cancel()
-            self.master.destroy()
 
         _font = font.Font(size=16)
 
@@ -579,17 +580,22 @@ class WarningWindow(Toplevel, WindowMixin):
 
         # кнопки "назад" и "выйти"
         self.choise_frame = ttk.Frame(self)
-        self.widgets['btBack'] = ttk.Button(self.choise_frame, command=back)
-        self.widgets['btExit'] = ttk.Button(self.choise_frame, command=exit)
+        self.widgets['btAccept'] = ttk.Button(self.choise_frame, command=self.accept_def)
+        self.widgets['btDeny'] = ttk.Button(self.choise_frame, command=self.close)
 
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['lbWarn'].pack(side=TOP)
         self.widgets['lbText'].pack(side=TOP)
 
-        self.widgets['btBack'].pack(side=LEFT, anchor='w', padx=5)
-        self.widgets['btExit'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btAccept'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btDeny'].pack(side=LEFT, anchor='w', padx=5)
         self.choise_frame.pack(side=BOTTOM, pady=10)
+
+    def update_texts(self):
+        for w_name, widget in self.widgets.items():
+            new_text_data = Lang.read(f'{self.name}.{self.type}.{w_name}')            
+            widget.config(text=new_text_data)
 
 
 class NotifyWindow(Toplevel, WindowMixin):

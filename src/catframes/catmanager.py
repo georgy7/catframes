@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import subprocess
 import threading
+import platform
 import random
 import time
 import signal
@@ -9,6 +10,7 @@ import sys
 import os
 import io
 import re
+import base64
 # import requests
 
 from tkinter import *
@@ -113,11 +115,17 @@ class Lang:
             'dirs.btRemDir': 'Remove',
             'dirs.DirNotExists': "Doesn't exists. Removing...",
 
-            'warn.title': 'Warning',
-            'warn.lbWarn': 'Warning!',
-            'warn.lbText': 'Incomplete tasks!',
-            'warn.btBack': 'Back',
-            'warn.btExit': 'Leave',
+            'warn.exit.title': 'Warning',
+            'warn.exit.lbWarn': 'Warning!',
+            'warn.exit.lbText': 'Incomplete tasks!',
+            'warn.exit.btAccept': 'Leave',
+            'warn.exit.btDeny': 'Back',
+
+            'warn.cancel.title': 'Warning',
+            'warn.cancel.lbWarn': 'Are you sure',
+            'warn.cancel.lbText': 'You want to cancel the task?',
+            'warn.cancel.btAccept': 'Yes',
+            'warn.cancel.btDeny': 'Back',
 
             'noti.title': 'Error',
             'noti.lbWarn': 'Invalid port range!',
@@ -169,11 +177,17 @@ class Lang:
             'dirs.btRemDir': 'Удалить',
             'dirs.DirNotExists': 'Не существует. Удаление...',
             
-            'warn.title': 'Внимание',
-            'warn.lbWarn': 'Внимание!',
-            'warn.lbText': 'Задачи не завершены!',
-            'warn.btBack': 'Назад',
-            'warn.btExit': 'Выйти',
+            'warn.exit.title': 'Внимание',
+            'warn.exit.lbWarn': 'Внимание!',
+            'warn.exit.lbText': 'Задачи не завершены!',
+            'warn.exit.btAccept': 'Выйти',
+            'warn.exit.btDeny': 'Назад',
+
+            'warn.cancel.title': 'Внимание',
+            'warn.cancel.lbWarn': 'Вы уверены,',
+            'warn.cancel.lbText': 'Что хотите отменить задачу?',
+            'warn.cancel.btAccept': 'Да',
+            'warn.cancel.btDeny': 'Назад',
 
             'noti.title': 'Ошибка',
             'noti.lbWarn': 'Неверный диапазон портов!',
@@ -324,7 +338,7 @@ class TaskConfig:
         return self._color
 
     # создание консольной команды в виде списка
-    def convert_to_command(self) -> List[str]:
+    def convert_to_command(self, for_user: bool = False) -> List[str]:
         command = ['catframes']
         if sys.platform == "win32":
             command = ['catframes.exe']
@@ -347,9 +361,15 @@ class TaskConfig:
         # command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
+            if for_user:
+                dir = f'"{dir}"'
             command.append(dir)
         
         command.append(self._filepath)                      # добавление полного пути файла    
+
+        if not for_user:                                    # если не для пользователя, то ключ превью
+            command.append('--live-preview')
+
         return command                                      # возврат собранной команды
 
 
@@ -371,8 +391,8 @@ class GuiCallback:
         
     
     @staticmethod  # метод из TaskBar
-    def update(progress: float, delta: bool = False):
-        """обновление полосы прогресса в окне"""
+    def update(progress: float, delta: bool = False, base64_img: str = ''):
+        """обновление полосы прогресса и превью в окне"""
         ...
 
     @staticmethod  # метод из RootWindow
@@ -399,82 +419,65 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-
-        # в зависимости от системы, дополнительные аргументы при создании процесса
-        if sys.platform == 'win32':
-            # для windows создание отдельной группы, чтобы завершить всё
-            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
-        else:
-            # для unix создание процесса с новой сессией
-            os_issues = {'preexec_fn': os.setsid}
-
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)  # запуск catframes
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
 
         self.error: Optional[str] = None
         self._progress = 0.0
+        self._image_base64 = ''
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
         # self._port = 0
         # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
-        pattern = re.compile(r'Progress: +[0-9]+')
+        progress_pattern = re.compile(r'Progress: +[0-9]+')
+        image_base64_pattern = re.compile(r'Preview: [a-zA-Z0-9+=/]+')
 
         for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
             if 'FFmpeg not found' in line:
                 self.error = NO_FFMPEG_ERROR
 
-            data = re.search(pattern, line)                 # ищет в строке процент прогресса
-            if data:
-                progress_percent = int(data.group().split()[1])  # если находит, забирает число
+            progress_data = re.search(progress_pattern, line)                 # ищет в строке процент прогресса
+            if progress_data:
+                progress_percent = int(progress_data.group().split()[1])  # если находит, забирает число
                 if self._progress != 100:                  # если процент 100 - предерживает его
                     self._progress = progress_percent/100  # переводит чистый процент в сотые
 
+            image_data = re.search(image_base64_pattern, line)
+            if image_data:
+                self._image_base64 = image_data.group().split()[1]
+
         if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
             self.error = INTERNAL_ERROR   # текст последней строки
-
         self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):
         return self._progress
+    
+    def get_image_base64(self):
+        return self._image_base64
 
-    # # получение порта api процесса
-    # def _recognize_port(self):
-    #     while not self._port:
-    #         text = self.process.stdout.readline()
-    #         if not 'port' in text:
-    #             continue
-    #         self._port = int(text.replace('port:', '').strip())
-
-    # # возвращает прогресс (от 0.0 до 1.0), полученный от api процесса
-    # def get_progress(self) -> float:
-    #     if not self._port:  # если порт ещё не определён
-    #         return 0.0
-
-    #     try: # делает запрос на сервер, возвращает прогресс
-    #         data = requests.get(f'http://127.0.0.1:{self._port}/progress', timeout=1).json()        
-    #         return data['framesEncoded'] / data['framesTotal']
-    #     except Exception:  # если сервер закрылся, возвращает единицу, т.е. процесс завершён
-    #         return 1.0
-        
     # убивает процесс (для экстренной остановки)
     def kill(self):
         if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
-            self.process.send_signal(signal.CTRL_BREAK_EVENT)
+            try:
+                os.kill(self.process.pid, signal.CTRL_C_EVENT)  # отправляет ctrl-C в процесс
+                time.sleep(0.1)
+            except KeyboardInterrupt:                           # ловит ctrl-C
+                pass
         else:
-            parent_pid = self.process.pid
-            os.killpg(os.getppid(parent_pid), signal.SIGTERM)
+            os.kill(self.process.pid, signal.SIGTERM)
 
-    @classmethod
-    def check_error(cls) -> bool:
-        command = ['catframes']
-        if sys.platform == 'win32':
-            command = ['catframes.exe']
-        try:
-            proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
-        except FileNotFoundError:
-            return NO_CATFRAMES_ERROR
-        if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
-            return NO_FFMPEG_ERROR
+    # @classmethod
+    # def check_error(cls) -> bool:
+    #     command = ['catframes']
+    #     if sys.platform == 'win32':
+    #         command = ['catframes.exe']
+    #     try:
+    #         proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
+    #     except FileNotFoundError:
+    #         return NO_CATFRAMES_ERROR
+    #     if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
+    #         return NO_FFMPEG_ERROR
 
 
 class Task:
@@ -483,11 +486,6 @@ class Task:
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
         self.command = task_config.convert_to_command()
-        # print(self.command)
-
-        # # !!! команда тестового api, а не процесса catframes
-        # run_dir = os.path.dirname(os.path.abspath(__file__))
-        # self.command = f'python {run_dir}/test_api/test_catframes_api.py'
 
         self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
@@ -517,7 +515,8 @@ class Task:
         while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
             time.sleep(0.2)
             progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
-            self.gui_callback.update(progress)                # через ручку коллбека обновить прогрессбар
+            image = self._process_thread.get_image_base64()
+            self.gui_callback.update(progress, base64_img=image)  # через ручку коллбека обновить прогрессбар
 
             if self._process_thread.error and not self.stop_flag:      # если процесс прервался не из-за юзера
                 return self.handle_error(self._process_thread.error)   # обработает ошибку             
@@ -549,9 +548,10 @@ class Task:
 
     # удаляет файл в системе
     def delete_file(self):
+        file = self.config.get_filepath()
         for i in range(20):  # делает 20 попыток
             try:
-                os.remove(self.config.get_filepath())
+                os.remove(file)
                 return
             except:              # если не получилось
                 time.sleep(0.2)  # ждёт чуток, и пробует ещё 
@@ -811,6 +811,7 @@ class WindowMixin(ABC):
         self.option_add("*Font", _font)  # шрифты остальных виджетов
 
         style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+        style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
 
         # создание стилей фона таскбара для разных состояний
         for status, color in MAIN_TASKBAR_COLORS.items():
@@ -879,6 +880,11 @@ def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
         img_list = list(map(lambda x: f'{dir}/{x}', img_list))  # добавляет путь к названию
     return img_list
 
+# переводчит base64 картинку в tk
+def base64_to_tk(image_base64):
+    image_data = base64.b64decode(image_base64)   # декодируем base64
+    image = Image.open(io.BytesIO(image_data))    # обрабатываем, как файл
+    return ImageTk.PhotoImage(image)              # переводим в тк
 
 # сокращает строку пути, расставляя многоточия внутри
 def shrink_path(path: str, limit: int) -> str:
@@ -916,7 +922,9 @@ class ScrollableFrame(ttk.Frame):
         super().__init__(root_window, *args, **kwargs, style='Main.TFrame')
         
         self.root = root_window
-        self.canvas = Canvas(self, highlightthickness=0, bg=MAIN_TASKLIST_COLOR)  # объект "холста"
+        self.canvas = Canvas(self, highlightthickness=0)  # объект "холста"
+        if not platform.system() == 'Darwin':  # если это не macos, добавить холсту цвет
+            self.canvas.config(bg=MAIN_TASKLIST_COLOR)
         self.canvas.bind(           # привязка к виджету холста
             "<Configure>",          # обработчика событий, чтобы внутренний фрейм
             self._on_resize_window  # менял размер, если холст растягивается
@@ -1012,11 +1020,12 @@ class ScrollableFrame(ttk.Frame):
 class TaskBar(ttk.Frame):
     """Класс баров задач в основном окне"""
 
-    def __init__(self, master: ttk.Frame, task: Task, **kwargs):
+    def __init__(self, master: ttk.Frame, task: Task, cancel_def: Callable, **kwargs):
         super().__init__(master, borderwidth=1, padding=5, style='Scroll.Task.TFrame')
         self.name = 'bar'
         self.widgets: Dict[str, Widget] = {}
         self.task: Task = task
+        self.cancel_def = cancel_def
         self.progress: float = 0
         self.image: Image
         self.length: int = 520
@@ -1043,21 +1052,15 @@ class TaskBar(ttk.Frame):
     def _init_widgets(self):
         self.left_frame = ttk.Frame(self, padding=5)
 
-        img_dir = self.task.config.get_dirs()[0]              # достаём первую директорию
-        img_paths = find_img_in_dir(img_dir, full_path=True)  # берём все картинки из неё
-        if len(img_paths) > 1:
-            img_path = img_paths[len(img_paths)//2]           # выбираем центральную
-        else:
-            img_path = img_paths[0]
+        img_dir = self.task.config.get_dirs()[0]                # достаём первую директорию
+        img_path = find_img_in_dir(img_dir, full_path=True)[0]  # берём первую картинку
 
         image = Image.open(img_path)
         image_size = (80, 60)
         image = image.resize(image_size, Image.ADAPTIVE)
-        image_tk = ImageTk.PhotoImage(image)
+        self.image_tk = ImageTk.PhotoImage(image)
 
-        self.widgets['_picture'] = ttk.Label(self.left_frame, image=image_tk)
-        self.widgets['_picture'].image = image_tk
-
+        self.widgets['_picture'] = ttk.Label(self.left_frame, image=self.image_tk)
 
         # создании средней части бара
         self.mid_frame = ttk.Frame(self, padding=5)
@@ -1078,12 +1081,12 @@ class TaskBar(ttk.Frame):
 
         # создание правой части бара
         self.right_frame = ttk.Frame(self, padding=5)
-       
+        
         # кнопка "отмена"
         self.widgets['btCancel'] = ttk.Button(
             self.right_frame, 
             width=10, 
-            command=lambda: self.task.cancel()
+            command=self.cancel_def
         )
         
         # полоса прогресса
@@ -1176,7 +1179,7 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
-    def update_progress(self, progress: float, delta: bool = False):
+    def update_progress(self, progress: float, delta: bool = False, base64_img: str = ''):
         if delta:  # прогресс будет дополняться на переданное значение
             self.progress += progress
         else:  # прогресс будет принимать переданное значение
@@ -1185,6 +1188,14 @@ class TaskBar(ttk.Frame):
             self.widgets['_progressBar'].config(value=self.progress)
         except:  # после удаления виджета вылетает ошибка из-за большой вложенности
             pass  # она ни на что не влияет, поэтому отлавливается и гасится
+
+        if base64_img:  # если передана картинка base64
+            try:        # пытается преобразовать её в картинку тк
+                image_tk = base64_to_tk(base64_img)  # и заменить на баре
+                self.widgets['_picture'].config(image=image_tk)
+                self.image_tk = image_tk
+            except:
+                pass
 
     # удаление бара
     def delete(self):
@@ -1952,9 +1963,15 @@ class RootWindow(Tk, WindowMixin):
 
     # при закрытии окна
     def close(self):
+        
+        def accept_uncomlete_exit():
+            for task in TaskManager.running_list():
+                task.cancel()
+            self.destroy()
+
         if TaskManager.running_list():  # если есть активные задачи
             # открытие окна с новой задачей (и/или переключение на него)
-            return LocalWM.open(WarningWindow, 'warn').focus()
+            return LocalWM.open(WarningWindow, 'warn', self, type='exit', accept_def=accept_uncomlete_exit).focus()
         self.destroy()
 
     # создание и настройка виджетов
@@ -1969,7 +1986,7 @@ class RootWindow(Tk, WindowMixin):
             LocalWM.open(SettingsWindow, 'sets').focus()
 
         # создание фреймов
-        self.upper_bar = upperBar = Frame(self, background=MAIN_TOOLBAR_COLOR)  # верхний бар с кнопками
+        self.upper_bar = upperBar = ttk.Frame(self, style='Main.ToolBar.TFrame')  # верхний бар с кнопками
         self.task_space = ScrollableFrame(self)  # пространство с прокруткой
         self.taskList = self.task_space.scrollable_frame  # сокращение пути для читаемости
 
@@ -1987,7 +2004,9 @@ class RootWindow(Tk, WindowMixin):
         
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
-        task_bar = TaskBar(self.taskList, task, **params)  # создаёт бар задачи
+        # сборка функции для открытия диалога при попытке отмены задачи
+        cancel_def = lambda: LocalWM.open(WarningWindow, 'warn', self, type='cancel', accept_def=task.cancel)
+        task_bar = TaskBar(self.taskList, task, cancel_def=cancel_def, **params)  # создаёт бар задачи
         self.task_bars[task.id] = task_bar  # регистрирует в словаре
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
@@ -2026,7 +2045,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 150
+        self.size = 250, 100
         # self.size = 250, 200
         self.resizable(False, False)
 
@@ -2034,11 +2053,12 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        self.main_frame = Frame(self)
 
         # создание виджетов, привязывание функций
-        self.widgets['lbLang'] = ttk.Label(self)
+        self.widgets['lbLang'] = ttk.Label( self.main_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
-            self,
+             self.main_frame,
             values=Lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
@@ -2064,10 +2084,12 @@ class SettingsWindow(Toplevel, WindowMixin):
         # )
         
         # применение настроек
-        def apply_settings():
+        def apply_settings(event):
             Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
+
+        self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
 
             # try:  # проверка введённых значений, если всё ок - сохранение
             #     port_first = int(self.widgets['_entrPortFirst'].get())
@@ -2081,13 +2103,13 @@ class SettingsWindow(Toplevel, WindowMixin):
             #     self._set_ports_default()  # возврат предыдущих значений виджетов
             #     LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
 
-        # сохранение настроек (применение + закрытие)
-        def save_settings():
-            apply_settings()
-            self.close()
+        # # сохранение настроек (применение + закрытие)
+        # def save_settings():
+        #     apply_settings()
+        #     self.close()
 
-        self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
-        self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
+        # self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
+        # self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
 
     # # установка полей ввода портов в последнее сохранённое состояние
     # def _set_ports_default(self):
@@ -2098,14 +2120,10 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_frame.pack(padx=10, pady=30)
 
-        for c in range(2): 
-            self.columnconfigure(index=c, weight=1)
-        for r in range(7): 
-            self.rowconfigure(index=r, weight=1)
-        
-        self.widgets['lbLang'].grid(row=1, column=0, sticky='e', padx=15, pady=5)
-        self.widgets['_cmbLang'].grid(row=1, column=1, sticky='w', padx=(15 ,5), pady=5)
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
 
         # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
@@ -2113,8 +2131,8 @@ class SettingsWindow(Toplevel, WindowMixin):
         # self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
         # self._set_ports_default()  # заполняем поля ввода портов
 
-        self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
-        self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
+        # self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
+        # self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -2286,7 +2304,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.canvas_frame.config(background=color)
             self.task_config.set_color(color)  # установка цвета в конфиге
             text_color = 'white' if is_dark_color(*self.winfo_rgb(color)) else 'black'
-            self.widgets['_btColor'].configure(bg=color, text=color, fg=text_color)  # цвет кнопки
+            self.widgets['_btColor'].configure(bg=color, text=color+'  ', fg=text_color)  # цвет кнопки
 
         def set_filepath():  # выбор пути для сохранения файла
             filepath = filedialog.asksaveasfilename(
@@ -2301,7 +2319,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         def copy_to_clip():  # копирование команды в буфер обмена
             self._collect_task_config()
-            command = ' '.join(self.task_config.convert_to_command())
+            command = ' '.join(self.task_config.convert_to_command(for_user=True))
             self.clipboard_clear()
             self.clipboard_append(command)
 
@@ -2315,7 +2333,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_btColor'] = Button(
             self.settings_grid, 
             command=ask_color, 
-            text=DEFAULT_CANVAS_COLOR, 
+            text=DEFAULT_CANVAS_COLOR+'  ', 
             width=7,
             bg=self.task_config.get_color(),
             fg='white',
@@ -2403,11 +2421,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
-        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15,0), pady=(20, 0))  # менеджер директорий
-        self.settings_grid.pack(pady=10)  # фрейм настроек
+        self.dir_manager.pack(expand=True, fill=BOTH, padx=(15, 0), pady=(20, 0))  # менеджер директорий
+        self.settings_grid.pack(fill=X, pady=10, padx=10)  # фрейм настроек
 
         # настройка столбцов и строк для сетки лейблов/кнопок в меню
-        self.settings_grid.columnconfigure(0, weight=3)
+        self.settings_grid.columnconfigure(0, weight=0)
         self.settings_grid.columnconfigure(1, weight=1)
 
         # подпись и кнопка цвета       
@@ -2431,7 +2449,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
 
         if not self.view_mode:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=5, column=1, sticky='ew', padx=5, pady=5)
+            self.widgets['btCreate'].grid(row=5, column=1, sticky='e', padx=5, pady=5)
 
         self._validate_task_config()
 
@@ -2456,11 +2474,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
 class WarningWindow(Toplevel, WindowMixin):
     """Окно предупреждения при выходе"""
 
-    def __init__(self, root: RootWindow):
+    def __init__(self, root: RootWindow, **kwargs):
         super().__init__(master=root)
         self.name = 'warn'
-        self.widgets: Dict[str, Widget] = {}
+        self.type: str = kwargs.get('type')
+        self.accept_def: Callable = kwargs.get('accept_def')
 
+        self.widgets: Dict[str, Widget] = {}
         self.size = 260, 130
         self.resizable(False, False)
 
@@ -2468,14 +2488,6 @@ class WarningWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
-        
-        def back():
-            self.close()
-
-        def exit():
-            for task in TaskManager.running_list():
-                task.cancel()
-            self.master.destroy()
 
         _font = font.Font(size=16)
 
@@ -2485,17 +2497,22 @@ class WarningWindow(Toplevel, WindowMixin):
 
         # кнопки "назад" и "выйти"
         self.choise_frame = ttk.Frame(self)
-        self.widgets['btBack'] = ttk.Button(self.choise_frame, command=back)
-        self.widgets['btExit'] = ttk.Button(self.choise_frame, command=exit)
+        self.widgets['btAccept'] = ttk.Button(self.choise_frame, command=self.accept_def)
+        self.widgets['btDeny'] = ttk.Button(self.choise_frame, command=self.close)
 
     # расположение виджетов
     def _pack_widgets(self):
         self.widgets['lbWarn'].pack(side=TOP)
         self.widgets['lbText'].pack(side=TOP)
 
-        self.widgets['btBack'].pack(side=LEFT, anchor='w', padx=5)
-        self.widgets['btExit'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btAccept'].pack(side=LEFT, anchor='w', padx=5)
+        self.widgets['btDeny'].pack(side=LEFT, anchor='w', padx=5)
         self.choise_frame.pack(side=BOTTOM, pady=10)
+
+    def update_texts(self):
+        for w_name, widget in self.widgets.items():
+            new_text_data = Lang.read(f'{self.name}.{self.type}.{w_name}')            
+            widget.config(text=new_text_data)
 
 
 class NotifyWindow(Toplevel, WindowMixin):
