@@ -181,16 +181,7 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-
-        # в зависимости от системы, дополнительные аргументы при создании процесса
-        if sys.platform == 'win32':
-            # для windows создание отдельной группы, чтобы завершить всё
-            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
-        else:
-            # для unix создание процесса с новой сессией
-            os_issues = {'preexec_fn': os.setsid}
-
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)  # запуск catframes
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
 
         self.error: Optional[str] = None
         self._progress = 0.0
@@ -230,22 +221,25 @@ class CatframesProcess:
     # убивает процесс (для экстренной остановки)
     def kill(self):
         if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
-            self.process.send_signal(signal.CTRL_BREAK_EVENT)
+            try:
+                os.kill(self.process.pid, signal.CTRL_C_EVENT)  # отправляет ctrl-C в процесс
+                time.sleep(0.1)
+            except KeyboardInterrupt:                           # ловит ctrl-C
+                pass
         else:
-            parent_pid = self.process.pid
-            os.killpg(os.getppid(parent_pid), signal.SIGTERM)
+            os.kill(self.process.pid, signal.SIGTERM)
 
-    @classmethod
-    def check_error(cls) -> bool:
-        command = ['catframes']
-        if sys.platform == 'win32':
-            command = ['catframes.exe']
-        try:
-            proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
-        except FileNotFoundError:
-            return NO_CATFRAMES_ERROR
-        if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
-            return NO_FFMPEG_ERROR
+    # @classmethod
+    # def check_error(cls) -> bool:
+    #     command = ['catframes']
+    #     if sys.platform == 'win32':
+    #         command = ['catframes.exe']
+    #     try:
+    #         proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
+    #     except FileNotFoundError:
+    #         return NO_CATFRAMES_ERROR
+    #     if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
+    #         return NO_FFMPEG_ERROR
 
 
 class Task:
@@ -254,11 +248,6 @@ class Task:
     def __init__(self, id: int, task_config: TaskConfig) -> None:
         self.config = task_config
         self.command = task_config.convert_to_command()
-        # print(self.command)
-
-        # # !!! команда тестового api, а не процесса catframes
-        # run_dir = os.path.dirname(os.path.abspath(__file__))
-        # self.command = f'python {run_dir}/test_api/test_catframes_api.py'
 
         self._process_thread: CatframesProcess = None
         self.id = id  # получение уникального номера
@@ -321,9 +310,10 @@ class Task:
 
     # удаляет файл в системе
     def delete_file(self):
+        file = self.config.get_filepath()
         for i in range(20):  # делает 20 попыток
             try:
-                os.remove(self.config.get_filepath())
+                os.remove(file)
                 return
             except:              # если не получилось
                 time.sleep(0.2)  # ждёт чуток, и пробует ещё 
