@@ -53,6 +53,7 @@ import platform
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1358,28 +1359,6 @@ class OutputOptions:
         if self.limit_seconds is not None:
             assert self.limit_seconds > 0
 
-    def _get_h264_options(self) -> Sequence[str]:
-        # Настраивать промежутки между ключевыми кадрами смысла нет: большинство плееров
-        # умеют точно перематывать, даже если между ними большие промежутки.
-        h264_crf = self.quality.get_h264_crf(self.frame_rate)
-        return [
-            '-pix_fmt', self.quality.get_pix_fmt(),
-            '-c:v', 'libx264',
-            '-preset', 'fast', '-tune', 'fastdecode',
-            '-movflags', '+faststart',
-            '-crf', str(h264_crf)
-        ]
-
-    def _get_vp9_options(self) -> Sequence[str]:
-        vp9_crf = self.quality.get_vp9_crf()
-        return [
-            '-c:v', 'libvpx-vp9',
-            '-deadline', 'realtime',
-            '-cpu-used', '4',
-            '-pix_fmt', self.quality.get_pix_fmt(),
-            '-crf', str(vp9_crf), '-b:v', '0'
-        ]
-
     @staticmethod
     def get_supported_suffixes() -> Sequence[str]:
         """Возвращает поддерживаемые расширения файлов."""
@@ -1389,6 +1368,39 @@ class OutputOptions:
         if self.limit_seconds:
             frames = frames[:(self.limit_seconds*self.frame_rate)]
         return frames
+
+
+class OutputProcessor:
+    def __init__(self, options: OutputOptions):
+        self._options = options
+        self._exit_lock = threading.Lock()
+
+    def _get_h264_options(self) -> Sequence[str]:
+        # There is no point in adjusting the gaps between keyframes: most modern players
+        # are able to rewind accurately, even if there are large gaps between them.
+        h264_crf = self._options.quality.get_h264_crf(self._options.frame_rate)
+        return [
+            '-pix_fmt', self._options.quality.get_pix_fmt(),
+            '-c:v', 'libx264',
+            '-preset', 'fast', '-tune', 'fastdecode',
+            '-movflags', '+faststart',
+            '-crf', str(h264_crf)
+        ]
+
+    def _get_vp9_options(self) -> Sequence[str]:
+        vp9_crf = self._options.quality.get_vp9_crf()
+        return [
+            '-c:v', 'libvpx-vp9',
+            '-deadline', 'realtime',
+            '-cpu-used', '4',
+            '-pix_fmt', self._options.quality.get_pix_fmt(),
+            '-crf', str(vp9_crf), '-b:v', '0'
+        ]
+
+    def exit_threads(self):
+        """To terminate all threads running in the main method in a controlled manner."""
+        with self._exit_lock:
+            pass
 
     def make(self, view: FrameView, frames: Sequence[Frame]):
 
@@ -1410,11 +1422,11 @@ class OutputOptions:
         ffmpeg_options = [
             'ffmpeg', '-f', 'rawvideo', '-c:v', 'rawvideo', '-pix_fmt', 'rgb24',
             '-s', str(view.resolution),
-            '-r', str(self.frame_rate),
+            '-r', str(self._options.frame_rate),
             '-i', '-'
         ]
 
-        suffix = self.destination.suffix
+        suffix = self._options.destination.suffix
         if suffix == '.mp4':
             ffmpeg_options.extend(self._get_h264_options())
         elif suffix == '.webm':
@@ -1423,9 +1435,9 @@ class OutputOptions:
             raise ValueError('Unsupported file name suffix.')
 
         ffmpeg_options.extend([
-            '-r', str(self.frame_rate),
-            ('-y' if self.overwrite else '-n'),
-            str(self.destination.expanduser())
+            '-r', str(self._options.frame_rate),
+            ('-y' if self._options.overwrite else '-n'),
+            str(self._options.destination.expanduser())
         ])
 
         set_processed(0)
@@ -1475,7 +1487,7 @@ class OutputOptions:
                     clear_write_thread_messages()
                     chunk = process.stdout.read(32)
 
-                    if self.live_preview and not view.thumbnail.empty():
+                    if self._options.live_preview and not view.thumbnail.empty():
                         print('Preview: ' + view.thumbnail.get_nowait(), flush=True)
 
                     #print(chunk.decode('utf-8'), flush=True, end='')
@@ -2867,7 +2879,21 @@ def main():
         view: DefaultFrameView = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         frames = output_options.limit_frames(frames)
 
-        output_options.make(view, frames)
+        output_processor = OutputProcessor(output_options)
+
+        def on_interrupt(sig, frame):
+            print('Keyboard interrupt!', flush=True)
+            output_processor.exit_threads()
+
+        def on_terminate(sig, frame):
+            print('Termination!', flush=True)
+            output_processor.exit_threads()
+
+        # TODO
+        # signal.signal(signal.SIGINT, on_interrupt)
+        # signal.signal(signal.SIGTERM, on_terminate)
+
+        output_processor.make(view, frames)
 
         print(f'\nFinished in {int(monotonic() - processing_start)} seconds.', flush=True)
 
