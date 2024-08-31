@@ -550,7 +550,12 @@ class Task:
     # удаляет файл в системе
     def delete_file(self):
         file = self.config.get_filepath()
-        os.remove(file)
+        try:
+            os.remove(file)
+        except:
+            # Just in case someone opened the video in a player
+            # while it was being encoded or something.
+            pass
 
     def delete(self):
         TaskManager.wipe(self)
