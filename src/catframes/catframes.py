@@ -53,6 +53,7 @@ import platform
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1358,28 +1359,6 @@ class OutputOptions:
         if self.limit_seconds is not None:
             assert self.limit_seconds > 0
 
-    def _get_h264_options(self) -> Sequence[str]:
-        # Настраивать промежутки между ключевыми кадрами смысла нет: большинство плееров
-        # умеют точно перематывать, даже если между ними большие промежутки.
-        h264_crf = self.quality.get_h264_crf(self.frame_rate)
-        return [
-            '-pix_fmt', self.quality.get_pix_fmt(),
-            '-c:v', 'libx264',
-            '-preset', 'fast', '-tune', 'fastdecode',
-            '-movflags', '+faststart',
-            '-crf', str(h264_crf)
-        ]
-
-    def _get_vp9_options(self) -> Sequence[str]:
-        vp9_crf = self.quality.get_vp9_crf()
-        return [
-            '-c:v', 'libvpx-vp9',
-            '-deadline', 'realtime',
-            '-cpu-used', '4',
-            '-pix_fmt', self.quality.get_pix_fmt(),
-            '-crf', str(vp9_crf), '-b:v', '0'
-        ]
-
     @staticmethod
     def get_supported_suffixes() -> Sequence[str]:
         """Возвращает поддерживаемые расширения файлов."""
@@ -1389,6 +1368,41 @@ class OutputOptions:
         if self.limit_seconds:
             frames = frames[:(self.limit_seconds*self.frame_rate)]
         return frames
+
+
+class OutputProcessor:
+    def __init__(self, options: OutputOptions):
+        self._options = options
+        self._exit_lock = threading.Lock()
+        self._write_pixels_control: Queue = Queue(maxsize = 10)
+
+    def _get_h264_options(self) -> Sequence[str]:
+        # There is no point in adjusting the gaps between keyframes: most modern players
+        # are able to rewind accurately, even if there are large gaps between them.
+        h264_crf = self._options.quality.get_h264_crf(self._options.frame_rate)
+        return [
+            '-pix_fmt', self._options.quality.get_pix_fmt(),
+            '-c:v', 'libx264',
+            '-preset', 'fast', '-tune', 'fastdecode',
+            '-movflags', '+faststart',
+            '-crf', str(h264_crf)
+        ]
+
+    def _get_vp9_options(self) -> Sequence[str]:
+        vp9_crf = self._options.quality.get_vp9_crf()
+        return [
+            '-c:v', 'libvpx-vp9',
+            '-deadline', 'realtime',
+            '-cpu-used', '4',
+            '-pix_fmt', self._options.quality.get_pix_fmt(),
+            '-crf', str(vp9_crf), '-b:v', '0'
+        ]
+
+    def exit_threads(self):
+        """To terminate all threads running in the main method in a controlled manner."""
+        with self._exit_lock:
+            if not self._write_pixels_control.full():
+                self._write_pixels_control.put('stop', block=False)
 
     def make(self, view: FrameView, frames: Sequence[Frame]):
 
@@ -1410,11 +1424,11 @@ class OutputOptions:
         ffmpeg_options = [
             'ffmpeg', '-f', 'rawvideo', '-c:v', 'rawvideo', '-pix_fmt', 'rgb24',
             '-s', str(view.resolution),
-            '-r', str(self.frame_rate),
+            '-r', str(self._options.frame_rate),
             '-i', '-'
         ]
 
-        suffix = self.destination.suffix
+        suffix = self._options.destination.suffix
         if suffix == '.mp4':
             ffmpeg_options.extend(self._get_h264_options())
         elif suffix == '.webm':
@@ -1423,9 +1437,9 @@ class OutputOptions:
             raise ValueError('Unsupported file name suffix.')
 
         ffmpeg_options.extend([
-            '-r', str(self.frame_rate),
-            ('-y' if self.overwrite else '-n'),
-            str(self.destination.expanduser())
+            '-r', str(self._options.frame_rate),
+            ('-y' if self._options.overwrite else '-n'),
+            str(self._options.destination.expanduser())
         ])
 
         set_processed(0)
@@ -1445,25 +1459,50 @@ class OutputOptions:
 
             write_thread_messages: Queue = Queue(maxsize = 10)
 
-            def write_pixels(items, pipe, queue):
+            def write_pixels(items, control_queue, pipe, progress_queue):
+                def poll_for_exit_comand():
+                    while not control_queue.empty():
+                        control_message = control_queue.get_nowait()
+                        if 'stop' == control_message:
+                            return True
+                    return False
+
                 for index in range(len(items)):
                     item = items[index]
-                    pipe.write(view.apply(item))
 
-                    if not queue.full():
-                        queue.put(1 + index, block=False)
+                    must_stop = poll_for_exit_comand()
+                    if must_stop:
+                        break
+
+                    try:
+                        pipe.write(view.apply(item))
+                    except:
+                        if must_stop:
+                            break
+                        elif poll_for_exit_comand():
+                            break
+                        else:
+                            raise
+
+                    if not progress_queue.full():
+                        progress_queue.put(1 + index, block=False)
 
                 pipe.close()
 
             input_thread = threading.Thread(
                 target=write_pixels,
-                args=[frames, process.stdin, write_thread_messages],
+                args=[
+                    frames,
+                    self._write_pixels_control,
+                    process.stdin,
+                    write_thread_messages
+                ],
                 daemon=False
             )
 
             input_thread.start()
 
-            def clear_write_thread_messages():
+            def read_write_thread_messages():
                 while not write_thread_messages.empty():
                     message = write_thread_messages.get_nowait()
                     if int == type(message):
@@ -1472,14 +1511,11 @@ class OutputOptions:
             with process.stdout:
                 ret_code = process.poll()
                 while None == ret_code:
-                    clear_write_thread_messages()
+                    read_write_thread_messages()
                     chunk = process.stdout.read(32)
 
-                    if self.live_preview and not view.thumbnail.empty():
+                    if self._options.live_preview and not view.thumbnail.empty():
                         print('Preview: ' + view.thumbnail.get_nowait(), flush=True)
-
-                    #print(chunk.decode('utf-8'), flush=True, end='')
-                    #print('.', flush=True, end='')
 
                     # I want this code to work in Python 3.7.
                     # The operator := requires 3.8.
@@ -2867,7 +2903,20 @@ def main():
         view: DefaultFrameView = DefaultFrameView(resolution, cli.margin_color, cli.layout)
         frames = output_options.limit_frames(frames)
 
-        output_options.make(view, frames)
+        output_processor = OutputProcessor(output_options)
+
+        def on_interrupt(sig, frame):
+            os.write(sys.stdout.fileno(), b'Keyboard interrupt!\n')
+            output_processor.exit_threads()
+
+        def on_terminate(sig, frame):
+            os.write(sys.stdout.fileno(), b'Termination!\n')
+            output_processor.exit_threads()
+
+        signal.signal(signal.SIGINT, on_interrupt)
+        signal.signal(signal.SIGTERM, on_terminate)
+
+        output_processor.make(view, frames)
 
         print(f'\nFinished in {int(monotonic() - processing_start)} seconds.', flush=True)
 
