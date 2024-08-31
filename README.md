@@ -1,15 +1,18 @@
 Catframes
 =========
 
-A script that concatenates frames. FFmpeg wrapper.
+It concatenates frames.
 
 With this software, you can, for example,
 
 * create a timelapse video,
 * turn an animation rendered in a PNG sequence into a video,
-* or compress a sequence of frames from a surveillance camera using a video codec.
+* compress your selfies,
+* compress a sequence of frames from CCTV.
 
-The script simply accepts folders with JPEG and PNG files as input and outputs MP4 or WebM.
+The script takes folders with JPEG, PNG, QOI and PCX files as input and outputs MP4 or WebM.
+
+It has GUI: `catmanager`!
 
 Installation
 ------------
