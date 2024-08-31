@@ -1,8 +1,8 @@
 [project]
 name = "catframes"
-version = "2024.8.0-SNAPSHOT"
+version = "2024.8.0"
 
-description = "A handy tool for combining images into videos via FFmpeg."
+description = "Video glue for image folders."
 
 readme = "README.md"
 license = {file = "LICENSE.txt"}
@@ -26,9 +26,7 @@ dependencies = [
 ]
 
 [project.urls]
-"Docs" = "http://itustinov.ru/cona/latest/docs/html/catframes.html"
 "Source code" = "https://github.com/georgy7/catframes"
-"Alternative repository" = "https://gitflic.ru/project/georgy7/cona"
 
 [project.scripts]
 catframes = "catframes.catframes:main"
