@@ -1451,7 +1451,6 @@ class OutputProcessor:
             catched = None
 
             process = subprocess.Popen(ffmpeg_options,
-                bufsize=1,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT
