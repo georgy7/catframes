@@ -340,14 +340,12 @@ class TaskConfig:
     # создание консольной команды в виде списка
     def convert_to_command(self, for_user: bool = False) -> List[str]:
         command = ['catframes']
-        if sys.platform == "win32":
-            command = ['catframes.exe']
-    
-        # добавление текстовых оверлеев
+
         for position, text in self._overlays.items():
             if text:
-                command.append(f'{position}="{text}"')
-        
+                command.append(position)
+                command.append(text)
+
         command.append(f'--margin-color={self._color}')     # параметр цвета
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
