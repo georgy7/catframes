@@ -2913,8 +2913,13 @@ def main():
             os.write(sys.stdout.fileno(), b'Termination!\n')
             output_processor.exit_threads()
 
+        def on_ctrl_break(sig, frame):
+            os.write(sys.stdout.fileno(), b'CTRL+BREAK!\n')
+            output_processor.exit_threads()
+
         signal.signal(signal.SIGINT, on_interrupt)
         signal.signal(signal.SIGTERM, on_terminate)
+        signal.signal(signal.SIGBREAK, on_ctrl_break)
 
         output_processor.make(view, frames)
 
