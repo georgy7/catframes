@@ -5,7 +5,10 @@ dist/
 src/catframes.egg-info/
 
 .idea/
+.DS_Store
+.venv/
 
+/test/
 .directory
 *.kate-swp
 *~
