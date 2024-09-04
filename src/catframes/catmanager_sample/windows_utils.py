@@ -889,6 +889,7 @@ class DirectoryManager(ttk.Frame):
         self.name = 'dirs'
 
         self.widgets: Dict[str, Widget] = {}
+        self._initial_dir: str = '~'
         self.drag_data = {"start_index": None, "item": None}
         self.on_change: Callable = on_change
 
@@ -962,11 +963,12 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self)
+        dir_name = filedialog.askdirectory(parent=self, initialdir=self._initial_dir)
         if not dir_name or dir_name in self.dirs:
             return
         if not find_img_in_dir(dir_name):
             return
+        self._initial_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)  # добавление в список директорий
         self.on_change(self.dirs[:])

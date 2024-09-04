@@ -1741,6 +1741,7 @@ class DirectoryManager(ttk.Frame):
         self.name = 'dirs'
 
         self.widgets: Dict[str, Widget] = {}
+        self._initial_dir: str = '~'
         self.drag_data = {"start_index": None, "item": None}
         self.on_change: Callable = on_change
 
@@ -1814,11 +1815,12 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self)
+        dir_name = filedialog.askdirectory(parent=self, initialdir=self._initial_dir)
         if not dir_name or dir_name in self.dirs:
             return
         if not find_img_in_dir(dir_name):
             return
+        self._initial_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)  # добавление в список директорий
         self.on_change(self.dirs[:])
@@ -2153,6 +2155,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
+        self._initial_filepath: str = '~'
 
         self.task_config = TaskConfig()
         self.view_mode: bool = False
@@ -2318,9 +2321,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
             filepath = filedialog.asksaveasfilename(
                     parent=self,                                                # открытие окна сохранения файла
                     filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
-                    defaultextension=".mp4"                                     # стандартное расширение
+                    defaultextension=".mp4",                                    # стандартное расширение
+                    initialdir=self._initial_filepath,
             )
             if filepath:
+                self._initial_filepath = os.path.dirname(filepath)
                 self.task_config.set_filepath(filepath)
                 self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
                 self._validate_task_config()

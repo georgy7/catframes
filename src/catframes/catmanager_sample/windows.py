@@ -236,6 +236,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
+        self._initial_filepath: str = '~'
 
         self.task_config = TaskConfig()
         self.view_mode: bool = False
@@ -401,9 +402,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
             filepath = filedialog.asksaveasfilename(
                     parent=self,                                                # открытие окна сохранения файла
                     filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
-                    defaultextension=".mp4"                                     # стандартное расширение
+                    defaultextension=".mp4",                                    # стандартное расширение
+                    initialdir=self._initial_filepath,
             )
             if filepath:
+                self._initial_filepath = os.path.dirname(filepath)
                 self.task_config.set_filepath(filepath)
                 self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
                 self._validate_task_config()
