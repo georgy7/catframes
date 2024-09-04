@@ -2048,8 +2048,19 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.size = 250, 100
         # self.size = 250, 200
         self.resizable(False, False)
+        self.transient(root)
+
+        self.bind("<FocusOut>", self._on_focus_out)
 
         super()._default_set_up()
+
+    # при потере фокуса окна, проверяет, не в фокусе ли его виджеты
+    def _on_focus_out(self, event):
+        try:
+            if not self.focus_get():
+                return self.close()
+        except:  # ловит ошибку, которая возникает при фокусе на комбобоксе
+            pass
 
     # создание и настройка виджетов
     def _init_widgets(self):
