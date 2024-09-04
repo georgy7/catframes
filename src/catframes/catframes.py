@@ -499,13 +499,13 @@ class _FileUtilsTest(TestCase):
     def test_list_images_of_non_existent_folder(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake'
-            with self.assertRaisesRegex(ValueError, '\S+'):
+            with self.assertRaisesRegex(ValueError, r'\S+'):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_non_existent_parent(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake_parent' / 'a_folder'
-            with self.assertRaisesRegex(ValueError, '\S+'):
+            with self.assertRaisesRegex(ValueError, r'\S+'):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_forbidden_folder(self):
@@ -1476,34 +1476,76 @@ class Encoder(ABC):
         """Encoding options"""
 
 
-class X264Encoder(Encoder):
-    def __init__(self, quality: Quality, fps: int):
-
-        if (fps < 1) or (fps > 60):
-            raise ValueError('Unsupported frame rate.')
+class X264Encoder(Encoder): 
+    def __init__(self, quality: Quality):
 
         if Quality.HIGH == quality:
-            crf60fps = 1
-            self.pix_fmt = 'yuv444p'
+            self.preset = 'slow'
+            self.crf = '6'
         elif Quality.MEDIUM == quality:
-            crf60fps = 12
-            self.pix_fmt = 'yuv422p'
+            self.preset = 'slow'
+            self.crf = '14'
         else:
-            crf60fps = 22
-            self.pix_fmt = 'yuv420p'
-
-        self.crf = round(crf60fps + 2.3 * math.log2(60/fps))
+            self.preset = 'fast'
+            self.crf = '22'
 
     def fits(self) -> bool:
         return True
 
     def get_options(self) -> Sequence[str]:
         return [
-            '-pix_fmt', self.pix_fmt,
             '-c:v', 'libx264',
-            '-preset', 'fast', '-tune', 'fastdecode',
-            '-movflags', '+faststart',
-            '-crf', str(self.crf)
+            '-preset:v', self.preset,
+            '-crf', self.crf,
+            '-pix_fmt', 'yuv444p',
+            '-tune', 'grain',
+            '-vf', 'hqdn3d'
+        ]
+
+
+class NVENC_Encoder(Encoder): 
+    def __init__(self, quality: Quality):
+        
+        if Quality.HIGH == quality:
+            self.preset = 'slow'
+            self.profile = 'high'
+            self.bitrate = '35'
+            self.bufsize = '10000k'
+            self.cq = '4'
+            
+        elif Quality.MEDIUM == quality:
+            self.preset = 'slow'
+            self.profile = 'high'
+            self.bitrate = '20'
+            self.bufsize = '5000k'
+            self.cq = '12'
+        else:
+            self.preset = 'fast'
+            self.profile = 'main'
+            self.bitrate = '8'
+            self.bufsize = '1000k'
+            self.cq = '20'
+        
+        self.max_bitrate = f'{str(int(self.bitrate) + 4)}M'
+        self.bitrate += "M"
+        
+    def fits(self) -> bool:
+        return True
+
+    def get_options(self) -> Sequence[str]:
+        return [
+            '-c:v', 'h264_nvenc',
+            '-preset:v', self.preset,
+            '-profile:v', self.profile,
+            '-cq', self.cq,
+            '-rc', 'cbr',
+            '-b:v', self.bitrate,
+            '-maxrate', self.max_bitrate,
+            '-bufsize', self.bufsize,
+            '-bf', '3',
+            '-pix_fmt', 'yuv444p',
+            '-rc-lookahead', '25',
+            '-vf', 'hqdn3d'
         ]
 
 
@@ -1539,28 +1581,30 @@ class H264Amf(Encoder):
         ]
 
 
-class VpxVp9Encoder(Encoder):
+class VP8Encoder(Encoder):
     def __init__(self, quality: Quality):
+        
         if Quality.HIGH == quality:
-            self.crf = 3
-            self.pix_fmt = 'yuv444p'
+            self.quality = 'best'
+            self.bitrate = '15M'
         elif Quality.MEDIUM == quality:
-            self.crf = 14
-            self.pix_fmt = 'yuv422p'
+            self.quality = 'good'
+            self.bitrate = '8M'
         else:
-            self.crf = 31
-            self.pix_fmt = 'yuv420p'
+            self.quality = 'good'
+            self.bitrate = '4M'
 
     def fits(self) -> bool:
         return True
 
     def get_options(self) -> Sequence[str]:
         return [
-            '-c:v', 'libvpx-vp9',
-            '-deadline', 'realtime',
-            '-cpu-used', '4',
-            '-pix_fmt', self.pix_fmt,
-            '-crf', str(self.crf), '-b:v', '0'
+            '-c:v', 'libvpx',
+            '-quality', self.quality,
+            '-b:v', self.bitrate,
+            '-lag-in-frames', '20',
+            '-arnr-maxframes', '15',
+            '-arnr-strength', '5'
         ]
 
 
@@ -1734,10 +1778,9 @@ class OutputOptions:
 
                 suffix = self.destination.suffix
                 if suffix == '.mp4':
-                    ffmpeg_options.extend(X264Encoder(self.quality, self.frame_rate).get_options())
-                    # ffmpeg_options.extend(H264Amf(self.quality).get_options())
+                    ffmpeg_options.extend(NVENC_Encoder(self.quality).get_options())
                 elif suffix == '.webm':
-                    ffmpeg_options.extend(VpxVp9Encoder(self.quality).get_options())
+                    ffmpeg_options.extend(VP8Encoder(self.quality).get_options())
                 else:
                     raise ValueError('Unsupported file name suffix.')
 
@@ -2911,7 +2954,7 @@ class ConsoleInterface:
         def port_range_validator(arg):
             tip = 'It must be written in the format MinPort:MaxPort.'
             min_port = 1024
-            if re.match('^\d+:\d+$', arg):
+            if re.match(r'^\d+:\d+$', arg):
                 nums = list(map(lambda x: int(x), arg.split(':')))
                 if nums[0] > nums[1]:
                     raise ArgumentTypeError(tip)
