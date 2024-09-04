@@ -2160,8 +2160,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config: TaskConfig = kwargs.get('task_config')
             self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
 
-        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)  # список доступных фреймрейтов
-
         self.size = 900, 500
         self.resizable(True, True)
 
@@ -2223,7 +2221,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
 
         self.task_config.set_specs(
-            framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
+            framerate=self.widgets['_spnFramerate'].get(),  # забирает выбранное значение в комбобоксе
             quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
         )
 
@@ -2353,14 +2351,16 @@ class NewTaskWindow(Toplevel, WindowMixin):
             highlightcolor='grey',
         )
 
-        self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
+        def validate_fps(value):
+            return value.isdigit() and 1 <= int(value) <= 60
+        v_fps = self.register(validate_fps), '%P'
+
+        self.widgets['_spnFramerate'] = ttk.Spinbox(  # виджет выбора фреймрейта
             self.settings_grid,
-            values=self.framerates, 
-            state='readonly',
-            justify=CENTER,
-            width=8,
+            validate='key', validatecommand=v_fps,
+            justify=CENTER, width=8,
         )
-        self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
+        self.widgets['_spnFramerate'].set(  # установка начального значения в выборе фреймрейта
             self.task_config.get_framerate()
         )
 
@@ -2445,7 +2445,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         # подпись и комбобокс частоты
         self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=5, pady=5)
-        self.widgets['_cmbFramerate'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        self.widgets['_spnFramerate'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
 
         # подпись и комбобокс качества
         self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=5, pady=5)
