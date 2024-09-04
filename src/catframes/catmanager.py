@@ -2164,9 +2164,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.resizable(True, True)
 
         super()._default_set_up()
-
-        self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
-        self.image_updater_thread.start()
+        threading.Thread(target=self.canvas_updater, daemon=True).start()
 
     # поток, обновляющий картинку и размеры холста
     def canvas_updater(self):
@@ -2203,15 +2201,16 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
             # если список не пуст, и счётчик дошёл
             self.image_canvas.update_image(images_to_show[index])
-            index = (index + 1) % len(images_to_show)  # инкремент
+            index = (index + 1) % len(images_to_show)
             time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
 
-        time.sleep(0.5)  # чтобы не было глича при одновременном открытии окна и картинки
         while True:
-            check_images_change()
             try:
+                check_images_change()
                 update_image()  # пробуем обновить картинку
                 time.sleep(1)
+            except AttributeError:
+                time.sleep(0.1)
             except TclError:  # это исключение появится, когда окно закроется
                 return
 
