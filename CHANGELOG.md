@@ -1,6 +1,6 @@
 # Catframes Changelog
 
-## [2024.8.0] — 2024-08-31
+## [2024.8.0] – 2024-08-31
 ### Added
 - GUI application written in Tkinter. You can run it like this: `catmanager`
 - System option `--live-preview` (GUI related).
@@ -22,23 +22,23 @@
 - System option `--port-range`: it does not affect anything.
 
 
-## [2024.4.0] — 2024-05-04
+## [2024.4.0] – 2024-05-04
 Some things in the source code have been renamed,
 and some comments have been translated into English.
 
 
-## [2024.3.1] — 2024-04-03
+## [2024.3.1] – 2024-04-03
 ### Fixed
 - WSGIServer shutdown
 
 
-## [2024.3.0] — 2024-03-31
+## [2024.3.0] – 2024-03-31
 ### Changed
 - I preload frames in a separate thread. It's about 15 percent faster.
 - Using other VP9 options results in slightly larger files, but 1.5–2 times faster.
 
 
-## [2024.2.0] — 2024-02-07
+## [2024.2.0] – 2024-02-07
 ### Changed
 - Destination file name is allowed (and ignored) with option `--resolutions`
 - No subsampling in high quality mode; moderate subsampling in medium quality mode
@@ -50,13 +50,13 @@ and some comments have been translated into English.
 - Options `--trim-start` and `--trim-end`
 
 
-## [2023.9.1] — 2023-10-19
+## [2023.9.1] – 2023-10-19
 ### Fixed
 - A bug in the resolution resolving algorithm, leading to division by zero in the presence
   of odd frame sizes due to incorrect use of rounded (to even) size.
 
 
-## [2023.9.0] — 2023-09-24
+## [2023.9.0] – 2023-09-24
 The version numbers now almost match the SemVer recommendations.
 
 ### Changed
@@ -70,13 +70,13 @@ The version numbers now almost match the SemVer recommendations.
 - Options `--trim-start` and `--trim-end`
 
 
-## [2023.5] — 2023-05-19
+## [2023.5] – 2023-05-19
 Not published in PYPI.
 
 The script works in Python 3.7 again.
 
 
-## [2022.10] — 2022-10-09
+## [2022.10] – 2022-10-09
 Not published in PYPI.
 
 Complete re-implementation that uses a web server to pass frames to FFmpeg.

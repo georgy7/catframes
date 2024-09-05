@@ -3,16 +3,16 @@ Catframes
 
 It concatenates frames.
 
-With this software, you can, for example,
+With this software, you can
 
-* create a timelapse video,
-* turn an animation rendered in a PNG sequence into a video,
-* compress your selfies,
-* compress a sequence of frames from CCTV.
+* create a timelapse video
+* turn an animation rendered in a PNG sequence into a video
+* compress your selfies
+* compress a sequence of frames from CCTV
 
 The script takes folders with JPEG, PNG, QOI and PCX files as input and outputs MP4 or WebM.
 
-It has GUI: `catmanager`!
+It has GUI: `catmanager`
 
 Installation
 ------------
