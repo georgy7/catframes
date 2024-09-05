@@ -2363,6 +2363,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self.widgets['_spnFramerate'] = ttk.Spinbox(  # виджет выбора фреймрейта
             self.settings_grid,
+            from_=1, to=60,
             validate='key', validatecommand=v_fps,
             justify=CENTER, width=8,
         )

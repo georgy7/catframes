@@ -40,7 +40,7 @@ def collect_code(file_path, ignore_imports: bool) -> list:
         for line in lines:
             # если стоит флаг, то игнорируем строки с импортами
             if ignore_imports:
-                if line.strip().startswith("import") or line.strip().startswith("from"):
+                if line.strip().startswith("import ") or line.strip().startswith("from "):
                     continue
             code_lines.append(line)
 
