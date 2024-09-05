@@ -26,7 +26,9 @@ dependencies = [
 ]
 
 [project.urls]
+Homepage = "https://itustinov.ru/"
 "Source code" = "https://github.com/georgy7/catframes"
+Changelog = "https://github.com/georgy7/catframes/blob/main/CHANGELOG.md"
 
 [project.scripts]
 catframes = "catframes.catframes:main"

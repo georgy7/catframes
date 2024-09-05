@@ -112,7 +112,7 @@ The command to run it with default settings looks like this:
 
 For automatic launches (through a CRON job, etc.), I recommend to add these options:
 
-    catframes -sf --port-range=10140:10240 folderA folderB folderC result.webm
+    catframes -sf folderA folderB folderC result.webm
 
 ### Default settings
 
@@ -167,4 +167,4 @@ Read more about these functions in the docs.
 See also
 --------
 
-**[Documentation (in Russian)](https://itustinov.ru/cona/latest/docs/html/catframes.html)**
+**[Documentation](https://itustinov.ru/cona/latest/docs/html/catframes.html)** (in Russian, outdated)
