@@ -340,14 +340,12 @@ class TaskConfig:
     # создание консольной команды в виде списка
     def convert_to_command(self, for_user: bool = False) -> List[str]:
         command = ['catframes']
-        if sys.platform == "win32":
-            command = ['catframes.exe']
-    
-        # добавление текстовых оверлеев
+
         for position, text in self._overlays.items():
             if text:
-                command.append(f'{position}="{text}"')
-        
+                command.append(position)
+                command.append(text)
+
         command.append(f'--margin-color={self._color}')     # параметр цвета
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
@@ -419,14 +417,23 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)  # запуск catframes
+        if sys.platform == 'win32':
+            # Обработка сигналов завершения в Windows выглядит как большой беспорядок.
+            # Если убрать этот флаг, CTRL+C будет отправляться как в дочерний, так и в родительский процесс.
+            # Если использовать этот флаг, CTRL+C не работает вообще, зато работает CTRL+Break.
+            # Этот флаг обязателен к использованию также и согласно документации Python, если мы хотим
+            # отправлять в подпроцесс эти два сигнала:
+            # https://docs.python.org/3/library/subprocess.html#subprocess.Popen.send_signal
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+        else:
+            os_issues = {}
+
+        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)
 
         self.error: Optional[str] = None
         self._progress = 0.0
         self._image_base64 = ''
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
-        # self._port = 0
-        # threading.Thread(target=self._recognize_port, daemon=True).start()  # запуск потока распознования порта
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
         progress_pattern = re.compile(r'Progress: +[0-9]+')
@@ -458,26 +465,18 @@ class CatframesProcess:
 
     # убивает процесс (для экстренной остановки)
     def kill(self):
-        if sys.platform == 'win32':  # исходя из системы, завершает семейство процессов
-            try:
-                os.kill(self.process.pid, signal.CTRL_C_EVENT)  # отправляет ctrl-C в процесс
-                time.sleep(0.1)
-            except KeyboardInterrupt:                           # ловит ctrl-C
-                pass
+        if sys.platform == 'win32':
+            # CTRL_C_EVENT is ignored for process groups
+            # https://learn.microsoft.com/ru-ru/windows/win32/procthread/process-creation-flags
+            os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
         else:
             os.kill(self.process.pid, signal.SIGTERM)
 
-    # @classmethod
-    # def check_error(cls) -> bool:
-    #     command = ['catframes']
-    #     if sys.platform == 'win32':
-    #         command = ['catframes.exe']
-    #     try:
-    #         proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
-    #     except FileNotFoundError:
-    #         return NO_CATFRAMES_ERROR
-    #     if 'FFmpeg not found' in ''.join(proc.stderr.readlines()):
-    #         return NO_FFMPEG_ERROR
+        # Раз уж удаление делается не через callback или Promise, нужно сделать это синхронно.
+        # Мы не можем полагаться на удачу. Мы должны всегда получить одинаковое поведение
+        # (удаление видео в случае отмены).
+        while None == self.process.poll():
+            time.sleep(0.1)
 
 
 class Task:
@@ -549,12 +548,12 @@ class Task:
     # удаляет файл в системе
     def delete_file(self):
         file = self.config.get_filepath()
-        for i in range(20):  # делает 20 попыток
-            try:
-                os.remove(file)
-                return
-            except:              # если не получилось
-                time.sleep(0.2)  # ждёт чуток, и пробует ещё 
+        try:
+            os.remove(file)
+        except:
+            # Just in case someone opened the video in a player
+            # while it was being encoded or something.
+            pass
 
     def delete(self):
         TaskManager.wipe(self)
