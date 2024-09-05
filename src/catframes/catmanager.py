@@ -343,8 +343,11 @@ class TaskConfig:
 
         for position, text in self._overlays.items():
             if text:
-                command.append(position)
-                command.append(text)
+                if for_user:
+                    command.append(f'{position}="{text}"')
+                else:
+                    command.append(position)
+                    command.append(text)
 
         command.append(f'--margin-color={self._color}')     # параметр цвета
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
