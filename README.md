@@ -24,7 +24,7 @@ What exactly does it do
 4. It heuristically chooses the video resolution from the collected data.
 5. It resizes each image (on the fly) to fit into that resolution, preserving the aspect ratio and aligning the images in the center.
 6. It overlays various text information on the frames, if you specified this in the arguments.
-7. It concatenates the frames, having a fairly high resistance to emergency.
+7. It concatenates the frames, having a fairly high resistance to emergencies.
 
 
 Installation
