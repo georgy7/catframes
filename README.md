@@ -10,9 +10,22 @@ With this software, you can
 * compress your selfies
 * compress a sequence of frames from CCTV
 
-The script takes folders with JPEG, PNG, QOI and PCX files as input and outputs MP4 or WebM.
+The script takes folders with images and outputs MP4 or WebM.
 
 It has GUI: `catmanager`
+
+
+What exactly does it do
+-----------------------
+
+1. It takes the folders in the order you specify them.
+2. It sorts images by name in natural order in each folder separately.
+3. It checks the resolution of each image and counts their numbers.
+4. It heuristically chooses the video resolution from the collected data.
+5. It resizes each image (on the fly) to fit into that resolution, preserving the aspect ratio and aligning the images in the center.
+6. It overlays various text information on the frames, if you specified this in the arguments.
+7. It concatenates the frames, having a fairly high resistance to emergency.
+
 
 Installation
 ------------
