@@ -74,7 +74,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.8.0-SNAPSHOT'
+__version__ = '2024.8.0'
 __license__ = 'Zlib'
 
 
@@ -360,13 +360,13 @@ class _FileUtilsTest(TestCase):
     def test_list_images_of_non_existent_folder(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake'
-            with self.assertRaisesRegex(ValueError, r'\S+'):
+            with self.assertRaisesRegex(ValueError, '\S+'):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_non_existent_parent(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake_parent' / 'a_folder'
-            with self.assertRaisesRegex(ValueError, r'\S+'):
+            with self.assertRaisesRegex(ValueError, '\S+'):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_forbidden_folder(self):
@@ -1300,162 +1300,41 @@ class FrameView(ABC):
 
 
 class Quality(Enum):
-    """Abstraction over endless FFmpeg quality settings."""
+    """Абстракция над бесконечными настройками качества FFmpeg."""
 
-    HIGH = 1
-    """Very high, but still lossу. It is suitable for artistic timelaps,
-    where it is important to preserve the texture, light iridescence,
-    and grain of the camera. It has a bitrate like MJPEG with 75% quality.
+    HIGH = 1, 3, 'yuv444p'
+    """Очень высокое, но всё же с потерями. Подходит для художественных таймлапсов, где важно
+    сохранить текстуру, световые переливы, зернистость камеры. Битрейт — как у JPEG 75.
     """
 
-    MEDIUM = 2
-    """It is suitable for almost any task. The graininess of the video
-    disappears, the gradients become a little rougher, the picture may be
-    a little murkier, but the details are easily recognizable.
+    MEDIUM = 12, 14, 'yuv422p'
+    """Подойдёт почти для любых задач. Зернистость видео пропадает, градиенты становятся чуть
+    грубее, картинка может быть чуть мутнее, но детали легко узнаваемы.
     """
 
-    POOR = 3
-    """Some small details become indistinguishable."""
+    POOR = 22, 31, 'yuv420p'
+    """Некоторые мелкие детали становятся неразличимыми."""
 
+    def get_h264_crf(self, fps: int) -> int:
+        """Constant Rate Factor меняет битрейт для поддержания постоянного уровня качества. Метрика
+        качества в кодеке связана с движением — медленные объекты считаются более заметными.
 
-class Encoder(ABC):
-    """FFmpeg options with a certain level of quality."""
-    def fits(self) -> bool:
-        """Can be used on this computer"""
-    def get_options(self) -> Sequence[str]:
-        """Encoding options"""
+        При повышении частоты кадров, детали в каждом отдельном кадре становятся всё менее
+        различимыми для зрителей, поэтому кодек при том же CRF порождает меньшие файлы.
 
+        Всё это логично для фильмов, но плохо для видеонаблюдения, где важен каждый кадр. Данный
+        метод корректирует CRF обратно по частоте смены кадров.
+        """
+        if (fps < 1) or (fps > 60):
+            raise ValueError('Unsupported frame rate.')
+        return round(self.value[0] + 2.3 * math.log2(60/fps))
 
-class X264Encoder(Encoder):
-    def __init__(self, quality: Quality):
+    def get_vp9_crf(self) -> int:
+        """Мои тесты показали, что опция CRF в VP9 не связана с частотой кадров."""
+        return self.value[1]
 
-        if Quality.HIGH == quality:
-            self.preset = 'slow'
-            self.crf = '6'
-        elif Quality.MEDIUM == quality:
-            self.preset = 'slow'
-            self.crf = '14'
-        else:
-            self.preset = 'fast'
-            self.crf = '22'
-
-    def fits(self) -> bool:
-        return True
-
-    def get_options(self) -> Sequence[str]:
-        return [
-            '-c:v', 'libx264',
-            '-preset:v', self.preset,
-            '-crf', self.crf,
-            '-pix_fmt', 'yuv444p',
-            '-tune', 'grain',
-            '-vf', 'hqdn3d'
-        ]
-
-
-class NVENC_Encoder(Encoder):
-    def __init__(self, quality: Quality):
-
-        if Quality.HIGH == quality:
-            self.preset = 'slow'
-            self.profile = 'high'
-            self.bitrate = '35'
-            self.bufsize = '10000k'
-            self.cq = '4'
-
-        elif Quality.MEDIUM == quality:
-            self.preset = 'slow'
-            self.profile = 'high'
-            self.bitrate = '20'
-            self.bufsize = '5000k'
-            self.cq = '12'
-        else:
-            self.preset = 'fast'
-            self.profile = 'main'
-            self.bitrate = '8'
-            self.bufsize = '1000k'
-            self.cq = '20'
-
-        self.max_bitrate = f'{str(int(self.bitrate) + 4)}M'
-        self.bitrate += "M"
-
-    def fits(self) -> bool:
-        return True
-
-    def get_options(self) -> Sequence[str]:
-        return [
-            '-c:v', 'h264_nvenc',
-            '-preset:v', self.preset,
-            '-profile:v', self.profile,
-            '-cq', self.cq,
-            '-rc', 'cbr',
-            '-b:v', self.bitrate,
-            '-maxrate', self.max_bitrate,
-            '-bufsize', self.bufsize,
-            '-bf', '3',
-            '-pix_fmt', 'yuv444p',
-            '-rc-lookahead', '25',
-            '-vf', 'hqdn3d'
-        ]
-
-
-class H264Amf(Encoder):
-    """H264 encoder for AMD.
-    It has exactly the same performance as x264 on my laptop
-    with AMD A8-6410 APU (AMD Radeon R5 Graphics).
-    However, it gives a cleaner result.
-    The frame rate does not affect it.
-    It does not support 4:4:4 pixel format, so in my opinion
-    it is not suitable for high quality video.
-    """
-    def __init__(self, quality: Quality):
-        if Quality.HIGH == quality:
-            self.qp = -1
-        elif Quality.MEDIUM == quality:
-            self.qp = 18
-        else:
-            self.qp = 27
-
-    def fits(self) -> bool:
-        return (self.qp > 0)
-
-    def get_options(self) -> Sequence[str]:
-        return [
-            '-pix_fmt', 'nv12',
-            '-c:v', 'h264_amf',
-            '-usage', 'lowlatency',
-            '-rc', 'cqp',
-            '-qp_i', str(self.qp),
-            '-qp_p', str(self.qp),
-            '-qp_b', str(self.qp)
-        ]
-
-
-class VP8Encoder(Encoder):
-    def __init__(self, quality: Quality):
-
-        if Quality.HIGH == quality:
-            self.quality = 'best'
-            self.bitrate = '15M'
-        elif Quality.MEDIUM == quality:
-            self.quality = 'good'
-            self.bitrate = '8M'
-        else:
-            self.quality = 'good'
-            self.bitrate = '4M'
-
-    def fits(self) -> bool:
-        return True
-
-    def get_options(self) -> Sequence[str]:
-        return [
-            '-c:v', 'libvpx',
-            '-quality', self.quality,
-            '-b:v', self.bitrate,
-            '-lag-in-frames', '20',
-            '-arnr-maxframes', '15',
-            '-arnr-strength', '5'
-        ]
+    def get_pix_fmt(self) -> str:
+        return self.value[2]
 
 
 @dataclass(frozen=True)
@@ -1497,6 +1376,28 @@ class OutputProcessor:
         self._exit_lock = threading.Lock()
         self._write_pixels_control: Queue = Queue(maxsize = 10)
 
+    def _get_h264_options(self) -> Sequence[str]:
+        # There is no point in adjusting the gaps between keyframes: most modern players
+        # are able to rewind accurately, even if there are large gaps between them.
+        h264_crf = self._options.quality.get_h264_crf(self._options.frame_rate)
+        return [
+            '-pix_fmt', self._options.quality.get_pix_fmt(),
+            '-c:v', 'libx264',
+            '-preset', 'fast', '-tune', 'fastdecode',
+            '-movflags', '+faststart',
+            '-crf', str(h264_crf)
+        ]
+
+    def _get_vp9_options(self) -> Sequence[str]:
+        vp9_crf = self._options.quality.get_vp9_crf()
+        return [
+            '-c:v', 'libvpx-vp9',
+            '-deadline', 'realtime',
+            '-cpu-used', '4',
+            '-pix_fmt', self._options.quality.get_pix_fmt(),
+            '-crf', str(vp9_crf), '-b:v', '0'
+        ]
+
     def exit_threads(self):
         """To terminate all threads running in the main method in a controlled manner."""
         with self._exit_lock:
@@ -1529,9 +1430,9 @@ class OutputProcessor:
 
         suffix = self._options.destination.suffix
         if suffix == '.mp4':
-            ffmpeg_options.extend(NVENC_Encoder(self._options.quality).get_options())
+            ffmpeg_options.extend(self._get_h264_options())
         elif suffix == '.webm':
-            ffmpeg_options.extend(VP8Encoder(self._options.quality).get_options())
+            ffmpeg_options.extend(self._get_vp9_options())
         else:
             raise ValueError('Unsupported file name suffix.')
 
@@ -1550,7 +1451,6 @@ class OutputProcessor:
             catched = None
 
             process = subprocess.Popen(ffmpeg_options,
-                bufsize=1,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT
