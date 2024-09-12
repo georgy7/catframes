@@ -131,8 +131,19 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.size = 250, 100
         # self.size = 250, 200
         self.resizable(False, False)
+        self.transient(root)
+
+        self.bind("<FocusOut>", self._on_focus_out)
 
         super()._default_set_up()
+
+    # при потере фокуса окна, проверяет, не в фокусе ли его виджеты
+    def _on_focus_out(self, event):
+        try:
+            if not self.focus_get():
+                return self.close()
+        except:  # ловит ошибку, которая возникает при фокусе на комбобоксе
+            pass
 
     # создание и настройка виджетов
     def _init_widgets(self):
@@ -225,6 +236,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name = 'task'
         self.widgets: Dict[str, Widget] = {}
+        self._initial_filepath: str = '~'
 
         self.task_config = TaskConfig()
         self.view_mode: bool = False
@@ -232,15 +244,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config: TaskConfig = kwargs.get('task_config')
             self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
 
-        self.framerates = (60, 50, 40, 30, 25, 20, 15, 10, 5)  # список доступных фреймрейтов
-
         self.size = 900, 500
         self.resizable(True, True)
 
         super()._default_set_up()
-
-        self.image_updater_thread = threading.Thread(target=self.canvas_updater, daemon=True)
-        self.image_updater_thread.start()
+        threading.Thread(target=self.canvas_updater, daemon=True).start()
 
     # поток, обновляющий картинку и размеры холста
     def canvas_updater(self):
@@ -277,15 +285,16 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
             # если список не пуст, и счётчик дошёл
             self.image_canvas.update_image(images_to_show[index])
-            index = (index + 1) % len(images_to_show)  # инкремент
+            index = (index + 1) % len(images_to_show)
             time.sleep(10)  # если картинка поменялась, то ждёт 10 сек
 
-        time.sleep(0.5)  # чтобы не было глича при одновременном открытии окна и картинки
         while True:
-            check_images_change()
             try:
+                check_images_change()
                 update_image()  # пробуем обновить картинку
                 time.sleep(1)
+            except AttributeError:
+                time.sleep(0.1)
             except TclError:  # это исключение появится, когда окно закроется
                 return
 
@@ -295,7 +304,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.task_config.set_overlays(overlays_texts=overlays)  # передаёт их в конфиг задачи оверлеев.
 
         self.task_config.set_specs(
-            framerate=self.widgets['_cmbFramerate'].get(),  # забирает выбранное значение в комбобоксе
+            framerate=self.widgets['_spnFramerate'].get(),  # забирает выбранное значение в комбобоксе
             quality=self.widgets['cmbQuality'].current(),   # а в этом забирает индекс выбранного значения
         )
 
@@ -393,9 +402,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
             filepath = filedialog.asksaveasfilename(
                     parent=self,                                                # открытие окна сохранения файла
                     filetypes=[("mp4 file", ".mp4"), ("webm file", ".webm")],   # доступные расширения и их имена
-                    defaultextension=".mp4"                                     # стандартное расширение
+                    defaultextension=".mp4",                                    # стандартное расширение
+                    initialdir=self._initial_filepath,
             )
             if filepath:
+                self._initial_filepath = os.path.dirname(filepath)
                 self.task_config.set_filepath(filepath)
                 self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
                 self._validate_task_config()
@@ -425,14 +436,17 @@ class NewTaskWindow(Toplevel, WindowMixin):
             highlightcolor='grey',
         )
 
-        self.widgets['_cmbFramerate'] = ttk.Combobox(  # виджет выбора фреймрейта
+        def validate_fps(value):
+            return value.isdigit() and 1 <= int(value) <= 60
+        v_fps = self.register(validate_fps), '%P'
+
+        self.widgets['_spnFramerate'] = ttk.Spinbox(  # виджет выбора фреймрейта
             self.settings_grid,
-            values=self.framerates, 
-            state='readonly',
-            justify=CENTER,
-            width=8,
+            from_=1, to=60,
+            validate='key', validatecommand=v_fps,
+            justify=CENTER, width=8,
         )
-        self.widgets['_cmbFramerate'].set(  # установка начального значения в выборе фреймрейта
+        self.widgets['_spnFramerate'].set(  # установка начального значения в выборе фреймрейта
             self.task_config.get_framerate()
         )
 
@@ -517,7 +531,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         # подпись и комбобокс частоты
         self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=5, pady=5)
-        self.widgets['_cmbFramerate'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        self.widgets['_spnFramerate'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
 
         # подпись и комбобокс качества
         self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=5, pady=5)
