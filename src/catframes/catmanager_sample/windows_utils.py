@@ -695,9 +695,6 @@ class ImageUnion:
         self.shown: Image = None
         self.transition_stage = 1, 0
 
-        self.frames = 30  # кол-во кадров изменения прозрачности 
-        self.delay = 0.01  # задержка между кадрами (с) 
-
         self.new = ImageComposite(self.size)
         self.old = ImageComposite(self.size)
 
@@ -723,23 +720,6 @@ class ImageUnion:
         tk = ImageTk.PhotoImage(image)
         self.master.itemconfig(self.id, image=tk)
         self.tk = tk
-
-    
-    # обновление изображения
-    def transit_image(self):            
-        alpha_new, alpha_old = 0, 1
-        for i in range(self.frames):
-            time.sleep(self.delay)
-            if i < self.frames/3:
-                alpha_new += (1/self.frames)*1.7
-            elif i < self.frames/1.5:
-                alpha_new += (1/self.frames)*1.5
-                alpha_old -= (1/self.frames)*1.5
-            else:
-                alpha_old -= (1/self.frames)*1.5
-            self.transit_delta(alpha_new, alpha_old)
-        self.transit_delta(1, 0)
-
 
     # меняет прозрачность для одного кадра
     def transit_delta(self, alpha_new: float, alpha_old: float):
@@ -794,6 +774,9 @@ class ImageCanvas(Canvas):
         self.view_mode = veiw_mode  # флаг режима просмотра
         self.color = background
 
+        self.frames = 30  # кол-во кадров изменения прозрачности 
+        self.delay = 0.01  # задержка между кадрами (с) 
+
         self.init_text = None
         self._create_init_text()    # создание пригласительной надписи
         if not veiw_mode:           # и, если это не режим просмотра,
@@ -804,27 +787,31 @@ class ImageCanvas(Canvas):
 
         self.overlays = OverlaysUnion(self, overlays)
 
-    # # обновление изображения
-    # def _transit_image(self):            
-    #     alpha_new, alpha_old = 0, 1
-    #     for i in range(self.frames):
-    #         time.sleep(self.delay)
-    #         if i < self.frames/3:
-    #             alpha_new += (1/self.frames)*1.7
-    #         elif i < self.frames/1.5:
-    #             alpha_new += (1/self.frames)*1.5
-    #             alpha_old -= (1/self.frames)*1.5
-    #         else:
-    #             alpha_old -= (1/self.frames)*1.5
-    #         self.img.transition(alpha_new, alpha_old)
-    #     self.img.transition(1, 0)
+    # обновление изображения
+    def transit_image(self):            
+        alpha_new, alpha_old = 0, 1
+        for i in range(self.frames):
+            time.sleep(self.delay)
+            if i < self.frames/3:
+                alpha_new += (1/self.frames)*1.7
+            elif i < self.frames/1.5:
+                alpha_new += (1/self.frames)*1.5
+                alpha_old -= (1/self.frames)*1.5
+            else:
+                alpha_old -= (1/self.frames)*1.5
+            self.img.transit_delta(alpha_new, alpha_old)
+
+            if i == int(self.frames/2):
+                self.overlays.update()
+        self.img.transit_delta(1, 0)
+        self.overlays.update()
 
     # установка новой картинки
     def update_image(self, image_link: str):
         self.cleared = False
         self._hide_init_text()
         self.img.set_new(image_link)
-        self.img.transit_image()
+        self.transit_image()
 
     # очистка холста от изображений (внешняя ручка)
     def clear_image(self):
@@ -832,7 +819,7 @@ class ImageCanvas(Canvas):
             return
         self._show_init_text()
         self.img.set_new('')
-        self.img.transit_image()
+        self.transit_image()
 
     # создание объекта пригласительного текста
     def _create_init_text(self):
@@ -857,13 +844,18 @@ class ImageCanvas(Canvas):
             if x < 0 or y < 0:
                 raise IndexError                        # если координата меньше нуля
 
-            # if self.new_img.hidden:                     # если картинка спрятана
-            #     raise Exception
+            if self.cleared:                     # если картинка спрятана
+                raise Exception
             
             color = self.img.shown.getpixel((x, y))   # цвет пикселя картинки на этих координатах
-            r, g, b = color[0:3]
+            r, g, b, a = color[0:4]
+
+            if a < 128:                                 # если пиксель на картинке, но прозрачный
+                raise Exception
+            
         except TypeError:                               # если pillow вернёт не ргб, а яркость пикселя
             return color < 128
+        
         except Exception:                               # если пиксель за пределами картинки
             r, g, b = self.winfo_rgb(self.color)        # задний план будет оцениваться, исходя из
             r, g, b = r/255, g/255, b/255               # выбранного фона холста
