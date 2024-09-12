@@ -789,7 +789,8 @@ class ImageCanvas(Canvas):
 
     # обновление изображения (внешняя ручка)
     def update_image(self, image_link: str):
-        self.cleared = False
+        if image_link:
+            self.cleared = False
         self.img.set_new(image_link)
         alpha_new = 0
         alpha_old = 1
@@ -803,18 +804,14 @@ class ImageCanvas(Canvas):
             else:
                 alpha_old -= (1/self.frames)*1.5
             self.img.transition(alpha_new, alpha_old)
+        self.img.transition(1, 0)
 
 
     # очистка холста от изображений (внешняя ручка)
     def clear_image(self):
         if self.cleared:
             return
-        self.cleared = True
-        # self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
-        # self._show_init_text()                  # сначала показ пригласительного текста
-        # self._animate_fadeoff()                 # анимируем исчезновение
-        # self.new_img.set_empty()                # устанавливаем стоковую картинку
-        # self.new_img.update_coords()            # позиционируем её
+        self.update_image('')
 
     # создание объекта пригласительного текста
     def _create_init_text(self):
