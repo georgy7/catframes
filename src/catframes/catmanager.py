@@ -1490,89 +1490,131 @@ class OverlaysUnion:
         return list(entries_text)
 
 
-
 class ImageComposite:
-    """Класс для хранения информации о картинке,
-    её изменения, и преобразования."""
+    def __init__(self, size: Tuple[int]):
+        self.size = size
+        self.stock = True
+        self.pil_orig: Image = None
+        self.pil_sized: Image = None
+        self.pil_fit: Image = None
+        self.set_empty()
 
-    def __init__(self, master: Canvas) -> None:
+    def set_size(self, size):
+        self.size = size
+
+    def open(self, image_link: str):
+        try:
+            self.pil_orig = Image.open(image_link).convert("RGBA")  # открытие изображения по пути
+            self.update_size()
+            self.stock = False
+        except (FileNotFoundError, AttributeError):  # если файл не найден
+            self.set_empty()                         # создаёт пустую картинку
+
+    def set_empty(self):
+        self.pil_sized = self.pil_fit = self.pil_orig = Image.new("RGBA", self.size, (0, 0, 0, 0))
+
+    # изменение размера картинки, подгонка под холст
+    def update_size(self):
+
+        # изменяем размер изображения, создаём прозрачную картинку
+        self.pil_sized = self.pil_orig.copy()
+        self.pil_sized.thumbnail(self.size, Image.Resampling.LANCZOS)
+        self.pil_fit = Image.new("RGBA", self.size, (0, 0, 0, 0))
+
+        # вставляем изображение в центр пустого изображения
+        x_offset = (self.size[0] - self.pil_sized.width) // 2
+        y_offset = (self.size[1] - self.pil_sized.height) // 2
+        self.pil_fit.paste(self.pil_sized, (x_offset, y_offset))
+
+    # получение изображения нужной прозрачности
+    def get_alpha(self, alpha: float):
+        if self.pil_fit.size != self.size:
+            self.update_size()
+        
+        alpha_img = self.pil_fit.getchannel('A')
+        alpha_img = alpha_img.point(lambda i: i * alpha)
+        self.modified = self.pil_fit.copy()
+        self.modified.putalpha(alpha_img)
+        return self.modified
+
+
+class ImageUnion:
+    """Класс для хранения информации о двух картинках,
+    их изменениях, и преобразованиях."""
+
+    def __init__(self, master: Canvas):
         self.master = master
         self.stock = True
-        self.hidden = True
-        self.id: int = None
-        self.orig_pil: Image = None
-        self.pil: Image = None
-        self.tk: ImageTk = None
-        self.height: int = None
-        self.width: int = None
-        self._create_image()
-    
-    # создание изображения
-    def _create_image(self):
-        self.set_empty()  # запись пустой картинки
-        x, y = self.master.width//2 - self.height//2, 0
-        self.id = self.master.create_image(x, y, anchor=NW, image=self.tk)  # передача изображения
+        self.size = master.width, master.height
+        self.shown: Image = None
+        self.transition_stage = 1, 0
+
+        self.frames = 30  # кол-во кадров изменения прозрачности 
+        self.delay = 0.01  # задержка между кадрами (с) 
+
+        self.new = ImageComposite(self.size)
+        self.old = ImageComposite(self.size)
+
+        self.tk = ImageTk.PhotoImage(Image.new("RGBA", self.size, (0, 0, 0, 0)))
+        self.id = master.create_image(0, 0, anchor='nw', image=self.tk)
         
         # привязка фокусировки на холст при нажатие на изображение, чтобы снять фокус с полей ввода
         self.master.tag_bind(self.id, "<Button-1>", lambda event: self.master.focus_set())
 
-    # изменение размера картинки, подгонка под холст
-    def _update_size(self, current_as_base: bool = False):
-        canvas_ratio = self.master.width / self.master.height  # соотношение сторон холста
-        ratio = self.orig_pil.size[0] / self.orig_pil.size[1]  # соотношение сторон картинки
+    def set_new(self, image_link: str):
+        self.old, self.new = self.new, self.old
+        self.new.open(image_link)
 
-        if canvas_ratio > ratio:                                      # если холст по соотносшению шире
-            size = int(self.master.height*ratio), self.master.height    # упор по высоте
-        else:                                                         # а если холст по соотношению выше
-            size = self.master.width, int(self.master.width/ratio)      # то упор по высоте
-
-        if (self.width, self.height) == size:  # если размеры не поменялись
+    def update_size(self, size: Tuple[int]):
+        if self.size == size:
             return
+        self.size = size
+        self.old.set_size(self.size)
+        self.new.set_size(self.size)
+        self.transit_delta(*self.transition_stage)
 
+    def update_tk(self, image: Image):
+        tk = ImageTk.PhotoImage(image)
+        self.master.itemconfig(self.id, image=tk)
+        self.tk = tk
+
+    
+    # обновление изображения
+    def transit_image(self):            
+        alpha_new, alpha_old = 0, 1
+        for i in range(self.frames):
+            time.sleep(self.delay)
+            if i < self.frames/3:
+                alpha_new += (1/self.frames)*1.7
+            elif i < self.frames/1.5:
+                alpha_new += (1/self.frames)*1.5
+                alpha_old -= (1/self.frames)*1.5
+            else:
+                alpha_old -= (1/self.frames)*1.5
+            self.transit_delta(alpha_new, alpha_old)
+        self.transit_delta(1, 0)
+
+
+    # меняет прозрачность для одного кадра
+    def transit_delta(self, alpha_new: float, alpha_old: float):
+        if alpha_new > 1:
+            alpha_new = 1
+        if alpha_old < 0:
+            alpha_old = 0
+        self.transition_stage = alpha_new, alpha_old
         try:
-            self.pil = self.orig_pil.resize(size, Image.LANCZOS)  # масштабирование
-            self.tk = ImageTk.PhotoImage(self.pil)                # загрузка новой тк-картинки
-            self.width, self.height = size                        # сохранение новых размеров
-
-            if current_as_base:           # установка текущего размера картинки
-                self.orig_pil = self.pil  # как базового (для оптимизации)
-        except Exception:  # если PIL сломается внутри из-за сложного и частого вызова
+            new = self.new.get_alpha(alpha_new)
+            old = self.old.get_alpha(alpha_old)
+            self.shown = Image.alpha_composite(old, new)
+            self.update_tk(self.shown)
+        except:
             pass
-
-    # приобразование ссылки на картинку, наполнение объекта композита
-    def open_image(self, image_link: str):
-        try:
-            self.orig_pil = Image.open(image_link)   # открытие изображения по пути
-            self._update_size(current_as_base=True)  # установка размеров картинки базовыми
-            self.stock = False
-        except (FileNotFoundError, AttributeError):  # если файл не найден
-            self.set_empty()                         # создаёт пустую картинку
 
     # расположение картинки на холсте по центру
     def update_coords(self):
         x = self.master.width//2 - self.width//2
         y = self.master.height//2 - self.height//2
         self.master.coords(self.id, x, y)
-
-    # создание пустого изображения, и надписи "добавьте картинки"
-    def set_empty(self):
-        self.height, self.width = self.master.height, self.master.width
-        self.orig_pil = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))  # пустое изображение
-        self.pil = self.orig_pil                           # текущий объект pil будет таким же
-        self.tk = ImageTk.PhotoImage(self.orig_pil)        # создаём объект тк
-        self.stock = True                                  # установка флага стокового изображения
-
-    # изменение прозрачности картинки
-    def change_alpha(self, alpha):
-        faded_current_image = self.pil.copy()              # копируем картинку 
-        faded_current_image.putalpha(int(alpha * 255))     # применяем альфа-канал 
-        self.tk = ImageTk.PhotoImage(faded_current_image)  # создаём тк картинку, сохраняем
-        self.master.itemconfig(self.id, image=self.tk)     # обновляем изображения на холсте 
-
-    # перезагрузка картинки на холсте
-    def reload(self):
-        self._update_size()                                # обновление размера
-        self.master.itemconfig(self.id, image=self.tk)     # замена тк-картинки на холсте
 
 
 # проверка, тёмный цвет, или светлый
@@ -1612,59 +1654,39 @@ class ImageCanvas(Canvas):
             self._show_init_text()  # показывает надпись
 
         self.cleared = True
-        self.new_img = ImageComposite(self)   # изображения, которые будут
-        self.old_img = ImageComposite(self)   # менять прозрачность по очереди
-
-        self.alpha_step = 0.1  # Шаг изменения прозрачности 
-        self.delay = 20  # Задержка между кадрами (мс) 
+        self.img = ImageUnion(self)
 
         self.overlays = OverlaysUnion(self, overlays)
 
-    # анимируем смену изображений (рекурсивный метод)
-    def _animate_transition(self, alpha: float = 1): 
-        if alpha <= 0:                   # если альфа-канал дошёл до нуля
-            self.old_img.hidden = True   # расставляем флаги прозрачности
-            self.new_img.hidden = False
-            self.overlays.update()       # обновляем оверлеи
-            self._hide_init_text()       # только в конце прячем текст
-            return
-        
-        if not self.old_img.stock:       # если изображение не стоковое
-            self.old_img.change_alpha(alpha)  # делаем его прозрачнее
-        self.new_img.change_alpha(1-alpha)    # а новое - наоборот
+    # # обновление изображения
+    # def _transit_image(self):            
+    #     alpha_new, alpha_old = 0, 1
+    #     for i in range(self.frames):
+    #         time.sleep(self.delay)
+    #         if i < self.frames/3:
+    #             alpha_new += (1/self.frames)*1.7
+    #         elif i < self.frames/1.5:
+    #             alpha_new += (1/self.frames)*1.5
+    #             alpha_old -= (1/self.frames)*1.5
+    #         else:
+    #             alpha_old -= (1/self.frames)*1.5
+    #         self.img.transition(alpha_new, alpha_old)
+    #     self.img.transition(1, 0)
 
-        # вызываем этот же метод, но уменьшая альфа-канал
-        self.master.after(self.delay, self._animate_transition, alpha-self.alpha_step)
-            
-    # плавное исчезновение картинки (рекурсивный метод)
-    def _animate_fadeoff(self, alpha: float = 1):
-        if alpha <= 0:                   # если альфа-канал дошёл до нуля
-            self.old_img.hidden = True   # ставим флаг прозрачности
-            self.overlays.update()       # обновляем оверлеи
-            return
-        
-        if not self.old_img.stock:
-            self.old_img.change_alpha(alpha)  # делаем картинку прозрачнее
-        self.master.after(self.delay, self._animate_fadeoff, alpha-self.alpha_step)  # рекурсия
-        
-    # обновление изображения (внешняя ручка)
+    # установка новой картинки
     def update_image(self, image_link: str):
         self.cleared = False
-        self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
-        self.new_img.open_image(image_link)     # открываем картинку
-        self.new_img.update_coords()            # устанавливаем её координаты
-        self._animate_transition()              # анимируем замену старой
+        self._hide_init_text()
+        self.img.set_new(image_link)
+        self.img.transit_image()
 
     # очистка холста от изображений (внешняя ручка)
     def clear_image(self):
         if self.cleared:
             return
-        self.cleared = True
-        self.old_img, self.new_img = self.new_img, self.old_img  # меняем картинки местами
-        self._show_init_text()                  # сначала показ пригласительного текста
-        self._animate_fadeoff()                 # анимируем исчезновение
-        self.new_img.set_empty()                # устанавливаем стоковую картинку
-        self.new_img.update_coords()            # позиционируем её
+        self._show_init_text()
+        self.img.set_new('')
+        self.img.transit_image()
 
     # создание объекта пригласительного текста
     def _create_init_text(self):
@@ -1684,18 +1706,15 @@ class ImageCanvas(Canvas):
 
     # проверка, тёмный ли фон на картинке за элементом канваса
     def is_dark_background(self, elem_id: int) -> bool:
-        x_shift, y_shift = self.coords(self.new_img.id) # сдвиг картинки от левого края холста
         x, y = self.coords(elem_id)                     # координаты элемента на холсте
         try:
-            x -= int(x_shift)                       # поправка, теперь это коорд. элемента на картинке
-            y -= int(y_shift)
             if x < 0 or y < 0:
                 raise IndexError                        # если координата меньше нуля
 
-            if self.new_img.hidden:                     # если картинка спрятана
-                raise Exception
+            # if self.new_img.hidden:                     # если картинка спрятана
+            #     raise Exception
             
-            color = self.new_img.pil.getpixel((x, y))   # цвет пикселя картинки на этих координатах
+            color = self.img.shown.getpixel((x, y))   # цвет пикселя картинки на этих координатах
             r, g, b = color[0:3]
         except TypeError:                               # если pillow вернёт не ргб, а яркость пикселя
             return color < 128
@@ -1714,8 +1733,7 @@ class ImageCanvas(Canvas):
         self.coords(self.init_text, self.width/2, self.height/2)  # позиция прив. текста
 
         if resize_image:                # если нужен пересчёт картинки
-            self.new_img.reload()       # то пересчитывает
-        self.new_img.update_coords()    # обновляет координаты картинки
+            self.img.update_size((width, height))       # то пересчитывает
 
     # формирует список из восьми строк, введённых в полях
     def fetch_entries_text(self) -> list:

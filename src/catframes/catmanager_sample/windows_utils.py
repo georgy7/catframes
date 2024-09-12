@@ -695,6 +695,9 @@ class ImageUnion:
         self.shown: Image = None
         self.transition_stage = 1, 0
 
+        self.frames = 30  # кол-во кадров изменения прозрачности 
+        self.delay = 0.01  # задержка между кадрами (с) 
+
         self.new = ImageComposite(self.size)
         self.old = ImageComposite(self.size)
 
@@ -714,14 +717,32 @@ class ImageUnion:
         self.size = size
         self.old.set_size(self.size)
         self.new.set_size(self.size)
-        self.transition(*self.transition_stage)
+        self.transit_delta(*self.transition_stage)
 
     def update_tk(self, image: Image):
         tk = ImageTk.PhotoImage(image)
         self.master.itemconfig(self.id, image=tk)
         self.tk = tk
 
-    def transition(self, alpha_new: float, alpha_old: float):
+    
+    # обновление изображения
+    def transit_image(self):            
+        alpha_new, alpha_old = 0, 1
+        for i in range(self.frames):
+            time.sleep(self.delay)
+            if i < self.frames/3:
+                alpha_new += (1/self.frames)*1.7
+            elif i < self.frames/1.5:
+                alpha_new += (1/self.frames)*1.5
+                alpha_old -= (1/self.frames)*1.5
+            else:
+                alpha_old -= (1/self.frames)*1.5
+            self.transit_delta(alpha_new, alpha_old)
+        self.transit_delta(1, 0)
+
+
+    # меняет прозрачность для одного кадра
+    def transit_delta(self, alpha_new: float, alpha_old: float):
         if alpha_new > 1:
             alpha_new = 1
         if alpha_old < 0:
@@ -781,37 +802,37 @@ class ImageCanvas(Canvas):
         self.cleared = True
         self.img = ImageUnion(self)
 
-        self.frames = 20  # кол-во кадров изменения прозрачности 
-        self.delay = 0.02  # задержка между кадрами (с) 
-
         self.overlays = OverlaysUnion(self, overlays)
-            
 
-    # обновление изображения (внешняя ручка)
+    # # обновление изображения
+    # def _transit_image(self):            
+    #     alpha_new, alpha_old = 0, 1
+    #     for i in range(self.frames):
+    #         time.sleep(self.delay)
+    #         if i < self.frames/3:
+    #             alpha_new += (1/self.frames)*1.7
+    #         elif i < self.frames/1.5:
+    #             alpha_new += (1/self.frames)*1.5
+    #             alpha_old -= (1/self.frames)*1.5
+    #         else:
+    #             alpha_old -= (1/self.frames)*1.5
+    #         self.img.transition(alpha_new, alpha_old)
+    #     self.img.transition(1, 0)
+
+    # установка новой картинки
     def update_image(self, image_link: str):
-        if image_link:
-            self.cleared = False
+        self.cleared = False
+        self._hide_init_text()
         self.img.set_new(image_link)
-        alpha_new = 0
-        alpha_old = 1
-        for i in range(self.frames):
-            time.sleep(self.delay)
-            if i < self.frames/3:
-                alpha_new += (1/self.frames)*1.7
-            elif i < self.frames/1.5:
-                alpha_new += (1/self.frames)*1.5
-                alpha_old -= (1/self.frames)*1.5
-            else:
-                alpha_old -= (1/self.frames)*1.5
-            self.img.transition(alpha_new, alpha_old)
-        self.img.transition(1, 0)
-
+        self.img.transit_image()
 
     # очистка холста от изображений (внешняя ручка)
     def clear_image(self):
         if self.cleared:
             return
-        self.update_image('')
+        self._show_init_text()
+        self.img.set_new('')
+        self.img.transit_image()
 
     # создание объекта пригласительного текста
     def _create_init_text(self):
