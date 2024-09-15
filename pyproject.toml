@@ -1,8 +1,9 @@
 [project]
 name = "catframes"
-version = "2024.8.0"
+version = "2024.8.1"
 
 description = "Video glue for image folders."
+keywords = ["concat", "images", "video", "webm", "mp4", "slideshow", "timelapse", "stop motion"]
 
 readme = "README.md"
 license = {file = "LICENSE.txt"}
@@ -18,6 +19,8 @@ authors = [
 classifiers = [
   "Intended Audience :: Developers",
   "Intended Audience :: System Administrators",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Multimedia :: Graphics :: Graphics Conversion",
   "License :: OSI Approved :: zlib/libpng License"
 ]
 

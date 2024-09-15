@@ -1,5 +1,16 @@
 # Catframes Changelog
 
+## [2024.8.1] – 2024-09-16
+### Fixed
+- New task window: alpha blending of images with transparent backgrounds.
+- Settings dialog: auto-closing on blur.
+- Add folder dialog: it starts from the parent folder of the last added one.
+- Command copy button (still wrong with line feeds).
+
+### Changed
+- Now FPS is a number input (1-60), not a drop-down list.
+
+
 ## [2024.8.0] – 2024-08-31
 ### Added
 - GUI application written in Tkinter. You can run it like this: `catmanager`
