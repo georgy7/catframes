@@ -2372,9 +2372,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 return True
             if not value.isdigit():
                 return False
-            if str(int(value)) != value:
-                return False
-            return 1 <= int(value) <= 60
+            return 0 <= int(value) <= 60
         v_fps = self.register(validate_fps), "%P"
 
         self.widgets['_spnFramerate'] = ttk.Spinbox(  # виджет выбора фреймрейта
@@ -2386,9 +2384,11 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         # проверяет, пустое ли поле ввода, и если да, вписывает минимальное значиние
         def check_empty_fps(event):
-            if not self.widgets['_spnFramerate'].get():
-                self.widgets['_spnFramerate'].set(1)
-
+            value = self.widgets['_spnFramerate'].get()
+            value = int(value) if value else 1
+            value = int(value) if value else 1
+            self.widgets['_spnFramerate'].set(value)
+                
         self.widgets['_spnFramerate'].bind("<FocusOut>", check_empty_fps)
 
         self.widgets['_spnFramerate'].set(  # установка начального значения в выборе фреймрейта
