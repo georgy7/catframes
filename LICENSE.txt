@@ -1,6 +1,5 @@
-© Георгий Устинов, 2022–2024
-© Богдан Сыроватский, 2024
-© Евгений Окатьев, 2024
+© Устинов Г.М., 2022–2024
+© Сыроватский Б.А., 2024
 
 This software is provided 'as-is', without any express or implied
 warranty.  In no event will the authors be held liable for any damages
