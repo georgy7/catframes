@@ -74,7 +74,7 @@ from unittest import TestCase
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 
-__version__ = '2024.8.0'
+__version__ = '2024.8.0-SNAPSHOT'
 __license__ = 'Zlib'
 
 
@@ -360,13 +360,13 @@ class _FileUtilsTest(TestCase):
     def test_list_images_of_non_existent_folder(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake'
-            with self.assertRaisesRegex(ValueError, '\S+'):
+            with self.assertRaisesRegex(ValueError, r'\S+'):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_non_existent_parent(self):
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake_parent' / 'a_folder'
-            with self.assertRaisesRegex(ValueError, '\S+'):
+            with self.assertRaisesRegex(ValueError, r'\S+'):
                 FileUtils.list_images(fake_path)
 
     def test_list_images_of_forbidden_folder(self):
@@ -1300,221 +1300,162 @@ class FrameView(ABC):
 
 
 class Quality(Enum):
-    """Абстракция над бесконечными настройками качества FFmpeg."""
+    """Abstraction over endless FFmpeg quality settings."""
 
-    HIGH = 'HIGH'
-    """Очень высокое, но всё же с потерями. Подходит для художественных таймлапсов, где важно
-    сохранить текстуру, световые переливы, зернистость камеры. Битрейт — как у JPEG 75.
+    HIGH = 1
+    """Very high, but still lossу. It is suitable for artistic timelaps,
+    where it is important to preserve the texture, light iridescence,
+    and grain of the camera. It has a bitrate like MJPEG with 75% quality.
     """
 
-    MEDIUM = 'MEDIUM'
-    """Подойдёт почти для любых задач. Зернистость видео пропадает, градиенты становятся чуть
-    грубее, картинка может быть чуть мутнее, но детали легко узнаваемы.
+    MEDIUM = 2
+    """It is suitable for almost any task. The graininess of the video
+    disappears, the gradients become a little rougher, the picture may be
+    a little murkier, but the details are easily recognizable.
     """
 
-    POOR = 'POOR'
-    """Некоторые мелкие детали становятся неразличимыми."""
+    POOR = 3
+    """Some small details become indistinguishable."""
 
 
-class Encoder:
-    def get_options(self, quality: Quality, fps: int = None) -> Sequence[str]:
-        raise NotImplementedError("Subclasses should implement this method")
-    
-    
-class H264Encoder(Encoder):
-    _settings = {
-        Quality.HIGH: {'crf': '1', 'pix_fmt': 'yuv444p'},
-        Quality.MEDIUM: {'crf': '12', 'pix_fmt': 'yuv422p'},
-        Quality.POOR: {'crf': '22', 'pix_fmt': 'yuv420p'}
-    }
+class Encoder(ABC):
+    """FFmpeg options with a certain level of quality."""
+    def fits(self) -> bool:
+        """Can be used on this computer"""
+    def get_options(self) -> Sequence[str]:
+        """Encoding options"""
 
-    def get_options(self, quality: Quality, fps: int) -> Sequence[str]:
-        settings = self._settings[quality]
-        crf = settings['crf']
-        pix_fmt = settings['pix_fmt']
-        if fps is not None:
-            crf = round(crf + 2.3 * math.log2(60 / fps))
+
+class X264Encoder(Encoder):
+    def __init__(self, quality: Quality):
+
+        if Quality.HIGH == quality:
+            self.preset = 'slow'
+            self.crf = '6'
+        elif Quality.MEDIUM == quality:
+            self.preset = 'slow'
+            self.crf = '14'
+        else:
+            self.preset = 'fast'
+            self.crf = '22'
+
+    def fits(self) -> bool:
+        return True
+
+    def get_options(self) -> Sequence[str]:
         return [
             '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-tune', 'fastdecode',
-            '-movflags', '+faststart',
-            '-pix_fmt', pix_fmt,
-            '-crf', crf
+            '-preset:v', self.preset,
+            '-crf', self.crf,
+            '-pix_fmt', 'yuv444p',
+            '-tune', 'grain',
+            '-vf', 'hqdn3d'
         ]
 
 
-class VP9Encoder(Encoder):
-    _settings = {
-        Quality.HIGH: {'crf': '3', 'pix_fmt': 'yuv444p'},
-        Quality.MEDIUM: {'crf': '14', 'pix_fmt': 'yuv422p'},
-        Quality.POOR: {'crf': '31', 'pix_fmt': 'yuv420p'}
-    }
+class NVENC_Encoder(Encoder):
+    def __init__(self, quality: Quality):
 
-    def get_options(self, quality: Quality, fps: int = None) -> Sequence[str]:
-        settings = self._settings[quality]
-        crf = settings['crf']
-        pix_fmt = settings['pix_fmt']
+        if Quality.HIGH == quality:
+            self.preset = 'slow'
+            self.profile = 'high'
+            self.bitrate = '35'
+            self.bufsize = '10000k'
+            self.cq = '4'
+
+        elif Quality.MEDIUM == quality:
+            self.preset = 'slow'
+            self.profile = 'high'
+            self.bitrate = '20'
+            self.bufsize = '5000k'
+            self.cq = '12'
+        else:
+            self.preset = 'fast'
+            self.profile = 'main'
+            self.bitrate = '8'
+            self.bufsize = '1000k'
+            self.cq = '20'
+
+        self.max_bitrate = f'{str(int(self.bitrate) + 4)}M'
+        self.bitrate += "M"
+
+    def fits(self) -> bool:
+        return True
+
+    def get_options(self) -> Sequence[str]:
         return [
-            '-c:v', 'libvpx-vp9',
-            '-deadline', 'realtime',
-            '-cpu-used', '4',
-            '-pix_fmt', pix_fmt,
-            '-crf', crf,
-            '-b:v', '0'
+            '-c:v', 'h264_nvenc',
+            '-preset:v', self.preset,
+            '-profile:v', self.profile,
+            '-cq', self.cq,
+            '-rc', 'cbr',
+            '-b:v', self.bitrate,
+            '-maxrate', self.max_bitrate,
+            '-bufsize', self.bufsize,
+            '-bf', '3',
+            '-pix_fmt', 'yuv444p',
+            '-rc-lookahead', '25',
+            '-vf', 'hqdn3d'
         ]
-        
 
-class H264NvencEncoder(Encoder):
-    _settings = {
-        Quality.HIGH: {'qp': '7', 'pix_fmt': 'yuv444p'},
-        Quality.MEDIUM: {'qp': '14', 'pix_fmt': 'yuv422p'},
-        Quality.POOR: {'qp': '28', 'pix_fmt': 'yuv420p'}
-    }
 
-    def get_options(self, quality: Quality, fps: int = None) -> Sequence[str]:
-        settings = self._settings[quality]
-        qp = settings['qp']
-        pix_fmt = settings['pix_fmt']
+class H264Amf(Encoder):
+    """H264 encoder for AMD.
+    It has exactly the same performance as x264 on my laptop
+    with AMD A8-6410 APU (AMD Radeon R5 Graphics).
+    However, it gives a cleaner result.
+    The frame rate does not affect it.
+    It does not support 4:4:4 pixel format, so in my opinion
+    it is not suitable for high quality video.
+    """
+    def __init__(self, quality: Quality):
+        if Quality.HIGH == quality:
+            self.qp = -1
+        elif Quality.MEDIUM == quality:
+            self.qp = 18
+        else:
+            self.qp = 27
+
+    def fits(self) -> bool:
+        return (self.qp > 0)
+
+    def get_options(self) -> Sequence[str]:
         return [
-            '-c:v', 'h264_nvenc',            
-            '-preset', 'fast',
-            '-movflags', '+faststart',
-            '-pix_fmt', pix_fmt,
-            '-qp', qp
-        ]
-        
-
-class H264AmfEncoder(Encoder):
-    _settings = {
-        Quality.HIGH: {'qp_i': '7', 'qp_p': '9'},
-        Quality.MEDIUM: {'qp_i': '16', 'qp_p': '18'},
-        Quality.POOR: {'qp_i': '26', 'qp_p': '27'}
-    }
-
-    def get_options(self, quality: Quality, fps: int = None) -> Sequence[str]:
-        settings = self._settings[quality]
-        qp_i = settings['qp_i']
-        qp_p = settings['qp_p']
-        return [
+            '-pix_fmt', 'nv12',
             '-c:v', 'h264_amf',
-            '-preset', 'speed',
-            '-movflags', '+faststart',
-            '-pix_fmt', 'yuv420p',
+            '-usage', 'lowlatency',
             '-rc', 'cqp',
-            '-qp_i', qp_i,
-            '-qp_p', qp_p
+            '-qp_i', str(self.qp),
+            '-qp_p', str(self.qp),
+            '-qp_b', str(self.qp)
         ]
-        
-        
-class HevcNvencEncoder(Encoder):
-    _settings = {
-        Quality.HIGH: {'qp': '7', 'pix_fmt': 'yuv444p'},
-        Quality.MEDIUM: {'qp': '14', 'pix_fmt': 'yuv422p'},
-        Quality.POOR: {'qp': '28', 'pix_fmt': 'yuv420p'}
-    }
 
-    def get_options(self, quality: Quality, fps: int = None) -> Sequence[str]:
-        settings = self._settings[quality]
-        qp = settings['qp']
-        pix_fmt = settings['pix_fmt']
+
+class VP8Encoder(Encoder):
+    def __init__(self, quality: Quality):
+
+        if Quality.HIGH == quality:
+            self.quality = 'best'
+            self.bitrate = '15M'
+        elif Quality.MEDIUM == quality:
+            self.quality = 'good'
+            self.bitrate = '8M'
+        else:
+            self.quality = 'good'
+            self.bitrate = '4M'
+
+    def fits(self) -> bool:
+        return True
+
+    def get_options(self) -> Sequence[str]:
         return [
-            '-c:v', 'hevc_nvenc',            
-            '-preset', 'fast',
-            '-movflags', '+faststart',
-            '-pix_fmt', pix_fmt,
-            '-qp', qp
+            '-c:v', 'libvpx',
+            '-quality', self.quality,
+            '-b:v', self.bitrate,
+            '-lag-in-frames', '20',
+            '-arnr-maxframes', '15',
+            '-arnr-strength', '5'
         ]
-
-
-class HevcAmfEncoder(Encoder):
-    _settings = {
-        Quality.HIGH: {'qp_i': '7', 'qp_p': '9'},
-        Quality.MEDIUM: {'qp_i': '16', 'qp_p': '18'},
-        Quality.POOR: {'qp_i': '26', 'qp_p': '27'}
-    }
-
-    def get_options(self, quality: Quality, fps: int = None) -> Sequence[str]:
-        settings = self._settings[quality]
-        qp_i = settings['qp_i']
-        qp_p = settings['qp_p']
-        return [
-            '-c:v', 'hevc_amf',
-            '-preset', 'speed',
-            '-movflags', '+faststart',
-            '-pix_fmt', 'yuv420p',
-            '-rc', 'cqp',
-            '-qp_i', qp_i,
-            '-qp_p', qp_p
-        ]
-
-
-class FFmpegEncoderChecker:
-    def __init__(self):
-        self.hardware_encoders = {
-            'h264_nvenc': H264NvencEncoder,
-            'h264_amf': H264AmfEncoder,
-            'hevc_nvenc': HevcNvencEncoder,
-            'hevc_amf': HevcAmfEncoder,
-        }
-        #TODO h264_qsv, hevc_qsv, h264_v4l2m2m
-
-        self.software_encoders = {
-            'libx264': H264Encoder,
-            'libvpx': VP9Encoder
-        }
-        
-        self.encoder_map = {
-            '.mp4': ['h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_v4l2m2m', 'hevc_nvenc', 'hevc_amf', 'libx264'],
-            '.webm': ['libvpx']
-        }
-        """
-        В encoder_map настраивается приоритетность энкодера.
-        Кто первый доступный и рабочий будет, тот и будет выбран.
-        """
-
-    def check_encoders(self):
-        """Возвращает список актуальных энкодеров, которые доступны в ffmpeg"""
-        try:
-            result = subprocess.run(['ffmpeg', '-encoders'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            encoders = result.stdout
-        except FileNotFoundError:
-            print("FFmpeg is not installed on this system.")
-            return []
-
-        available_encoders = []
-        for line in encoders.splitlines():
-            for encoder in {**self.hardware_encoders, **self.software_encoders}:
-                if encoder in line:
-                    available_encoders.append(encoder)
-                    break
-            
-        return list(set(available_encoders))
-
-    def test_encoder(self, encoder):
-        """
-        Принимает кодировщик в качестве аргумента, генерирует тестовый шаблон с помощью опции -f lavfi
-        и color=c=black:s=1280x720:d=1 (черный экран размером 1280x720 пикселей, длительность 1 секунда),
-        для кодирования тестового шаблона с использованием указанного кодировщика и отправляем вывод в /dev/null
-        (или nul на Windows) с помощью опции -f null -
-        """
-        try:
-            subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:d=1', '-c:v', encoder, '-f', 'null', '-'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
-        except subprocess.CalledProcessError:
-            return False
-
-    def select_encoder(self, file_extension) -> Encoder:
-        """Возвращает экземпляр класса энкодера для указанного суффикса"""
-        available_encoders = self.check_encoders()
-        
-        for encoder in self.encoder_map[file_extension]:
-            if encoder in available_encoders and self.test_encoder(encoder):
-                encoder_class = {**self.hardware_encoders, **self.software_encoders}.get(encoder)
-                if encoder_class:
-                    return encoder_class()
-
-        raise ValueError(f"No working encoders found for {file_extension}.")
 
 
 @dataclass(frozen=True)
@@ -1553,12 +1494,8 @@ class OutputOptions:
 class OutputProcessor:
     def __init__(self, options: OutputOptions):
         self._options = options
-        self._encoder_checker = FFmpegEncoderChecker()
         self._exit_lock = threading.Lock()
         self._write_pixels_control: Queue = Queue(maxsize = 10)
-
-    def _get_encoder_options(self, encoder: Encoder) -> Sequence[str]:
-        return encoder.get_options(self._options.quality, self._options.frame_rate)
 
     def exit_threads(self):
         """To terminate all threads running in the main method in a controlled manner."""
@@ -1589,11 +1526,15 @@ class OutputProcessor:
             '-r', str(self._options.frame_rate),
             '-i', '-'
         ]
-        
+
         suffix = self._options.destination.suffix
-        selected_encoder = self._encoder_checker.select_encoder(suffix)
-        
-        ffmpeg_options.extend(self._get_encoder_options(selected_encoder))
+        if suffix == '.mp4':
+            ffmpeg_options.extend(NVENC_Encoder(self._options.quality).get_options())
+        elif suffix == '.webm':
+            ffmpeg_options.extend(VP8Encoder(self._options.quality).get_options())
+        else:
+            raise ValueError('Unsupported file name suffix.')
+
         ffmpeg_options.extend([
             '-r', str(self._options.frame_rate),
             ('-y' if self._options.overwrite else '-n'),
@@ -1609,6 +1550,7 @@ class OutputProcessor:
             catched = None
 
             process = subprocess.Popen(ffmpeg_options,
+                bufsize=1,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT
