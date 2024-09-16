@@ -2919,7 +2919,8 @@ def main():
 
         signal.signal(signal.SIGINT, on_interrupt)
         signal.signal(signal.SIGTERM, on_terminate)
-        signal.signal(signal.SIGBREAK, on_ctrl_break)
+        if 'Windows' == platform.system():
+            signal.signal(signal.SIGBREAK, on_ctrl_break)
 
         output_processor.make(view, frames)
 
