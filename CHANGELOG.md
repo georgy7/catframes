@@ -1,6 +1,11 @@
 # Catframes Changelog
 
-## [2024.8.1] – 2024-09-16
+## [2024.8.2] – 2024-09-16
+### Fixed
+- CLI application functioning on non-Windows platforms
+
+
+## [2024.8.1] – 2024-09-16 YANKED
 ### Fixed
 - New task window: alpha blending of images with transparent backgrounds.
 - Settings dialog: auto-closing on blur.
@@ -136,3 +141,5 @@ It make sense, probably, when compressing CCTV frames.
 [2024.3.1]: https://github.com/georgy7/catframes/tree/v2024.3.1
 [2024.4.0]: https://github.com/georgy7/catframes/tree/v2024.4.0
 [2024.8.0]: https://github.com/georgy7/catframes/tree/v2024.8.0
+[2024.8.1]: https://github.com/georgy7/catframes/tree/v2024.8.1
+[2024.8.2]: https://github.com/georgy7/catframes/tree/v2024.8.2

@@ -1,6 +1,6 @@
 [project]
 name = "catframes"
-version = "2024.8.1"
+version = "2024.8.2"
 
 description = "Video glue for image folders."
 keywords = ["concat", "images", "video", "webm", "mp4", "slideshow", "timelapse", "stop motion"]
