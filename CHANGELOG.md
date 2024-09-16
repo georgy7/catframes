@@ -5,7 +5,8 @@
 - CLI application functioning on non-Windows platforms
 
 
-## [2024.8.1] – 2024-09-16 YANKED
+## [2024.8.1] – 2024-09-16
+**Note: This release was yanked from PyPI.**
 ### Fixed
 - New task window: alpha blending of images with transparent backgrounds.
 - Settings dialog: auto-closing on blur.
@@ -17,6 +18,7 @@
 
 
 ## [2024.8.0] – 2024-08-31
+**Note: This release was yanked from PyPI.**
 ### Added
 - GUI application written in Tkinter. You can run it like this: `catmanager`
 - System option `--live-preview` (GUI related).
