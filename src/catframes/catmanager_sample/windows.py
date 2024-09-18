@@ -39,7 +39,7 @@ class RootWindow(Tk, WindowMixin):
         self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
         self.size = 550, 450
-        self.size_max = 700, 700
+        # self.size_max = 700, 700
         self.resizable(True, True)  # можно растягивать
 
         super()._default_set_up()
