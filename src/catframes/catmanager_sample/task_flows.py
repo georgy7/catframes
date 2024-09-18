@@ -100,13 +100,14 @@ class TaskConfig:
         return self._color
 
     # создание консольной команды в виде списка
-    def convert_to_command(self, for_user: bool = False) -> List[str]:
+    def convert_to_command(self, for_user: bool = False, bash: bool = True) -> List[str]:
         command = ['catframes']
+        q = "'" if bash else '"'
 
         for position, text in self._overlays.items():
             if text:
                 if for_user:
-                    command.append(f'{position}="{text}"')
+                    command.append(f'{position}={q}{text}{q}')
                 else:
                     command.append(position)
                     command.append(text)

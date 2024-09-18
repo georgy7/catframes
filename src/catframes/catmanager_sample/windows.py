@@ -314,7 +314,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
         if self.task_config.get_dirs() and self.task_config.get_filepath():
             state = 'enabled'
         self.widgets['btCreate'].configure(state=state)
-        self.widgets['btCopy'].configure(state=state)
+        self.widgets['btCopyBash'].configure(state=state)
+        self.widgets['btCopyWin'].configure(state=state)
 
     # создание и запуск задачи
     def _create_task_instance(self):
@@ -411,12 +412,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 self.widgets['_btPath'].configure(text=filepath.split('/')[-1])
                 self._validate_task_config()
 
-        def copy_to_clip():  # копирование команды в буфер обмена
-            self._collect_task_config()
-            command = ' '.join(self.task_config.convert_to_command(for_user=True))
-            self.clipboard_clear()
-            self.clipboard_append(command)
-
         # виджеты столбца описания кнопок
         self.widgets['lbColor'] = ttk.Label(self.settings_grid)
         self.widgets['lbFramerate'] = ttk.Label(self.settings_grid)
@@ -476,15 +471,30 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
         ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
-        self.widgets['btCreate'] = ttk.Button(self.settings_grid, command=add_task, style='Create.Task.TButton')
+        self.widgets['btCreate'] = ttk.Button(
+            self.settings_grid, command=add_task, style='Create.Task.TButton'
+        )
 
+        def copy_to_clip(bash: bool = True):  # копирование команды в буфер обмена
+            self._collect_task_config()
+            command = ' '.join(self.task_config.convert_to_command(for_user=True, bash=bash))
+            self.clipboard_clear()
+            self.clipboard_append(command)
+        
         # лейбл и кнопка копирования команды
         self.widgets['lbCopy'] = ttk.Label(self.settings_grid)
-        self.widgets['btCopy'] = ttk.Button(self.settings_grid, command=copy_to_clip)
+        self.copy_frame = Frame(self.settings_grid)
+        self.widgets['btCopyBash'] = ttk.Button(
+            self.copy_frame, command=copy_to_clip, width=3
+        )
+        self.widgets['btCopyWin'] = ttk.Button(
+            self.copy_frame, command=lambda: copy_to_clip(bash=False), width=3
+        )
+
 
         if self.view_mode:  # если это режим просмотра, все виджеты, кроме копирования - недоступны
             for w_name, w in self.widgets.items():
-                if ('lb') in w_name or ('Copy') in w_name:
+                if 'lb' in w_name or 'Copy' in w_name:
                     continue
                 w.configure(state='disabled')
 
@@ -557,7 +567,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
         
         # подпись и кнопка копирования команды
         self.widgets['lbCopy'].grid(row=4, column=0, sticky='e', padx=5, pady=5)
-        self.widgets['btCopy'].grid(row=4, column=1, sticky='ew', padx=5, pady=5)
+        self.copy_frame.grid(row=4, column=1, padx=5, pady=5, sticky='ew')
+        self.widgets['btCopyBash'].pack(side=LEFT, fill=BOTH, expand=True)
+        self.widgets['btCopyWin'].pack(side=LEFT, fill=BOTH, expand=True)
 
         if not self.view_mode:  # кнопка создания задачи
             self.widgets['btCreate'].grid(row=5, column=1, sticky='e', padx=5, pady=5)

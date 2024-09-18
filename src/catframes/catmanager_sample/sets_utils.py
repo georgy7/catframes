@@ -64,8 +64,9 @@ class Lang:
             'task.lbSaveAs': 'Save as:',
             'task.btCreate': 'Create',
             'task.btPathChoose': 'choose',
-            'task.lbCopy': 'Сli command:',
-            'task.btCopy': 'Copy',
+            'task.lbCopy': 'Copy cli:',
+            'task.btCopyBash': 'Bash',
+            'task.btCopyWin': 'Win',
 
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
@@ -126,8 +127,9 @@ class Lang:
             'task.lbSaveAs': 'Сохранить как:',
             'task.btCreate': 'Создать',
             'task.btPathChoose': 'выбрать',
-            'task.lbCopy': 'Команда cli:',
-            'task.btCopy': 'Копировать',
+            'task.lbCopy': 'Копировать cli:',
+            'task.btCopyBash': 'Bash',
+            'task.btCopyWin': 'Win',
 
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
