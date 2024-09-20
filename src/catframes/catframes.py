@@ -140,7 +140,7 @@ class FileUtils:
     @staticmethod
     def tail(file_path, line_count):
         """Returns at the most n last lines of a file, or empty string."""
-        result = deque(maxlen=line_count)
+        result: deque = deque(maxlen=line_count)
         try:
             with file_path.open(mode='r') as f:
                 for line in f:
@@ -216,7 +216,7 @@ class FileUtils:
                     result.append((level, max_int_value+1, ord(letter_or_number)))
             return result
 
-        def key_function(path):
+        def key_function(path) -> List[int]:
             filename = path.name
             extension_match = extension_pattern.search(filename)
             if extension_match:
@@ -230,7 +230,7 @@ class FileUtils:
             # базовая часть, тем раньше файл в последовательности.
             tuples = natural_simple(1, basename)
             tuples.extend(natural_simple(0, extension))
-            return functools.reduce(lambda x, y: x+y, tuples)
+            return functools.reduce(lambda x, y: x+y, [list(t) for t in tuples])
 
         files.sort(key=key_function)
 
@@ -274,6 +274,8 @@ class _FileUtilsTest(TestCase):
             file_path.write_text('12345', encoding='utf-8')
             mtime = FileUtils.get_mtime(file_path)
 
+            self.assertIsNotNone(mtime)
+            assert mtime is not None
             self.assertGreater(mtime, start)
             self.assertLess((mtime - start).seconds, 10)
 
@@ -374,7 +376,7 @@ class _FileUtilsTest(TestCase):
 
     def test_natural_sort_of_empty_list(self):
         """It must not crash when sorting empty file lists."""
-        items = []
+        items: List[Path] = []
         FileUtils.sort_natural(items)
         self.assertSequenceEqual([], items)
 
@@ -602,6 +604,7 @@ class _FrameTest(TestCase):
             path.write_text('12345', encoding='utf-8')
             frame = Frame(path)
             self.assertIsInstance(frame.checksum, str)
+            assert frame.checksum is not None
             self.assertTrue(len(frame.checksum) >= self.CRC32_HEX_LENGTH)
             self.assertIsNone(frame.resolution)
             self.assertEqual(frame.name, path.name)
@@ -618,8 +621,13 @@ class _FrameTest(TestCase):
             image.save(path)
 
             frame = Frame(path)
+
             self.assertIsInstance(frame.checksum, str)
+            assert frame.checksum is not None
             self.assertTrue(len(frame.checksum) >= self.CRC32_HEX_LENGTH)
+
+            self.assertIsNotNone(frame.resolution)
+            assert frame.resolution is not None
             self.assertEqual(frame.resolution.width, width)
             self.assertEqual(frame.resolution.height, height)
             self.assertEqual(frame.name, path.name)
@@ -1581,7 +1589,7 @@ class PillowFrameView(FrameView):
     def _clear(self, color):
         """Тип аргумента допустим любой из тех, что понимает Pillow."""
         size = (self.resolution.width, self.resolution.height)
-        self._draw.rectangle([(0, 0), size], fill=color)
+        self._draw.rectangle(((0, 0), size), fill=color)
 
     def _paste(self, source: Image.Image):
         """Вписывает отмасштабированную картинку по центру поверх текущего содержимого."""
@@ -2447,7 +2455,7 @@ class _EnumeratorTest(TestCase):
 
             frame_groups = []
             for _ in range(3):
-                frames = []
+                frames: List[Frame] = []
                 frame_groups.append(frames)
                 for _ in range(100):
                     frames.append(Frame(file_1))
@@ -2479,7 +2487,7 @@ class _EnumeratorTest(TestCase):
 
             frame_groups = []
             for _ in range(3):
-                frames = []
+                frames: List[Frame] = []
                 frame_groups.append(frames)
                 for _ in range(100):
                     frames.append(Frame(file_1))
@@ -2522,7 +2530,8 @@ class _EnumeratorTest(TestCase):
             last_real_frame = next((x for x in reversed(all_frames) if not x.banner), None)
             self.assertIsNotNone(first_real_frame)
             self.assertIsNotNone(last_real_frame)
-
+            assert first_real_frame is not None
+            assert last_real_frame is not None
             self.assertEqual(1, first_real_frame.numvideo)
             self.assertEqual(300, last_real_frame.numvideo)
 
@@ -2561,6 +2570,10 @@ class ConsoleInterface:
                                  'the script treat it as an input folder.')
 
         self._args = parser.parse_args()
+
+        self._source: List[str] = []
+        self._destination: Union[str, None] = None
+
         if self._args.resolutions and \
                 (
                     (len(self._args.paths) <= 1) or
@@ -2568,7 +2581,6 @@ class ConsoleInterface:
                     Path(self._args.paths[-1]).suffix not in OutputOptions.get_supported_suffixes()
                 ):
             self._source = self._args.paths
-            self._destination = None
         elif len(self._args.paths) <= 1:
             parser.error('A destination path is required.')
         else:
@@ -2802,7 +2814,10 @@ class ConsoleInterface:
 
         :raises ValueError: пользователь указал файл с недопустимым расширением и т.п.
         """
-        destination = Path(self._destination)
+        if self._destination is not None:
+            destination = Path(self._destination)
+        else:
+            raise ValueError('Destination is not provided.')
 
         if destination.is_dir():
             raise ValueError('Destination must not be a folder.')
@@ -2889,6 +2904,8 @@ def main():
 
         if cli.statistics_only:
             sys.exit(0)
+
+        assert output_options is not None
 
         cli.show_splitter()
         del resolution_table
