@@ -6,7 +6,7 @@ Catframes
 © Георгий Устинов, 2022–2024
 © Евгений Окатьев, 2024
 
-Данное програмное обеспечение предоставляется «как есть», без каких-либо явных или подразумеваемых
+Данное программное обеспечение предоставляется «как есть», без каких-либо явных или подразумеваемых
 гарантий. Ни в каком случае авторы не несут ответственность за любые убытки, возникшие в результате
 использования данного программного обеспечения.
 
@@ -44,7 +44,6 @@ import gc
 import hashlib
 import itertools
 import io
-import json
 import math
 import os
 from operator import itemgetter
@@ -59,13 +58,13 @@ import sys
 import tempfile
 import threading
 import textwrap
-from queue import Queue, Empty, Full
+from queue import Queue
 from collections import deque
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import base64
 from time import sleep, monotonic
@@ -99,7 +98,7 @@ class FileUtils:
             return None
         hashsum = hashlib.sha1()
         try:
-            with path.expanduser().open(mode = 'rb') as binary:
+            with path.expanduser().open(mode='rb') as binary:
                 chunk = binary.read(4096)
                 while chunk:
                     hashsum.update(chunk)
@@ -140,8 +139,8 @@ class FileUtils:
 
     @staticmethod
     def tail(file_path, line_count):
-        """Retuns at the most n last lines of a file, or empty string."""
-        result = deque(maxlen = line_count)
+        """Returns at the most n last lines of a file, or empty string."""
+        result = deque(maxlen=line_count)
         try:
             with file_path.open(mode='r') as f:
                 for line in f:
@@ -170,7 +169,7 @@ class FileUtils:
             # это будет значить, что скорее всего папка не даёт нам разрешения
             # узнать, чем являются её элементы.
             # Проверено в Alpine: если установить у папки права 600, получится
-            # получить список, но не удасться узнать что-либо о его элементах.
+            # получить список, но не удастся узнать что-либо о его элементах.
             # Если же файл будет удалён прямо перед вызовом is_file(),
             # этот метод согласно документации просто вернёт False.
             return [
@@ -371,7 +370,7 @@ class _FileUtilsTest(TestCase):
 
     def test_list_images_of_forbidden_folder(self):
         # on Unix-like systems
-        pass # TODO
+        pass    # TODO
 
     def test_natural_sort_of_empty_list(self):
         """It must not crash when sorting empty file lists."""
@@ -474,7 +473,7 @@ class Resolution:
         assert self.height > 0
 
     def __str__(self):
-        """Returns a string of the form `WxH". The letter X was chosen as the separator
+        """Returns a string of the form `WxH`. The letter X was chosen as the separator
         for compatibility reasons with most fonts and encodings.
         """
         return f'{self.width}x{self.height}'
@@ -510,8 +509,8 @@ class Frame:
         assert (path is None) == banner
         assert (self._path is None) == banner
 
-        # Чек-сумма может быть незаполнена не только из-за того, что путь незаполнен.
-        # Сюда же относятся все ошибки доступа к содержимому.
+        # Чек-сумма может отсутствать не только из-за того, что путь отсутствует:
+        # сюда же относятся все ошибки доступа к содержимому.
         if self._checksum:
             assert path is not None
             try:
@@ -529,7 +528,7 @@ class Frame:
 
     @property
     def banner(self) -> bool:
-        return (self._path is None)
+        return self._path is None
 
     @property
     def message(self) -> str:
@@ -558,12 +557,12 @@ class Frame:
 
     @property
     def checksum(self) -> Union[str, None]:
-        """Незаполнено, если не удалось прочитать файл в момент создания объекта."""
+        """Не заполнено, если не удалось прочитать файл в момент создания объекта."""
         return self._checksum
 
     @property
     def resolution(self) -> Union[Resolution, None]:
-        """Незаполнено, если не удалось прочитать файл в момент создания объекта."""
+        """Не заполнено, если не удалось прочитать файл в момент создания объекта."""
         return self._resolution
 
 
@@ -743,11 +742,11 @@ class ResolutionStatistics:
             most_frequent = list(xw for xw in distinct if xw[1] == max_weight)
             return round(max(xw[0] for xw in most_frequent))
 
-        def find_other_axis(x, keys: List[int], values: List[int], count: List[int]) -> int:
+        def find_other_axis(x, keys: List[int], values: List[int], counts: List[int]) -> int:
             indices = [i for i, k in enumerate(keys) if k == x]
             values2 = [v for i, v in enumerate(values) if i in indices]
-            count2 = [c for i, c in enumerate(count) if i in indices]
-            return ResolutionUtils.round(find(list(zip(values2, count2))))
+            counts2 = [c for i, c in enumerate(counts) if i in indices]
+            return ResolutionUtils.round(find(list(zip(values2, counts2))))
 
         if len(self._table) < 1:
             return Resolution(1280, 720)
@@ -862,9 +861,9 @@ class _ResolutionStatisticsTest(TestCase):
             folder_path = Path(folder_path_string)
             frames = []
 
-            def make_frame(i, w, h):
-                file = folder_path / (str(i) + '.jpg')
-                Image.new("RGB", (w, h)).save(file)
+            def make_frame(index, width, height):
+                file = folder_path / (str(index) + '.jpg')
+                Image.new("RGB", (width, height)).save(file)
                 return Frame(file)
 
             frame = make_frame(1, 1280, 720)
@@ -1171,50 +1170,50 @@ class _ResolutionStatisticsTest(TestCase):
 
             counter = 1
 
-            def get_next_file():
+            def get_next_file() -> Path:
                 nonlocal counter
-                return folder_path / (str(counter) + '.jpg');
+                return folder_path / (str(counter) + '.jpg')
 
-            def save_file(file):
+            def add_frame(path: Path):
                 nonlocal counter
-                frames.append(Frame(file))
+                frames.append(Frame(path))
                 counter += 1
 
             for i in range(12):
                 file = get_next_file()
                 Image.new("RGB", (1056, 592)).save(file)
-                save_file(file)
+                add_frame(file)
 
             for i in range(6):
                 file = get_next_file()
                 Image.new("RGB", (800, 592)).save(file)
-                save_file(file)
+                add_frame(file)
 
             for i in range(2):
                 file = get_next_file()
                 Image.new("RGB", (1100, 718)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(1):
                 file = get_next_file()
                 Image.new("RGB", (1150, 718)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(2):
                 file = get_next_file()
                 Image.new("RGB", (1190, 718)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(1):
                 file = get_next_file()
                 Image.new("RGB", (1400, 718)).save(file)
-                save_file(file)
+                add_frame(file)
 
             for i in range(6):
                 file = get_next_file()
                 Image.new("RGB", (1280, 640)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(6):
                 file = get_next_file()
                 Image.new("RGB", (856, 480)).save(file)
-                save_file(file)
+                add_frame(file)
 
             resolution_table = ResolutionStatistics(frames)
             lines = [x for x in resolution_table.sort_by_count_desc()]
@@ -1231,50 +1230,50 @@ class _ResolutionStatisticsTest(TestCase):
 
             counter = 1
 
-            def get_next_file():
+            def get_next_file() -> Path:
                 nonlocal counter
-                return folder_path / (str(counter) + '.jpg');
+                return folder_path / (str(counter) + '.jpg')
 
-            def save_file(file):
+            def add_frame(path: Path):
                 nonlocal counter
-                frames.append(Frame(file))
+                frames.append(Frame(path))
                 counter += 1
 
             for i in range(12):
                 file = get_next_file()
                 Image.new("RGB", (592, 1056)).save(file)
-                save_file(file)
+                add_frame(file)
 
             for i in range(6):
                 file = get_next_file()
                 Image.new("RGB", (592, 800)).save(file)
-                save_file(file)
+                add_frame(file)
 
             for i in range(2):
                 file = get_next_file()
                 Image.new("RGB", (718, 1100)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(1):
                 file = get_next_file()
                 Image.new("RGB", (718, 1150)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(2):
                 file = get_next_file()
                 Image.new("RGB", (718, 1190)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(1):
                 file = get_next_file()
                 Image.new("RGB", (718, 1400)).save(file)
-                save_file(file)
+                add_frame(file)
 
             for i in range(6):
                 file = get_next_file()
                 Image.new("RGB", (640, 1280)).save(file)
-                save_file(file)
+                add_frame(file)
             for i in range(6):
                 file = get_next_file()
                 Image.new("RGB", (480, 856)).save(file)
-                save_file(file)
+                add_frame(file)
 
             resolution_table = ResolutionStatistics(frames)
             lines = [x for x in resolution_table.sort_by_count_desc()]
@@ -1291,7 +1290,7 @@ class FrameView(ABC):
     def __init__(self, resolution: Resolution):
         self.resolution = resolution
 
-        self.thumbnail: Queue = Queue(maxsize = 1)
+        self.thumbnail: Queue = Queue(maxsize=1)
         """A thread-safe channel for getting a thumbnail of a recently processed frame."""
 
     @abstractmethod
@@ -1374,7 +1373,7 @@ class OutputProcessor:
     def __init__(self, options: OutputOptions):
         self._options = options
         self._exit_lock = threading.Lock()
-        self._write_pixels_control: Queue = Queue(maxsize = 10)
+        self._write_pixels_control: Queue = Queue(maxsize=10)
 
     def _get_h264_options(self) -> Sequence[str]:
         # There is no point in adjusting the gaps between keyframes: most modern players
@@ -1406,17 +1405,14 @@ class OutputProcessor:
 
     def make(self, view: FrameView, frames: Sequence[Frame]):
 
-        processed_frame_count = 0
         processed_per_cent = -1
 
         def set_processed(count):
-            nonlocal processed_frame_count
             nonlocal processed_per_cent
 
             last_processed = processed_per_cent
 
             processed_per_cent = math.floor(count / len(frames) * 100)
-            processed_frame_count = count
 
             if last_processed < processed_per_cent:
                 print(f'Progress: {processed_per_cent}%', flush=True)
@@ -1457,7 +1453,7 @@ class OutputProcessor:
                 stderr=subprocess.STDOUT
             )
 
-            write_thread_messages: Queue = Queue(maxsize = 10)
+            write_thread_messages: Queue = Queue(maxsize=10)
 
             def write_pixels(items, control_queue, pipe, progress_queue):
                 def poll_for_exit_comand():
@@ -1510,7 +1506,7 @@ class OutputProcessor:
 
             with process.stdout:
                 ret_code = process.poll()
-                while None == ret_code:
+                while ret_code is None:
                     read_write_thread_messages()
                     chunk = process.stdout.read(32)
 
@@ -1526,7 +1522,7 @@ class OutputProcessor:
                 if 0 == ret_code:
                     set_processed(len(frames))
                 else:
-                    sys.exit(15) # == F(Fmpeg)
+                    sys.exit(0xF)   # is for FFmpeg
 
             input_thread.join()
 
@@ -1701,7 +1697,7 @@ class OverlayModel:
     vtime: datetime
     """Приблизительное местное время создания видео."""
     machine: str
-    """Типа машины, накотором создаётся видео. Пустая строка, если не удаётся определить."""
+    """Тип машины, на котором создаётся видео. Пустая строка, если не удаётся определить."""
     node: str
     """Сетевое имя компьютера, где создаётся видео. Пустая строка, если не удаётся определить."""
 
@@ -1784,7 +1780,7 @@ class DefaultFrameView(PillowFrameView):
         file_checksum = FileUtils.get_checksum(frame.path)
         if file_checksum == frame.checksum:
             warning = ''
-        elif file_checksum == None:
+        elif file_checksum is None:
             warning = f'{frame.folder}/{frame.name}\nНе удалось определить хеш-сумму.'
         else:
             warning = f'{frame.folder}/{frame.name}\nХеш-сумма изменилась!'
@@ -1807,8 +1803,8 @@ class DefaultFrameView(PillowFrameView):
         return 'lmr'[xpos] + 'amd'[ypos]
 
     def _get_line_position(self,
-            xpos: int, ypos: int,
-            line_index: int, total_lines: int) -> Tuple[int, int]:
+                           xpos: int, ypos: int,
+                           line_index: int, total_lines: int) -> Tuple[int, int]:
         top, right, bottom, left = 0, 2, 1, 2
         x_variants = left, (self.resolution.width // 2), (self.resolution.width - 1 - right)
         y_variants = top, (self.resolution.height // 2), (self.resolution.height - 1 - bottom)
@@ -1819,7 +1815,7 @@ class DefaultFrameView(PillowFrameView):
         assert line_index >= 0
         assert line_index < total_lines
 
-        min_y, max_y = 0, self.resolution.height-1
+        min_y, max_y = 0, self.resolution.height - 1
 
         if ypos == 0:
             index = line_index
@@ -1973,7 +1969,6 @@ class _DefaultFrameViewTest(TestCase):
         assert_close(image_color, from_rgb_src[120, 0])
         assert_close(margin_color, from_rgba_src[120, 0])
         assert_close(image_color, from_rgba_src[320, 240])
-
 
 
 class OverLang:
@@ -2185,7 +2180,7 @@ class OverLang:
 
 class _OverLangTest(TestCase):
     @staticmethod
-    def _get_overlay_mockup(symlink: bool = False, with_mtime = True) -> OverlayModel:
+    def _get_overlay_mockup(symlink: bool = False, with_mtime=True) -> OverlayModel:
         modified = datetime(2022, 9, 7, 0, 1, 23, 123000) if with_mtime else None
         return OverlayModel(
             warning='Что-то не так\nс кадром example.jpg...',
@@ -2304,7 +2299,7 @@ class _OverLangTest(TestCase):
         self._check_overlay(model, 'node', model.node)
 
     def test_vtime(self):
-        """Стандартный формат — с миллисекундами. В остальном, формат работает у datetime."""
+        """Стандартный формат — с миллисекундами. В остальном формат работает у datetime."""
         model = self._get_overlay_mockup()
         expected = model.vtime.isoformat(timespec='milliseconds')
         self._check_overlay(model, 'vtime', expected)
@@ -2335,7 +2330,7 @@ class _OverLangTest(TestCase):
         self._check_overlay(model, 'frame:video', str(model.numvideo))
 
     def test_mtime(self):
-        """Стандартный формат — с миллисекундами. В остальном, формат работает у datetime."""
+        """Стандартный формат — с миллисекундами. В остальном формат работает у datetime."""
         model = self._get_overlay_mockup()
         expected = model.mtime.isoformat(timespec='milliseconds')
         self._check_overlay(model, 'mtime', expected)
@@ -2348,7 +2343,7 @@ class _OverLangTest(TestCase):
         expected = model.mtime.strftime('%d.%m.%Y %H:%M:%S')
         self._check_overlay(model, 'mtime:%d.%m.%Y %H:%M:%S', expected)
 
-        model = self._get_overlay_mockup(with_mtime = False)
+        model = self._get_overlay_mockup(with_mtime=False)
         assert model.mtime is None
         self._check_overlay(model, 'mtime', '')
         self._check_overlay(model, 'mtime:%d.%m.%Y %H:%M:%S', '')
@@ -2497,7 +2492,7 @@ class _EnumeratorTest(TestCase):
                 frame_groups[0].insert(3, banner_1)
 
             for i in range(20):
-                frame_groups[1].insert(44, banner_1)
+                frame_groups[1].insert(44, banner_2)
 
             for i in range(5):
                 frame_groups[2].insert(70, banner_3)
@@ -2542,7 +2537,7 @@ class ConsoleInterface:
 
     def __init__(self):
         parser = ArgumentParser(prog='catframes.py', description=DESCRIPTION,
-            formatter_class=RawDescriptionHelpFormatter)
+                                formatter_class=RawDescriptionHelpFormatter)
 
         self._add_input_arguments(parser)
         self._add_rendering_arguments(parser)
@@ -2550,20 +2545,20 @@ class ConsoleInterface:
         self._add_system_arguments(parser)
 
         parser.add_argument('--resolutions', action='store_true',
-            help='show the resolution choosing process and exit')
+                            help='show the resolution choosing process and exit')
 
         supported_suffixes = ' or '.join(map(lambda x: x[1:], OutputOptions.get_supported_suffixes()))
         parser.add_argument('paths', metavar='PATH', nargs='+',
-            help='The paths are input folders (a source), ' + 
-            'and the last one is an output video file ' +
-            f'({supported_suffixes}, a destination). ' + 
-            'The order of the folders determines in which order ' +
-            'they will be concatenated. ' +
-            'If `--resolutions` argument is used, the destination path is optional. ' +
-            'That means, that if the last path points ' +
-            'to a folder or a symlink to a folder, ' +
-            'even if its name is similar to a video file, ' +
-            'the script treat it as an input folder.')
+                            help='The paths are input folders (a source), ' +
+                                 'and the last one is an output video file ' +
+                                 f'({supported_suffixes}, a destination). ' +
+                                 'The order of the folders determines in which order ' +
+                                 'they will be concatenated. ' +
+                                 'If `--resolutions` argument is used, the destination path is optional. ' +
+                                 'That means, that if the last path points ' +
+                                 'to a folder or a symlink to a folder, ' +
+                                 'even if its name is similar to a video file, ' +
+                                 'the script treat it as an input folder.')
 
         self._args = parser.parse_args()
         if self._args.resolutions and \
@@ -2601,10 +2596,10 @@ class ConsoleInterface:
     def _add_input_arguments(cls, parser: ArgumentParser):
         input_arguments = parser.add_argument_group('Input')
         input_arguments.add_argument('-s', '--sure', action='store_true',
-            help="do not exit if some or all of input directories " + 
-            "do not exist. You are sure that you are specifying " +
-            "the correct folders. If they don't exist, it just has to be " +
-            "shown in the resulting video.")
+                                     help="do not exit if some or all of input directories " +
+                                          "do not exist. You are sure that you are specifying " +
+                                          "the correct folders. If they don't exist, it just has to be " +
+                                          "shown in the resulting video.")
 
     def _make_layout(self):
         h_positions = ('left', 0), ('right', 2)
@@ -2647,15 +2642,15 @@ class ConsoleInterface:
         center = ('center', 1)
         warning_x, warning_y = 1, 0
 
-        def get_default_overlay(h_pos, v_pos):
-            if h_pos[1] == warning_x and v_pos[1] == warning_y:
+        def get_default_overlay(x_position, y_position):
+            if x_position[1] == warning_x and y_position[1] == warning_y:
                 return 'WARN'
             return None
 
         rendering_arguments = parser.add_argument_group('Rendering')
 
-        def add_overlay_argument(argument, base_help, h_pos, v_pos):
-            default = get_default_overlay(h_pos, v_pos)
+        def add_overlay_argument(argument, base_help, x_position, y_position):
+            default = get_default_overlay(x_position, y_position)
             help_tail = ' (default: %(default)s)' if default else ''
             rendering_arguments.add_argument(
                 argument, metavar='T',
@@ -2689,8 +2684,8 @@ class ConsoleInterface:
                 h_pos, v_pos)
 
         rendering_arguments.add_argument('--margin-color', metavar='X',
-            default='#000',
-            help='#rrggbb or #rgb (default: %(default)s)')
+                                         default='#000',
+                                         help='#rrggbb or #rgb (default: %(default)s)')
 
     @classmethod
     def _add_output_arguments(cls, parser: ArgumentParser):
@@ -2699,26 +2694,26 @@ class ConsoleInterface:
 
         video_arguments = parser.add_argument_group('Output')
         video_arguments.add_argument('-r', '--frame-rate', metavar='X',
-            default=30, type=cls._get_minmax_type(1, 60),
-            help='an integer from 1 to 60 (default: %(default)s)')
+                                     default=30, type=cls._get_minmax_type(1, 60),
+                                     help='an integer from 1 to 60 (default: %(default)s)')
         video_arguments.add_argument('-q', '--quality', metavar='X',
-            choices=quality_choices, default=default_quality,
-            help='%(choices)s (default: %(default)s)')
+                                     choices=quality_choices, default=default_quality,
+                                     help='%(choices)s (default: %(default)s)')
         video_arguments.add_argument('--limit', metavar='SECONDS',
-            type=cls._get_minmax_type(1),
-            help='to try different options')
+                                     type=cls._get_minmax_type(1),
+                                     help='to try different options')
         video_arguments.add_argument('-f', '--force', action='store_true',
-            help='overwrite video file if exists')
+                                     help='overwrite video file if exists')
 
     @classmethod
     def _add_system_arguments(cls, parser: ArgumentParser):
         system_arguments = parser.add_argument_group('System')
         system_arguments.add_argument('-p', '--port-range', metavar='X',
-            default='10240:65535',
-            help='deprecated and will be removed soon')
+                                      default='10240:65535',
+                                      help='deprecated and will be removed soon')
 
         system_arguments.add_argument('--live-preview', action='store_true',
-            help='print base64 encoded JPEG thumbnails')
+                                      help='print base64 encoded JPEG thumbnails')
 
     def show_options(self):
         """Чтобы пользователь видел, как проинтерпретированы его аргументы."""
@@ -2737,7 +2732,7 @@ class ConsoleInterface:
         print(f'  source:', flush=True)
         for item in self._source:
             print(f'    - {item}', flush=True)
-        if None != self._destination:
+        if self._destination is not None:
             print(f'  destination:', flush=True)
             print(f'    - {self._destination}', flush=True)
         print(flush=True)
@@ -2759,7 +2754,7 @@ class ConsoleInterface:
 
         def get_banner_frames(message):
             banner = Frame(None, True, message)
-            return [banner for i in range(banner_duration_seconds * self._args.frame_rate)]
+            return [banner for _ in range(banner_duration_seconds * self._args.frame_rate)]
 
         for raw_folder_path in self._source:
             folder_path = Path(raw_folder_path)
@@ -2852,7 +2847,7 @@ class ConsoleInterface:
         return self._layout
 
     @staticmethod
-    def list_resolutions(resolutions: ResolutionStatistics, limit:int = 10):
+    def list_resolutions(resolutions: ResolutionStatistics, limit: int = 10):
         """Перечислить разрешения от самых частых к самым редким."""
         lines = resolutions.sort_by_count_desc()
         assert limit > 0
