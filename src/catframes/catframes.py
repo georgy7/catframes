@@ -1423,6 +1423,26 @@ class H264QsvEncoder(Encoder):
         ]
 
 
+class H264V4l2m2mEncoder(Encoder):
+    _settings = {
+        Quality.HIGH: {'q': '18'},      #-q 18 это максимально возможно стабильное значение. 
+        Quality.MEDIUM: {'q': '18'},    #Можно выше но есть вероятность что в какой то момент кадры будут пропускаться. Буфер не решает проблему.
+        Quality.POOR: {'q': '28'}
+    }
+
+    def get_options(self, quality: Quality, fps: int) -> Sequence[str]:
+        settings = self._settings[quality]
+        q = settings['q']
+        return [
+            '-c:v', 'h264_v4l2m2m',
+            '-preset', 'fast',
+            '-movflags', '+faststart',
+            '-qmin', q,
+            '-qmax', q,
+            '-b:v', '1000M'             #По какой то из причин если просто отключить ограничение битрайта указав 0,
+        ]                               #он фактически начинает его воспринимать как просто минимальное значение.
+
+
 class HevcNvencEncoder(Encoder):
     _settings = {
         Quality.HIGH: {'qp': '7', 'pix_fmt': 'yuv444p'},
@@ -1470,10 +1490,11 @@ class FFmpegEncoderChecker:
             'h264_nvenc': H264NvencEncoder,
             'h264_amf': H264AmfEncoder,
             'h264_qsv': H264QsvEncoder,
+            'h264_v4l2m2m': H264V4l2m2mEncoder,
             'hevc_nvenc': HevcNvencEncoder,
             'hevc_amf': HevcAmfEncoder,
         }
-        #TODO h264_v4l2m2m
+        #TODO h264_videotoolbox, hevc_videotoolbox
 
         self.software_encoders = {
             'libx264': H264Encoder,
@@ -1481,14 +1502,10 @@ class FFmpegEncoderChecker:
         }
 
         self.encoder_map = {
-            '.mp4': ['h264_amf', 'h264_nvenc', 'h264_amf', 'h264_qsv', 'hevc_nvenc', 'hevc_amf', 'libx264'],
+            '.mp4': ['h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_v4l2m2m', 'hevc_nvenc', 'hevc_amf', 'libx264'],
             '.webm': ['libvpx']
-        }
-        """
-        В encoder_map настраивается приоритетность энкодера.
-        Кто первый доступный и рабочий будет, тот и будет выбран.
-        """
-        
+        }       # Приоритетность энкодера. Кто первый доступный и рабочий будет, тот и будет выбран.
+  
     def check_encoders(self):
         """Возвращает список актуальных энкодеров, которые доступны в ffmpeg"""
         try:
@@ -1507,25 +1524,35 @@ class FFmpegEncoderChecker:
 
         return list(set(available_encoders))
 
-    def test_encoder(self, encoder):
+    def test_encoder(self, encoder, resolution, fps):
         """
         Принимает кодировщик в качестве аргумента, генерирует тестовый шаблон с помощью опции -f lavfi
-        и color=c=black:s=1280x720:d=1 (черный экран размером 1280x720 пикселей, длительность 1 секунда),
+        и color=c=black:s=X:d=1 (черный экран размером X пикселей, длительность 1 секунда),
         для кодирования тестового шаблона с использованием указанного кодировщика и отправляем вывод в /dev/null
         (или nul на Windows) с помощью опции -f null -
+        
+        Также указывается количество кадров в секунду, т.к. при некоторых условиях может происходить переполнения буфера,
+        как в примере с h264_v4l2m2m, при большом разрешении и большом количестве кадров процесс ffmpeg может просто не запуститься,
+        и данная проблемма может находиться либо на аппаратном уровне, либо в ограничениях самой системы.
         """
         try:
-            subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=1280x720:d=1', '-c:v', encoder, '-f', 'null', '-'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(['ffmpeg', '-y',
+                            '-f', 'lavfi',
+                            '-i', f'color=c=black:s={str(resolution)}:d=1',
+                            '-r', str(fps),
+                            '-c:v', encoder,
+                            '-f', 'null', '-'
+                            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             return True
         except subprocess.CalledProcessError:
             return False
 
-    def select_encoder(self, file_extension) -> Encoder:
-        """Возвращает экземпляр класса энкодера для указанного суффикса"""
+    def select_encoder(self, file_extension, resolution, fps) -> Encoder:
+        """Возвращает экземпляр класса энкодера для указанного суффикса и заданных параметров разрешения и частоты кадров"""
         available_encoders = self.check_encoders()
 
         for encoder in self.encoder_map[file_extension]:
-            if encoder in available_encoders and self.test_encoder(encoder):
+            if encoder in available_encoders and self.test_encoder(encoder, resolution, fps):
                 encoder_class = {**self.hardware_encoders, **self.software_encoders}.get(encoder)
                 if encoder_class:
                     return encoder_class()
@@ -1576,14 +1603,6 @@ class OutputProcessor:
     def _get_encoder_options(self, encoder: Encoder) -> Sequence[str]:
         return encoder.get_options(self._options.quality, self._options.frame_rate)
 
-    def select_encoder(self) -> Encoder:
-        suffix = self._options.destination.suffix
-
-        if suffix == '.mp4' and self._options.quality == Quality.HIGH:
-            return H264Encoder()
-        else:
-            return self._encoder_checker.select_encoder(suffix)
-
     def exit_threads(self) -> None:
         """To terminate all threads running in the main method in a controlled manner."""
         with self._exit_lock:
@@ -1604,6 +1623,14 @@ class OutputProcessor:
             if last_processed < processed_per_cent:
                 print(f'Progress: {processed_per_cent}%', flush=True)
 
+        def select_encoder() -> Encoder:
+            suffix = self._options.destination.suffix
+
+            if suffix == '.mp4' and self._options.quality == Quality.HIGH:
+                return H264Encoder()
+            else:
+                return self._encoder_checker.select_encoder(suffix, str(view.resolution), str(self._options.frame_rate))
+
         ffmpeg_options = [
             'ffmpeg', '-f', 'rawvideo', '-c:v', 'rawvideo', '-pix_fmt', 'rgb24',
             '-s', str(view.resolution),
@@ -1611,7 +1638,7 @@ class OutputProcessor:
             '-i', '-'
         ]
 
-        selected_encoder = self.select_encoder()
+        selected_encoder = select_encoder()
         
         ffmpeg_options.extend(self._get_encoder_options(selected_encoder))
         ffmpeg_options.extend([
@@ -1621,7 +1648,7 @@ class OutputProcessor:
         ])
 
         set_processed(0)
-        
+
         with tempfile.TemporaryDirectory() as logs_path_string:
             logs_path = Path(logs_path_string)
 
