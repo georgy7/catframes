@@ -22,17 +22,6 @@ Catframes
    за оригинал.
 3. Данное сообщение не должно быть удалено или изменено в распространяемом исходном коде.
 
-
-Зависимости
------------
-
-1. FFmpeg — LGPL v2.1+ или GPL v2+ `при включении GPL-компонентов <https://ffmpeg.org/legal.html>`_.
-   Файлы с расширением ``mp4`` кодируются
-   библиотекой `x264 <https://www.videolan.org/developers/x264.html>`_ (GPLv2),
-   с расширением ``webm`` — библиотекой libvpx (3-пунктовая BSD).
-2. Библиотека `Pillow <https://python-pillow.org/>`_ — пермиссивная лицензия HPND.
-3. Хотя бы один поддерживаемый юникодный моноширинный TrueType-шрифт (см. код PillowFrameView).
-
 """
 
 # from __future__ import annotations  # для псевдонимов в autodoc
@@ -138,7 +127,7 @@ class FileUtils:
         return path.expanduser().is_symlink()
 
     @staticmethod
-    def tail(file_path, line_count):
+    def tail(file_path: Path, line_count: int) -> str:
         """Returns at the most n last lines of a file, or empty string."""
         result: deque = deque(maxlen=line_count)
         try:
@@ -186,7 +175,7 @@ class FileUtils:
             raise ValueError(f'Forbidden: {folder}')
 
     @staticmethod
-    def sort_natural(files: List[Path]):
+    def sort_natural(files: List[Path]) -> None:
         """В Linux также известен как version sort. Многосимвольные десятичные числа считаются
         за один символ и сортируются в зависимости от значения числа.
 
@@ -216,7 +205,7 @@ class FileUtils:
                     result.append((level, max_int_value+1, ord(letter_or_number)))
             return result
 
-        def key_function(path) -> List[int]:
+        def key_function(path: Path) -> List[int]:
             filename = path.name
             extension_match = extension_pattern.search(filename)
             if extension_match:
@@ -236,7 +225,7 @@ class FileUtils:
 
 
 class _FileUtilsTest(TestCase):
-    def test_checksum(self):
+    def test_checksum(self) -> None:
         """Works like sha1sum on Linux. For folders and non-existent files, it returns None."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
@@ -258,7 +247,7 @@ class _FileUtilsTest(TestCase):
             expected = 'c629c5d9a1e44286b80e3566f0204b6024dffef2'
             self.assertEqual(FileUtils.get_checksum(file_path), expected)
 
-    def test_mtime(self):
+    def test_mtime(self) -> None:
         """Returns the local time of the modification, and
         if the file does not exist, returns None.
         """
@@ -279,7 +268,7 @@ class _FileUtilsTest(TestCase):
             self.assertGreater(mtime, start)
             self.assertLess((mtime - start).seconds, 10)
 
-    def test_file_size(self):
+    def test_file_size(self) -> None:
         """For folders and non-existent files, it returns None."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
@@ -294,7 +283,7 @@ class _FileUtilsTest(TestCase):
             file_path.write_text('12345', encoding='utf-8')
             self.assertEqual(FileUtils.get_file_size(file_path), 5)
 
-    def test_is_symlink(self):
+    def test_is_symlink(self) -> None:
         """For non-existent files, it returns False. For existing ones too."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             file_path = Path(folder_path_string) / '1.txt'
@@ -305,7 +294,7 @@ class _FileUtilsTest(TestCase):
             file_path.write_text('12345', encoding='utf-8')
             self.assertEqual(FileUtils.is_symlink(file_path), False)
 
-    def test_list_images_1(self):
+    def test_list_images_1(self) -> None:
         filenames = [
             '123.jpg',
             '456.JPEG',
@@ -326,7 +315,7 @@ class _FileUtilsTest(TestCase):
             for x in result_filenames:
                 self.assertIn(x, filenames)
 
-    def test_list_images_2(self):
+    def test_list_images_2(self) -> None:
         filenames = [
             '123.jpg',
             '456.JPEG',
@@ -358,29 +347,29 @@ class _FileUtilsTest(TestCase):
             for x in result_filenames:
                 self.assertIn(x, expected)
 
-    def test_list_images_of_non_existent_folder(self):
+    def test_list_images_of_non_existent_folder(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake'
             with self.assertRaisesRegex(ValueError, '\S+'):
                 FileUtils.list_images(fake_path)
 
-    def test_list_images_of_non_existent_parent(self):
+    def test_list_images_of_non_existent_parent(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             fake_path = Path(folder_path_string) / 'fake_parent' / 'a_folder'
             with self.assertRaisesRegex(ValueError, '\S+'):
                 FileUtils.list_images(fake_path)
 
-    def test_list_images_of_forbidden_folder(self):
+    def test_list_images_of_forbidden_folder(self) -> None:
         # on Unix-like systems
         pass    # TODO
 
-    def test_natural_sort_of_empty_list(self):
+    def test_natural_sort_of_empty_list(self) -> None:
         """It must not crash when sorting empty file lists."""
         items: List[Path] = []
         FileUtils.sort_natural(items)
         self.assertSequenceEqual([], items)
 
-    def test_natural_sort_of_letters(self):
+    def test_natural_sort_of_letters(self) -> None:
         """It must not crash when there are no numbers in the filenames."""
         folder_a, folder_b = 'some_folder', 'another_folder'
         expected = [
@@ -399,7 +388,7 @@ class _FileUtilsTest(TestCase):
         FileUtils.sort_natural(items)
         self.assertSequenceEqual(expected, items)
 
-    def test_natural_sort_of_digital_camera_images(self):
+    def test_natural_sort_of_digital_camera_images(self) -> None:
         """An extreme example to demonstrate."""
         folder_a, folder_b = 'some_folder', 'another_folder'
         expected = [
@@ -426,7 +415,7 @@ class _FileUtilsTest(TestCase):
         FileUtils.sort_natural(items)
         self.assertSequenceEqual(expected, items)
 
-    def test_natural_sort_of_iso_dates(self):
+    def test_natural_sort_of_iso_dates(self) -> None:
         """The example shows that leading zeros do not interfere with natural sorting."""
         folder_a, folder_b = 'some_folder', 'another_folder'
         expected = [
@@ -448,7 +437,7 @@ class _FileUtilsTest(TestCase):
         FileUtils.sort_natural(items)
         self.assertSequenceEqual(expected, items)
 
-    def test_natural_sort(self):
+    def test_natural_sort(self) -> None:
         """The basic case for which natural sorting is designed."""
         folders = 'some_folder', 'another_folder'
         expected = []
@@ -470,11 +459,11 @@ class Resolution:
     width: int
     height: int
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         assert self.width > 0
         assert self.height > 0
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Returns a string of the form `WxH`. The letter X was chosen as the separator
         for compatibility reasons with most fonts and encodings.
         """
@@ -569,7 +558,7 @@ class Frame:
 
 
 class _ResolutionTest(TestCase):
-    def test_eq(self):
+    def test_eq(self) -> None:
         """It's equality of values, not references."""
         first = Resolution(640, 480)
         second = Resolution(640, 480)
@@ -588,7 +577,7 @@ class _ResolutionTest(TestCase):
 class _FrameTest(TestCase):
     CRC32_HEX_LENGTH = 8
 
-    def test_path_to_nowhere(self):
+    def test_path_to_nowhere(self) -> None:
         """Кадр должен быть создан, даже если путь никуда не ведёт."""
         path = Path(f'{random.randint(0, sys.maxsize)}.jpg')
         frame = Frame(path)
@@ -596,7 +585,7 @@ class _FrameTest(TestCase):
         self.assertIsNone(frame.resolution)
         self.assertEqual(frame.name, path.name)
 
-    def test_not_image(self):
+    def test_not_image(self) -> None:
         """Кадр должен быть создан, даже если картинка не читается."""
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
@@ -609,7 +598,7 @@ class _FrameTest(TestCase):
             self.assertIsNone(frame.resolution)
             self.assertEqual(frame.name, path.name)
 
-    def test_jpeg(self):
+    def test_jpeg(self) -> None:
         """Проверяется заполнение конструктором основных свойств кадра."""
         width = random.randint(10, 1920)
         height = random.randint(10, 1080)
@@ -633,7 +622,7 @@ class _FrameTest(TestCase):
             self.assertEqual(frame.name, path.name)
             self.assertEqual(frame.folder, folder_path.parts[-1])
 
-    def test_root_folder(self):
+    def test_root_folder(self) -> None:
         """Свойство folder не должно падать, когда кадр находится в корне файловой системы."""
         root_dir = Path(Path().resolve().parts[0])
         frame = Frame(root_dir / 'qwe.png')
@@ -750,7 +739,7 @@ class ResolutionStatistics:
             most_frequent = list(xw for xw in distinct if xw[1] == max_weight)
             return round(max(xw[0] for xw in most_frequent))
 
-        def find_other_axis(x, keys: List[int], values: List[int], counts: List[int]) -> int:
+        def find_other_axis(x: int, keys: List[int], values: List[int], counts: List[int]) -> int:
             indices = [i for i, k in enumerate(keys) if k == x]
             values2 = [v for i, v in enumerate(values) if i in indices]
             counts2 = [c for i, c in enumerate(counts) if i in indices]
@@ -795,7 +784,7 @@ class ResolutionStatistics:
 
 
 class _ResolutionStatisticsTest(TestCase):
-    def test_simple_1(self):
+    def test_simple_1(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -814,7 +803,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1280, 800)), str(resolution))
 
-    def test_simple_2(self):
+    def test_simple_2(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -833,14 +822,14 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(800, 1280)), str(resolution))
 
-    def test_simple_3(self):
+    def test_simple_3(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             frames = []
 
-            def make_frame(i, w, h):
-                file = folder_path / (str(i) + '.jpg')
-                Image.new("RGB", (w, h)).save(file)
+            def make_frame(index: int, width: int, height: int) -> Frame:
+                file = folder_path / (str(index) + '.jpg')
+                Image.new("RGB", (width, height)).save(file)
                 return Frame(file)
 
             frames.append(make_frame( 1, 1280,  720))
@@ -864,12 +853,12 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1280, 960)), str(resolution))
 
-    def test_simple_4(self):
+    def test_simple_4(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             frames = []
 
-            def make_frame(index, width, height):
+            def make_frame(index: int, width: int, height: int) -> Frame:
                 file = folder_path / (str(index) + '.jpg')
                 Image.new("RGB", (width, height)).save(file)
                 return Frame(file)
@@ -910,7 +899,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1920, 1080)), str(resolution))
 
-    def test_simple_5_even_even(self):
+    def test_simple_5_even_even(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -930,7 +919,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1024, 768)), str(resolution))
 
-    def test_simple_5_odd_even(self):
+    def test_simple_5_odd_even(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -953,7 +942,7 @@ class _ResolutionStatisticsTest(TestCase):
                 ResolutionUtils.round(768)
             )), str(resolution))
 
-    def test_simple_5_even_odd(self):
+    def test_simple_5_even_odd(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -976,7 +965,7 @@ class _ResolutionStatisticsTest(TestCase):
                 ResolutionUtils.round(767)
             )), str(resolution))
 
-    def test_simple_5_odd_odd(self):
+    def test_simple_5_odd_odd(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -999,7 +988,7 @@ class _ResolutionStatisticsTest(TestCase):
                 ResolutionUtils.round(767)
             )), str(resolution))
 
-    def test_simple_6(self):
+    def test_simple_6(self) -> None:
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
             file_1 = folder_path / '1.jpg'
@@ -1020,7 +1009,7 @@ class _ResolutionStatisticsTest(TestCase):
                 str(Resolution(ResolutionUtils.round(799), 1280)),
                 str(resolution))
 
-    def test_empty(self):
+    def test_empty(self) -> None:
         resolution_table = ResolutionStatistics([])
         lines = [x for x in resolution_table.sort_by_count_desc()]
         self.assertEqual(0, len(lines))
@@ -1029,7 +1018,7 @@ class _ResolutionStatisticsTest(TestCase):
         # Default resolution: HD, 720p
         self.assertEqual(str(Resolution(1280, 720)), str(resolution))
 
-    def test_mixed(self):
+    def test_mixed(self) -> None:
         """К простому набору кадров подмешиваются
         кадры-заглушки, которые должны быть проигнорированы.
         """
@@ -1057,7 +1046,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1280, 800)), str(resolution))
 
-    def test_banners_only(self):
+    def test_banners_only(self) -> None:
         """Если на входе только кадры-заглушки, результат
         аналогичен пустому набору кадров (HD).
         """
@@ -1074,7 +1063,7 @@ class _ResolutionStatisticsTest(TestCase):
         # Default resolution: HD, 720p
         self.assertEqual(str(Resolution(1280, 720)), str(resolution))
 
-    def test_hard_choice_1(self):
+    def test_hard_choice_1(self) -> None:
         # Обнаружилось, что в некоторых случаях предложенный ранее
         # алгоритм даёт глупые решения. Рассмотрим этот случай.
         #
@@ -1141,7 +1130,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1280, 718)), str(resolution))
 
-    def test_hard_choice_2(self):
+    def test_hard_choice_2(self) -> None:
         # Тот же пример, просто меняем ширину и высоту местами.
         # В этом относительно простом примере поведение должно остаться неизменным.
         with tempfile.TemporaryDirectory() as folder_path_string:
@@ -1169,7 +1158,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(718, 1280)), str(resolution))
 
-    def test_hard_choice_3(self):
+    def test_hard_choice_3(self) -> None:
         # То же самое, но есть несколько вариантов ширины у данной высоты.
         # Должна быть выбрана самая частая больше или равная средней взвешенной.
         with tempfile.TemporaryDirectory() as folder_path_string:
@@ -1182,7 +1171,7 @@ class _ResolutionStatisticsTest(TestCase):
                 nonlocal counter
                 return folder_path / (str(counter) + '.jpg')
 
-            def add_frame(path: Path):
+            def add_frame(path: Path) -> None:
                 nonlocal counter
                 frames.append(Frame(path))
                 counter += 1
@@ -1230,7 +1219,7 @@ class _ResolutionStatisticsTest(TestCase):
             resolution = resolution_table.choose()
             self.assertEqual(str(Resolution(1190, 718)), str(resolution))
 
-    def test_hard_choice_4(self):
+    def test_hard_choice_4(self) -> None:
         # Ширина и высота меняются местами.
         with tempfile.TemporaryDirectory() as folder_path_string:
             folder_path = Path(folder_path_string)
@@ -1242,7 +1231,7 @@ class _ResolutionStatisticsTest(TestCase):
                 nonlocal counter
                 return folder_path / (str(counter) + '.jpg')
 
-            def add_frame(path: Path):
+            def add_frame(path: Path) -> None:
                 nonlocal counter
                 frames.append(Frame(path))
                 counter += 1
@@ -1358,7 +1347,7 @@ class OutputOptions:
     limit_seconds: Union[int, None]
     live_preview: bool
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         assert 1 <= self.frame_rate <= 60
         assert isinstance(self.quality, Quality)
         assert isinstance(self.destination, Path)
@@ -1371,7 +1360,7 @@ class OutputOptions:
         """Возвращает поддерживаемые расширения файлов."""
         return '.mp4', '.webm'
 
-    def limit_frames(self, frames: Sequence[Frame]):
+    def limit_frames(self, frames: Sequence[Frame]) -> Sequence[Frame]:
         if self.limit_seconds:
             frames = frames[:(self.limit_seconds*self.frame_rate)]
         return frames
@@ -1405,17 +1394,17 @@ class OutputProcessor:
             '-crf', str(vp9_crf), '-b:v', '0'
         ]
 
-    def exit_threads(self):
+    def exit_threads(self) -> None:
         """To terminate all threads running in the main method in a controlled manner."""
         with self._exit_lock:
             if not self._write_pixels_control.full():
                 self._write_pixels_control.put('stop', block=False)
 
-    def make(self, view: FrameView, frames: Sequence[Frame]):
+    def make(self, view: FrameView, frames: Sequence[Frame]) -> None:
 
         processed_per_cent = -1
 
-        def set_processed(count):
+        def set_processed(count: int) -> None:
             nonlocal processed_per_cent
 
             last_processed = processed_per_cent
@@ -1463,8 +1452,8 @@ class OutputProcessor:
 
             write_thread_messages: Queue = Queue(maxsize=10)
 
-            def write_pixels(items, control_queue, pipe, progress_queue):
-                def poll_for_exit_comand():
+            def write_pixels(items: Sequence[Frame], control_queue: Queue, pipe, progress_queue: Queue) -> None:
+                def poll_for_exit_comand() -> bool:
                     while not control_queue.empty():
                         control_message = control_queue.get_nowait()
                         if 'stop' == control_message:
@@ -1506,7 +1495,7 @@ class OutputProcessor:
 
             input_thread.start()
 
-            def read_write_thread_messages():
+            def read_write_thread_messages() -> None:
                 while not write_thread_messages.empty():
                     message = write_thread_messages.get_nowait()
                     if int == type(message):
