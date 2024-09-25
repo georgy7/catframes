@@ -341,18 +341,19 @@ class TaskConfig:
 
     # создание консольной команды в виде списка
     def convert_to_command(self, for_user: bool = False, bash: bool = True) -> List[str]:
-        command = ['catframes']
+        command = ["catframes"]
         q = "'" if bash else '"'
 
         for position, text in self._overlays.items():
             if text:
                 if for_user:
-                    command.append(f'{position}={q}{text}{q}')
+                    text = text.replace("\n", "\\n")
+                    command.append(f"{position}={q}{text}{q}")
                 else:
                     command.append(position)
                     command.append(text)
 
-        command.append(f'--margin-color={self._color}')     # параметр цвета
+        command.append(f"--margin-color={self._color}")     # параметр цвета
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
 
@@ -361,18 +362,19 @@ class TaskConfig:
 
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")
-
-        # command.append(f"--port-range={self._ports[0]}:{self._ports[1]}")  # диапазон портов
         
         for dir in self._dirs:                              # добавление директорий с изображениями
             if for_user:
-                dir = f'"{dir}"'
+                dir = f"{q}{dir}{q}"
             command.append(dir)
         
-        command.append(self._filepath)                      # добавление полного пути файла    
+        if for_user:
+            command.append(f"{q}{self._filepath}{q}")       # добавление полного пути файла
+        else:
+            command.append(self._filepath)
 
         if not for_user:                                    # если не для пользователя, то ключ превью
-            command.append('--live-preview')
+            command.append("--live-preview")
 
         return command                                      # возврат собранной команды
 
@@ -1973,7 +1975,7 @@ class RootWindow(Tk, WindowMixin):
         self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
         self.size = 550, 450
-        self.size_max = 700, 700
+        # self.size_max = 700, 700
         self.resizable(True, True)  # можно растягивать
 
         super()._default_set_up()
