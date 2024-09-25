@@ -1,0 +1,12 @@
+table.docutils {
+    width: 100%;
+    border-collapse: collapse;
+}
+table.docutils th, table.docutils td {
+    border: 1px solid black;
+    text-align: center;
+    padding: 8px;
+}
+table.docutils th {
+    background-color: #f2f2f2;
+}
