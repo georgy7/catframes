@@ -2325,16 +2325,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self._create_task_instance()  # cоздание и запуск задачи
             self.close()                  # закрытие окна создания задачи
 
-        def ask_color():  # вызов системного окна по выбору цвета
-            color = colorchooser.askcolor(parent=self)[-1]
-            if not color:
-                return
-            self.image_canvas.update_background_color(color)
-            self.canvas_frame.config(background=color)
-            self.task_config.set_color(color)  # установка цвета в конфиге
-            text_color = 'white' if is_dark_color(*self.winfo_rgb(color)) else 'black'
-            self.widgets['_btColor'].configure(bg=color, text=color+'  ', fg=text_color)  # цвет кнопки
-
         def set_filepath():  # выбор пути для сохранения файла
             filepath = filedialog.asksaveasfilename(
                     parent=self,                                                # открытие окна сохранения файла
@@ -2354,17 +2344,68 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['lbQuality'] = ttk.Label(self.settings_grid)
         self.widgets['lbSaveAs'] = ttk.Label(self.settings_grid)
 
+        def update_color(color: str):  # передача цвета во все ручки
+            self.image_canvas.update_background_color(color)
+            self.canvas_frame.config(background=color)
+            self.task_config.set_color(color)  # установка цвета в конфиге
+            # self.widgets['_btColor'].configure(bg=color, text=color)  # цвет кнопки
+            
+        def ask_color():  # вызов системного окна по выбору цвета
+            color = colorchooser.askcolor(parent=self)[-1]
+            if not color:
+                return
+            self.widgets['_entColor'].delete(0, END)
+            self.widgets['_entColor'].insert(0, color)
+            update_color(color)
+
+        self.color_frame = Frame(self.settings_grid)
+
+        def validate_color(value: str):
+            if not value:
+                return True
+            if value.count('#') > 1:
+                return False
+            if value.count('#') == 1 and not value.startswith('#'):
+                return False
+            value = value.lstrip('#')
+            if len(value) > 6:
+                return False
+            for v in value:
+                if v.lower() not in '0123456789abcdef':
+                    return False
+            return True
+        v_color = self.register(validate_color), "%P"
+
+        self.widgets['_entColor'] = ttk.Entry(
+            self.color_frame, 
+            validate='key', validatecommand=v_color,
+            justify=CENTER, width=5, 
+        )
+        self.widgets['_entColor'].insert(0, self.task_config.get_color())
+
+        def check_empty_color(event):
+            text: str = self.widgets['_entColor'].get()
+            self.widgets['_entColor'].delete(0, END)
+
+            if text.startswith('#'):
+                text = text.lower().lstrip('#')
+            if len(text) == 0:
+                self.widgets['_entColor'].insert(0, DEFAULT_CANVAS_COLOR)
+                return
+            
+            missing = 6-len(text)
+            color = '#' + text + '0'*missing
+            self.widgets['_entColor'].insert(0, color)
+            update_color(color)
+            
+        self.widgets['_entColor'].bind("<FocusOut>", check_empty_color)
+
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
-        self.widgets['_btColor'] = Button(
-            self.settings_grid, 
+        self.widgets['_btColor'] = ttk.Button(
+            self.color_frame, 
             command=ask_color, 
-            text=DEFAULT_CANVAS_COLOR+'  ', 
-            width=7,
-            bg=self.task_config.get_color(),
-            fg='white',
-            borderwidth=1,
-            relief='solid',
-            highlightcolor='grey',
+            text='+', 
+            width=2,
         )
 
         def validate_fps(value):
@@ -2386,7 +2427,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         def check_empty_fps(event):
             value = self.widgets['_spnFramerate'].get()
             value = int(value) if value else 1
-            value = int(value) if value else 1
+            value = value or 1
             self.widgets['_spnFramerate'].set(value)
                 
         self.widgets['_spnFramerate'].bind("<FocusOut>", check_empty_fps)
@@ -2485,13 +2526,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.settings_grid.columnconfigure(0, weight=0)
         self.settings_grid.columnconfigure(1, weight=1)
 
-        # подпись и кнопка цвета       
+        # подпись, поле ввода, и кнопка выбора цвета
         self.widgets['lbColor'].grid(row=0, column=0, sticky='e', padx=5, pady=5)
-        self.widgets['_btColor'].grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+        self.color_frame.grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+        self.widgets['_entColor'].pack(side=LEFT, fill=X, expand=True)
+        self.widgets['_btColor'].pack(side=LEFT)
 
         # подпись и комбобокс частоты
         self.widgets['lbFramerate'].grid(row=1, column=0, sticky='e', padx=5, pady=5)
-        self.widgets['_spnFramerate'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        self.widgets['_spnFramerate'].grid(row=1, column=1, sticky='sewn', padx=5, pady=5)
 
         # подпись и комбобокс качества
         self.widgets['lbQuality'].grid(row=2, column=0, sticky='e', padx=5, pady=5)
