@@ -1443,6 +1443,24 @@ class H264V4l2m2mEncoder(Encoder):
         ]                               #он фактически начинает его воспринимать как просто минимальное значение.
 
 
+class H264VideoToolboxEncoder(Encoder):
+    _settings = {
+        Quality.HIGH: {'q': '86'},
+        Quality.MEDIUM: {'q': '70'},
+        Quality.POOR: {'q': '46'}
+    }
+
+    def get_options(self, quality: Quality, fps: int) -> Sequence[str]:
+        settings = self._settings[quality]
+        q = settings['q']
+        return [
+            '-c:v', 'h264_videotoolbox',
+            '-preset', 'fast',
+            '-movflags', '+faststart',
+            '-q', q
+        ]
+
+
 class HevcNvencEncoder(Encoder):
     _settings = {
         Quality.HIGH: {'qp': '7', 'pix_fmt': 'yuv444p'},
@@ -1484,6 +1502,25 @@ class HevcAmfEncoder(Encoder):
         ]
 
 
+class HevcVideoToolboxEncoder(Encoder):
+    _settings = {
+        Quality.HIGH: {'q': '91'},
+        Quality.MEDIUM: {'q': '78'},
+        Quality.POOR: {'q': '52'}
+    }
+
+    def get_options(self, quality: Quality, fps: int) -> Sequence[str]:
+        settings = self._settings[quality]
+        q = settings['q']
+        return [
+            '-c:v', 'hevc_videotoolbox',
+            '-preset', 'fast',
+            '-movflags', '+faststart',
+            '-pix_fmt', 'yuv420p',          #При том что по стандарту выбырается формат пикселя yuv420p,
+            '-q', q                         #всё равно нужно указывать явно на него, т.к. это влияет на конечное качество и размер файла.
+        ]
+
+
 class FFmpegEncoderChecker:
     def __init__(self):
         self.hardware_encoders = {
@@ -1491,10 +1528,11 @@ class FFmpegEncoderChecker:
             'h264_amf': H264AmfEncoder,
             'h264_qsv': H264QsvEncoder,
             'h264_v4l2m2m': H264V4l2m2mEncoder,
+            'h264_videotoolbox': H264VideoToolboxEncoder,
             'hevc_nvenc': HevcNvencEncoder,
             'hevc_amf': HevcAmfEncoder,
+            'hevc_videotoolbox': HevcVideoToolboxEncoder
         }
-        #TODO h264_videotoolbox, hevc_videotoolbox
 
         self.software_encoders = {
             'libx264': H264Encoder,
