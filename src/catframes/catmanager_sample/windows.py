@@ -1,5 +1,5 @@
 from _prefix import *
-from sets_utils import Lang, PortSets
+from sets_utils import Settings
 from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager, ToolTip, is_dark_color
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
@@ -22,7 +22,7 @@ from windows_base import WindowMixin, LocalWM
 они тоже вызываются миксином при стандартной настройке окна. 
 
 Любые виджеты внутри окна должны добавляться в словарь виджетов,
-а тексты для них прописываться в классе языковых настроек Lang.
+а тексты для них прописываться в классе настроек Settings, в атрибуте lang.
 Если появляется более сложная композиция, метод update_texts должен
 быть расширен так, чтобы вызывать обновление текста во всех виджетах.
 """
@@ -153,64 +153,19 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets['lbLang'] = ttk.Label( self.main_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
              self.main_frame,
-            values=Lang.get_all(),  # вытягивает список языков
+            values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
         )
-
-        # def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
-        #     return new_value.isnumeric() or not new_value
-        
-        # v_numeric = (self.register(validate_numeric), '%P')  # регистрация валидации
-
-        # self.widgets['lbPortRange'] = ttk.Label(self)
-        # self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
-        #     self, 
-        #     justify=CENTER, 
-        #     validate='key', 
-        #     validatecommand=v_numeric  # привязка валидации
-        # )
-        # self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
-        #     self, 
-        #     justify=CENTER, 
-        #     validate='all',
-        #     validatecommand=v_numeric  # привязка валидации
-        # )
         
         # применение настроек
         def apply_settings(event):
-            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            Settings.lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            Settings.save()
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
         self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
-
-            # try:  # проверка введённых значений, если всё ок - сохранение
-            #     port_first = int(self.widgets['_entrPortFirst'].get())
-            #     port_last = int(self.widgets['_entrPortLast'].get())
-            #     assert(port_last-port_first >= 100)         # диапазон не меньше 100 портов
-            #     assert(port_first >= 10240)                 # начальный порт не ниже 10240
-            #     assert(port_last <= 65025)                  # конечный порт не выше 65025
-            #     PortSets.set_range(port_first, port_last)   # сохранение настроек
-
-            # except:  # если какое-то из условий не выполнено
-            #     self._set_ports_default()  # возврат предыдущих значений виджетов
-            #     LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
-
-        # # сохранение настроек (применение + закрытие)
-        # def save_settings():
-        #     apply_settings()
-        #     self.close()
-
-        # self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
-        # self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
-
-    # # установка полей ввода портов в последнее сохранённое состояние
-    # def _set_ports_default(self):
-    #     self.widgets['_entrPortFirst'].delete(0, 'end')
-    #     self.widgets['_entrPortFirst'].insert(0, PortSets.get_range()[0])
-    #     self.widgets['_entrPortLast'].delete(0, 'end')
-    #     self.widgets['_entrPortLast'].insert(0, PortSets.get_range()[1])
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -218,15 +173,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
         self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
-        self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
-
-        # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
-        # self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))
-        # self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
-        # self._set_ports_default()  # заполняем поля ввода портов
-
-        # self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
-        # self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
+        self.widgets['_cmbLang'].current(newindex=Settings.lang.current_index)  # подставляем в ячейку текущий язык
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -508,7 +455,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         path = self.task_config.get_filepath()
-        file_name = path.split('/')[-1] if path else Lang.read('task.btPathChoose')
+        file_name = path.split('/')[-1] if path else Settings.lang.read('task.btPathChoose')
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
         ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
@@ -628,9 +575,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
         # установка начального значения в выборе качества
         self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
         if self.view_mode:
-            self.title(Lang.read(f'task.title.view'))
+            self.title(Settings.lang.read(f'task.title.view'))
         if not self.task_config.get_filepath():
-            self.widgets['_btPath'].configure(text=Lang.read('task.btPathChoose'))
+            self.widgets['_btPath'].configure(text=Settings.lang.read('task.btPathChoose'))
 
     @staticmethod  # открытие окна в режиме просмотра
     def open_view(task_config: TaskConfig):
@@ -677,7 +624,7 @@ class WarningWindow(Toplevel, WindowMixin):
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():
-            new_text_data = Lang.read(f'{self.name}.{self.type}.{w_name}')            
+            new_text_data = Settings.lang.read(f'{self.name}.{self.type}.{w_name}')            
             widget.config(text=new_text_data)
 
 

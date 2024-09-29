@@ -11,6 +11,7 @@ import os
 import io
 import re
 import base64
+import configparser
 # import requests
 
 from tkinter import *
@@ -18,6 +19,8 @@ from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
+
+CONFIG_FILENAME = '.catmanager.ini'
 
 DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 
@@ -66,9 +69,6 @@ class Lang:
     При добавлении новых языков в словарь data,
     их названия будут сами подтягиваться в поле настроек.
     """
-
-    current_name = 'english'
-    current_index = 0
 
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
@@ -198,44 +198,88 @@ class Lang:
         },
     }
 
-    @staticmethod  # получение всех доступных языков
-    def get_all() -> tuple:
+    def __init__(self):
+        self.current_name = 'english'
+        self.current_index = 0
+
+    # получение всех доступных языков
+    def get_all(self) -> tuple:
         return tuple(Lang.data.keys())
 
-    @staticmethod  # установка языка по имени или индексу
-    def set(name: str = None, index: int = None) -> None:
+    # установка языка по имени или индексу
+    def set(self, name: str = None, index: int = None) -> None:
 
         if name and name in Lang.data:
-            Lang.current_index = Lang.get_all().index(name)
-            Lang.current_name = name
+            self.current_index = self.get_all().index(name)
+            self.current_name = name
 
         elif isinstance(index, int) and 0 <= index < len(Lang.data):
-            Lang.current_name = Lang.get_all()[index]
-            Lang.current_index = index
+            self.current_name = self.get_all()[index]
+            self.current_index = index
 
-    @staticmethod  # получение текста по тегу
-    def read(tag) -> Union[str, tuple]:
+    # получение текста по тегу
+    def read(self, tag: str) -> Union[str, tuple]:
         try:
-            return Lang.data[Lang.current_name][tag]
+            return Lang.data[self.current_name][tag]
         except KeyError:  # если тег не найден
             return '-----'
-            
 
-class PortSets:
-    """Класс настроек диапазона портов
-    системы для связи с ffmpeg."""
 
-    min_port: int = 10240
-    max_port: int = 65000
+class IniConfig:
+    """Создание, чтение, и изменение внешнего файла конфига"""
+
+    def __init__(self):
+        self.file_path = os.path.join(
+            os.path.expanduser('~'), CONFIG_FILENAME
+        )
+
+        self.config = configparser.ConfigParser()
+
+        if not os.path.isfile(self.file_path):
+            self.set_default()
+        self.config.read(self.file_path)            
+
+    # создание стандартного конфиг файла
+    def set_default(self):
+        self.config['Settings'] = {
+            'Language': 'english',
+            'UseSystemPath': 'yes',
+            'TtkTheme': 'default'
+        }
+        self.config['AbsolutePath'] = {
+            'Python': '',
+            'FFmpeg': '',
+            'Catframes': '',
+        }
+        self.save()
+
+    # редактирование ключа в секции конфиг файла
+    def update(self, section: str, key: str, value: Union[str, int]):
+        if section in self.config:
+            self.config[section][key] = value
+    
+    def save(self):
+        with open(self.file_path, 'w') as configfile:
+            self.config.write(configfile)
+
+
+class Settings:
+    """Содержит объекты всех классов настроек"""
+
+    lang = Lang()
+    conf = IniConfig()
 
     @classmethod
-    def set_range(cls, min_port: int, max_port: int) -> None:
-        cls.min_port = min_port
-        cls.max_port = max_port
+    def save(cls):
+        cls.conf.update('Settings', 'Language', cls.lang.current_name)
+        cls.conf.save()
 
     @classmethod
-    def get_range(cls) -> Tuple:
-        return cls.min_port, cls.max_port
+    def restore(cls):
+        cls.lang.set(cls.conf.config['Settings']['Language'])
+
+Settings.restore()
+
 
 
 
@@ -750,14 +794,14 @@ class WindowMixin(ABC):
 
     # обновление текстов всех виджетов окна, исходя из языка
     def update_texts(self) -> None:
-        self.title(Lang.read(f'{self.name}.title'))
+        self.title(Settings.lang.read(f'{self.name}.title'))
 
         for w_name, widget in self.widgets.items():
 
             if w_name.startswith('_'):  # если виджет начинается с "_", его обходит
                 continue
 
-            new_text_data = Lang.read(f'{self.name}.{w_name}')
+            new_text_data = Settings.lang.read(f'{self.name}.{w_name}')
 
             if w_name.startswith('cmb'): # если виджет это комбобокс
                 widget.config(values=new_text_data)   
@@ -806,10 +850,6 @@ class WindowMixin(ABC):
     # настройка стиля окна, исходя из разрешения экрана
     def _set_style(self) -> None:
 
-        # screen_height = self.winfo_screenheight()  # достаём высоту экрана
-        # scale = (screen_height/540)                # индекс масштабирования
-        # scale *= MAJOR_SCALING                     # домножаем на глобальную
-
         style=ttk.Style()
         _font = font.Font(
             size=12, 
@@ -835,12 +875,10 @@ class WindowMixin(ABC):
         )
 
         x, y = self.size                   # забираем объявленные размеры окна
-        # x, y = int(x*scale), int(y*scale)  # масштабируем их
         self.geometry(f'{x}x{y}')          # и присваиваем их окну
         self.minsize(x, y)                 # и устанавливаем как минимальные
         try:
             x, y = self.size_max               # если есть максимальные размеры
-            # x, y = int(x*scale), int(y*scale)  # масштабируем их
             self.maxsize(x, y)
         except AttributeError:
             pass
@@ -990,7 +1028,7 @@ class ScrollableFrame(ttk.Frame):
 
     def update_texts(self):
         pass
-    #     self._empty_sign.config(text=Lang.read('bar.lbEmpty'))
+    #     self._empty_sign.config(text=Settings.lang.read('bar.lbEmpty'))
 
     # изменение размеров фрейма внутри холста
     def _on_resize_window(self, event):
@@ -1129,23 +1167,23 @@ class TaskBar(ttk.Frame):
 
         # если есть ошибка, то лейбл информации заполняем текстом этой ошибки
         if self.error:
-            self.widgets['_lbData'].config(text=Lang.read(f'bar.error.{self.error}'))
+            self.widgets['_lbData'].config(text=Settings.lang.read(f'bar.error.{self.error}'))
             return            
 
         # если нет ошибки, то создаём локализованую строку "качество: высокое | частота кадров: 50"
         lb_data_list = []
         
         # собираем информацию про качество
-        quality = Lang.read('task.cmbQuality')[self.task.config.get_quality()]
-        quality_text = f"{Lang.read('bar.lbQuality')} {quality}"
+        quality = Settings.lang.read('task.cmbQuality')[self.task.config.get_quality()]
+        quality_text = f"{Settings.lang.read('bar.lbQuality')} {quality}"
         lb_data_list.append(quality_text)
 
         # информацию про фреймрейт
-        framerate_text = f"{Lang.read('bar.lbFramerate')} {self.task.config.get_framerate()}"
+        framerate_text = f"{Settings.lang.read('bar.lbFramerate')} {self.task.config.get_framerate()}"
         lb_data_list.append(framerate_text)
 
         if self.length > 600:  # и если ширина фрейма больше 600, то и информацию про цвет
-            color_text = f"{Lang.read('bar.lbColor')} {self.task.config.get_color()}"
+            color_text = f"{Settings.lang.read('bar.lbColor')} {self.task.config.get_color()}"
             lb_data_list.append(color_text)
 
         # присваиваем всё это дело лейблу информации через резделитель ' | '
@@ -1212,7 +1250,7 @@ class TaskBar(ttk.Frame):
     def update_texts(self):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+                widget.config(text=Settings.lang.read(f'{self.name}.{w_name}'))
         self._update_labels()
 
 
@@ -1745,7 +1783,7 @@ class ImageCanvas(Canvas):
     # обновление
     def update_texts(self):
         if self.init_text:
-            self.itemconfig(self.init_text, text=Lang.read('task.initText'))
+            self.itemconfig(self.init_text, text=Settings.lang.read('task.initText'))
 
 
 class DirectoryManager(ttk.Frame):
@@ -1887,14 +1925,14 @@ class DirectoryManager(ttk.Frame):
             os.startfile(dir_to_open)
         except:
             self.listbox.delete(index)
-            self.listbox.insert(index, Lang.read('dirs.DirNotExists'))
+            self.listbox.insert(index, Settings.lang.read('dirs.DirNotExists'))
             self.after(2000, self.listbox.delete, index)
             self._remove_directory()
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+                widget.config(text=Settings.lang.read(f'{self.name}.{w_name}'))
 
 
 class ToolTip: 
@@ -1958,7 +1996,7 @@ class ToolTip:
 они тоже вызываются миксином при стандартной настройке окна. 
 
 Любые виджеты внутри окна должны добавляться в словарь виджетов,
-а тексты для них прописываться в классе языковых настроек Lang.
+а тексты для них прописываться в классе настроек Settings, в атрибуте lang.
 Если появляется более сложная композиция, метод update_texts должен
 быть расширен так, чтобы вызывать обновление текста во всех виджетах.
 """
@@ -2089,64 +2127,19 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets['lbLang'] = ttk.Label( self.main_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
              self.main_frame,
-            values=Lang.get_all(),  # вытягивает список языков
+            values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
         )
-
-        # def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
-        #     return new_value.isnumeric() or not new_value
-        
-        # v_numeric = (self.register(validate_numeric), '%P')  # регистрация валидации
-
-        # self.widgets['lbPortRange'] = ttk.Label(self)
-        # self.widgets['_entrPortFirst'] = ttk.Entry(  # поле ввода начального порта
-        #     self, 
-        #     justify=CENTER, 
-        #     validate='key', 
-        #     validatecommand=v_numeric  # привязка валидации
-        # )
-        # self.widgets['_entrPortLast'] = ttk.Entry(  # поле ввода конечного порта
-        #     self, 
-        #     justify=CENTER, 
-        #     validate='all',
-        #     validatecommand=v_numeric  # привязка валидации
-        # )
         
         # применение настроек
         def apply_settings(event):
-            Lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            Settings.lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
+            Settings.save()
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
         self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
-
-            # try:  # проверка введённых значений, если всё ок - сохранение
-            #     port_first = int(self.widgets['_entrPortFirst'].get())
-            #     port_last = int(self.widgets['_entrPortLast'].get())
-            #     assert(port_last-port_first >= 100)         # диапазон не меньше 100 портов
-            #     assert(port_first >= 10240)                 # начальный порт не ниже 10240
-            #     assert(port_last <= 65025)                  # конечный порт не выше 65025
-            #     PortSets.set_range(port_first, port_last)   # сохранение настроек
-
-            # except:  # если какое-то из условий не выполнено
-            #     self._set_ports_default()  # возврат предыдущих значений виджетов
-            #     LocalWM.open(NotifyWindow, 'noti', master=self)  # окно оповещения
-
-        # # сохранение настроек (применение + закрытие)
-        # def save_settings():
-        #     apply_settings()
-        #     self.close()
-
-        # self.widgets['btApply'] = ttk.Button(self, command=apply_settings, width=7)
-        # self.widgets['btSave'] = ttk.Button(self, command=save_settings, width=7)
-
-    # # установка полей ввода портов в последнее сохранённое состояние
-    # def _set_ports_default(self):
-    #     self.widgets['_entrPortFirst'].delete(0, 'end')
-    #     self.widgets['_entrPortFirst'].insert(0, PortSets.get_range()[0])
-    #     self.widgets['_entrPortLast'].delete(0, 'end')
-    #     self.widgets['_entrPortLast'].insert(0, PortSets.get_range()[1])
 
     # расположение виджетов
     def _pack_widgets(self):
@@ -2154,15 +2147,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
         self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
-        self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
-
-        # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
-        # self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))
-        # self.widgets['_entrPortLast'].grid(row=3, column=1, sticky='wn', padx=(5, 15))
-        # self._set_ports_default()  # заполняем поля ввода портов
-
-        # self.widgets['btApply'].grid(row=6, column=0, sticky='ew', padx=(15, 5), ipadx=30, pady=10)
-        # self.widgets['btSave'].grid(row=6, column=1, sticky='ew', padx=(5, 15), ipadx=30, pady=10)
+        self.widgets['_cmbLang'].current(newindex=Settings.lang.current_index)  # подставляем в ячейку текущий язык
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -2444,7 +2429,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
 
         path = self.task_config.get_filepath()
-        file_name = path.split('/')[-1] if path else Lang.read('task.btPathChoose')
+        file_name = path.split('/')[-1] if path else Settings.lang.read('task.btPathChoose')
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
         ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
@@ -2564,9 +2549,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
         # установка начального значения в выборе качества
         self.widgets['cmbQuality'].current(newindex=self.task_config.get_quality())
         if self.view_mode:
-            self.title(Lang.read(f'task.title.view'))
+            self.title(Settings.lang.read(f'task.title.view'))
         if not self.task_config.get_filepath():
-            self.widgets['_btPath'].configure(text=Lang.read('task.btPathChoose'))
+            self.widgets['_btPath'].configure(text=Settings.lang.read('task.btPathChoose'))
 
     @staticmethod  # открытие окна в режиме просмотра
     def open_view(task_config: TaskConfig):
@@ -2613,7 +2598,7 @@ class WarningWindow(Toplevel, WindowMixin):
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():
-            new_text_data = Lang.read(f'{self.name}.{self.type}.{w_name}')            
+            new_text_data = Settings.lang.read(f'{self.name}.{self.type}.{w_name}')            
             widget.config(text=new_text_data)
 
 
@@ -2657,14 +2642,9 @@ class NotifyWindow(Toplevel, WindowMixin):
 
 
 
-    #  из файла main.py:# from task_flows import CatframesProcess
-
+    #  из файла main.py:
 
 def main():
-    # error = CatframesProcess.check_error()
-    # if error:
-    #     messagebox.showerror("Error", error)
-    #     return
     root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
     root.mainloop()
 

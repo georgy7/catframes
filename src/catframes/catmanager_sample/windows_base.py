@@ -1,5 +1,5 @@
 from _prefix import *
-from sets_utils import Lang
+from sets_utils import Settings
 from task_flows import TaskManager
 
 
@@ -122,14 +122,14 @@ class WindowMixin(ABC):
 
     # обновление текстов всех виджетов окна, исходя из языка
     def update_texts(self) -> None:
-        self.title(Lang.read(f'{self.name}.title'))
+        self.title(Settings.lang.read(f'{self.name}.title'))
 
         for w_name, widget in self.widgets.items():
 
             if w_name.startswith('_'):  # если виджет начинается с "_", его обходит
                 continue
 
-            new_text_data = Lang.read(f'{self.name}.{w_name}')
+            new_text_data = Settings.lang.read(f'{self.name}.{w_name}')
 
             if w_name.startswith('cmb'): # если виджет это комбобокс
                 widget.config(values=new_text_data)   
@@ -178,10 +178,6 @@ class WindowMixin(ABC):
     # настройка стиля окна, исходя из разрешения экрана
     def _set_style(self) -> None:
 
-        # screen_height = self.winfo_screenheight()  # достаём высоту экрана
-        # scale = (screen_height/540)                # индекс масштабирования
-        # scale *= MAJOR_SCALING                     # домножаем на глобальную
-
         style=ttk.Style()
         _font = font.Font(
             size=12, 
@@ -207,12 +203,10 @@ class WindowMixin(ABC):
         )
 
         x, y = self.size                   # забираем объявленные размеры окна
-        # x, y = int(x*scale), int(y*scale)  # масштабируем их
         self.geometry(f'{x}x{y}')          # и присваиваем их окну
         self.minsize(x, y)                 # и устанавливаем как минимальные
         try:
             x, y = self.size_max               # если есть максимальные размеры
-            # x, y = int(x*scale), int(y*scale)  # масштабируем их
             self.maxsize(x, y)
         except AttributeError:
             pass

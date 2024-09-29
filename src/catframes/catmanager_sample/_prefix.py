@@ -11,6 +11,7 @@ import os
 import io
 import re
 import base64
+import configparser
 # import requests
 
 from tkinter import *
@@ -18,6 +19,8 @@ from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
+
+CONFIG_FILENAME = '.catmanager.ini'
 
 DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 

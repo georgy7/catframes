@@ -1,5 +1,5 @@
 from _prefix import *
-from sets_utils import Lang
+from sets_utils import Settings
 from task_flows import Task
 from windows_base import LocalWM
 
@@ -131,7 +131,7 @@ class ScrollableFrame(ttk.Frame):
 
     def update_texts(self):
         pass
-    #     self._empty_sign.config(text=Lang.read('bar.lbEmpty'))
+    #     self._empty_sign.config(text=Settings.lang.read('bar.lbEmpty'))
 
     # изменение размеров фрейма внутри холста
     def _on_resize_window(self, event):
@@ -270,23 +270,23 @@ class TaskBar(ttk.Frame):
 
         # если есть ошибка, то лейбл информации заполняем текстом этой ошибки
         if self.error:
-            self.widgets['_lbData'].config(text=Lang.read(f'bar.error.{self.error}'))
+            self.widgets['_lbData'].config(text=Settings.lang.read(f'bar.error.{self.error}'))
             return            
 
         # если нет ошибки, то создаём локализованую строку "качество: высокое | частота кадров: 50"
         lb_data_list = []
         
         # собираем информацию про качество
-        quality = Lang.read('task.cmbQuality')[self.task.config.get_quality()]
-        quality_text = f"{Lang.read('bar.lbQuality')} {quality}"
+        quality = Settings.lang.read('task.cmbQuality')[self.task.config.get_quality()]
+        quality_text = f"{Settings.lang.read('bar.lbQuality')} {quality}"
         lb_data_list.append(quality_text)
 
         # информацию про фреймрейт
-        framerate_text = f"{Lang.read('bar.lbFramerate')} {self.task.config.get_framerate()}"
+        framerate_text = f"{Settings.lang.read('bar.lbFramerate')} {self.task.config.get_framerate()}"
         lb_data_list.append(framerate_text)
 
         if self.length > 600:  # и если ширина фрейма больше 600, то и информацию про цвет
-            color_text = f"{Lang.read('bar.lbColor')} {self.task.config.get_color()}"
+            color_text = f"{Settings.lang.read('bar.lbColor')} {self.task.config.get_color()}"
             lb_data_list.append(color_text)
 
         # присваиваем всё это дело лейблу информации через резделитель ' | '
@@ -353,7 +353,7 @@ class TaskBar(ttk.Frame):
     def update_texts(self):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+                widget.config(text=Settings.lang.read(f'{self.name}.{w_name}'))
         self._update_labels()
 
 
@@ -886,7 +886,7 @@ class ImageCanvas(Canvas):
     # обновление
     def update_texts(self):
         if self.init_text:
-            self.itemconfig(self.init_text, text=Lang.read('task.initText'))
+            self.itemconfig(self.init_text, text=Settings.lang.read('task.initText'))
 
 
 class DirectoryManager(ttk.Frame):
@@ -1028,14 +1028,14 @@ class DirectoryManager(ttk.Frame):
             os.startfile(dir_to_open)
         except:
             self.listbox.delete(index)
-            self.listbox.insert(index, Lang.read('dirs.DirNotExists'))
+            self.listbox.insert(index, Settings.lang.read('dirs.DirNotExists'))
             self.after(2000, self.listbox.delete, index)
             self._remove_directory()
 
     def update_texts(self):
         for w_name, widget in self.widgets.items():
             if not w_name.startswith('_'):
-                widget.config(text=Lang.read(f'{self.name}.{w_name}'))
+                widget.config(text=Settings.lang.read(f'{self.name}.{w_name}'))
 
 
 class ToolTip: 

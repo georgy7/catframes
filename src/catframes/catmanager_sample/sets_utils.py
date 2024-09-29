@@ -24,9 +24,6 @@ class Lang:
     их названия будут сами подтягиваться в поле настроек.
     """
 
-    current_name = 'english'
-    current_index = 0
-
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
             'root.title': 'CatFrames',
@@ -155,41 +152,84 @@ class Lang:
         },
     }
 
-    @staticmethod  # получение всех доступных языков
-    def get_all() -> tuple:
+    def __init__(self):
+        self.current_name = 'english'
+        self.current_index = 0
+
+    # получение всех доступных языков
+    def get_all(self) -> tuple:
         return tuple(Lang.data.keys())
 
-    @staticmethod  # установка языка по имени или индексу
-    def set(name: str = None, index: int = None) -> None:
+    # установка языка по имени или индексу
+    def set(self, name: str = None, index: int = None) -> None:
 
         if name and name in Lang.data:
-            Lang.current_index = Lang.get_all().index(name)
-            Lang.current_name = name
+            self.current_index = self.get_all().index(name)
+            self.current_name = name
 
         elif isinstance(index, int) and 0 <= index < len(Lang.data):
-            Lang.current_name = Lang.get_all()[index]
-            Lang.current_index = index
+            self.current_name = self.get_all()[index]
+            self.current_index = index
 
-    @staticmethod  # получение текста по тегу
-    def read(tag) -> Union[str, tuple]:
+    # получение текста по тегу
+    def read(self, tag: str) -> Union[str, tuple]:
         try:
-            return Lang.data[Lang.current_name][tag]
+            return Lang.data[self.current_name][tag]
         except KeyError:  # если тег не найден
             return '-----'
-            
 
-class PortSets:
-    """Класс настроек диапазона портов
-    системы для связи с ffmpeg."""
 
-    min_port: int = 10240
-    max_port: int = 65000
+class IniConfig:
+    """Создание, чтение, и изменение внешнего файла конфига"""
+
+    def __init__(self):
+        self.file_path = os.path.join(
+            os.path.expanduser('~'), CONFIG_FILENAME
+        )
+
+        self.config = configparser.ConfigParser()
+
+        if not os.path.isfile(self.file_path):
+            self.set_default()
+        self.config.read(self.file_path)            
+
+    # создание стандартного конфиг файла
+    def set_default(self):
+        self.config['Settings'] = {
+            'Language': 'english',
+            'UseSystemPath': 'yes',
+            'TtkTheme': 'default'
+        }
+        self.config['AbsolutePath'] = {
+            'Python': '',
+            'FFmpeg': '',
+            'Catframes': '',
+        }
+        self.save()
+
+    # редактирование ключа в секции конфиг файла
+    def update(self, section: str, key: str, value: Union[str, int]):
+        if section in self.config:
+            self.config[section][key] = value
+    
+    def save(self):
+        with open(self.file_path, 'w') as configfile:
+            self.config.write(configfile)
+
+
+class Settings:
+    """Содержит объекты всех классов настроек"""
+
+    lang = Lang()
+    conf = IniConfig()
 
     @classmethod
-    def set_range(cls, min_port: int, max_port: int) -> None:
-        cls.min_port = min_port
-        cls.max_port = max_port
+    def save(cls):
+        cls.conf.update('Settings', 'Language', cls.lang.current_name)
+        cls.conf.save()
 
     @classmethod
-    def get_range(cls) -> Tuple:
-        return cls.min_port, cls.max_port
+    def restore(cls):
+        cls.lang.set(cls.conf.config['Settings']['Language'])
+
+Settings.restore()

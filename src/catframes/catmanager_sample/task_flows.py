@@ -1,5 +1,4 @@
 from _prefix import *
-from sets_utils import PortSets
 
 
 """
