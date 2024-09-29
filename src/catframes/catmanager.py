@@ -92,7 +92,7 @@ class Lang:
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
-            'sets.lbPortRange': 'System ports range:',
+            'sets.lbTheme': 'Theme:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
 
@@ -155,7 +155,7 @@ class Lang:
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
-            'sets.lbPortRange': 'Диапазон портов системы:',
+            'sets.lbTheme': 'Тема:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
 
@@ -204,25 +204,82 @@ class Lang:
 
     # получение всех доступных языков
     def get_all(self) -> tuple:
-        return tuple(Lang.data.keys())
+        return tuple(self.data.keys())
 
     # установка языка по имени или индексу
     def set(self, name: str = None, index: int = None) -> None:
 
-        if name and name in Lang.data:
+        if name and name in self.data:
             self.current_index = self.get_all().index(name)
             self.current_name = name
 
-        elif isinstance(index, int) and 0 <= index < len(Lang.data):
+        elif isinstance(index, int) and 0 <= index < len(self.data):
             self.current_name = self.get_all()[index]
             self.current_index = index
 
     # получение текста по тегу
     def read(self, tag: str) -> Union[str, tuple]:
         try:
-            return Lang.data[self.current_name][tag]
+            return self.data[self.current_name][tag]
         except KeyError:  # если тег не найден
             return '-----'
+
+
+class Theme:
+    """Класс настроек ttk темы"""
+
+    master: Tk
+    style: ttk.Style
+    data: tuple
+    current_name: str
+    current_index: int
+    
+    def lazy_init(self, master: Tk):
+        self.master = master
+        self.style = ttk.Style()
+        self.data = self.style.theme_names()
+        self.set()
+
+    def set_name(self, name: str):
+        self.current_name = name
+
+    def get_all(self):
+        return self.data
+    
+    def set(self, index: Optional[int] = None):
+        if not hasattr(self, 'master'):
+            return
+
+        if index == None:
+            self.current_index = self.data.index(self.current_name)
+        else:
+            self.current_name = self.data[index]
+            self.current_index = index
+
+        self.style.theme_use(self.current_name)
+        self.set_styles()
+
+        _font = font.Font(size=12)
+        self.style.configure(style='.', font=_font)  # шрифт текста в кнопке
+        self.master.option_add("*Font", _font)  # шрифты остальных виджетов
+
+    def set_styles(self):
+        self.style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+        self.style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
+
+        # создание стилей фона таскбара для разных состояний
+        for status, color in MAIN_TASKBAR_COLORS.items():
+            self.style.configure(f'{status}.Task.TFrame', background=color)
+            self.style.configure(f'{status}.Task.TLabel', background=color)
+            self.style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
+
+        self.style.map(
+            "Create.Task.TButton", 
+            background=[
+                ("active", 'blue'),
+                ("!disabled", 'blue')
+            ]
+        )
 
 
 class IniConfig:
@@ -244,7 +301,7 @@ class IniConfig:
         self.config['Settings'] = {
             'Language': 'english',
             'UseSystemPath': 'yes',
-            'TtkTheme': 'default'
+            'TtkTheme': 'vista' if platform.system() == 'Windows' else 'default'
         }
         self.config['AbsolutePath'] = {
             'Python': '',
@@ -267,16 +324,19 @@ class Settings:
     """Содержит объекты всех классов настроек"""
 
     lang = Lang()
+    theme = Theme()
     conf = IniConfig()
 
     @classmethod
     def save(cls):
         cls.conf.update('Settings', 'Language', cls.lang.current_name)
+        cls.conf.update('Settings', 'TtkTheme', cls.theme.current_name)
         cls.conf.save()
 
     @classmethod
     def restore(cls):
         cls.lang.set(cls.conf.config['Settings']['Language'])
+        cls.theme.set_name(cls.conf.config['Settings']['TtkTheme'])
 
 Settings.restore()
 
@@ -780,8 +840,10 @@ class WindowMixin(ABC):
     def _default_set_up(self):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
-        self._set_style()     # настройка внешнего вида окна
+        self._set_size()     # настройка внешнего вида окна
         self._to_center()     # размещение окна в центре экрана
+        if self.name == 'root':
+            Settings.theme.lazy_init(master=self)
         self.after(1, self._init_widgets)  # создание виджетов
         self.after(2, self.update_texts)   # установка текста нужного языка
         self.after(3, self._pack_widgets)  # расстановка виджетов
@@ -846,33 +908,7 @@ class WindowMixin(ABC):
 
         self.geometry(f'+{int(x)}+{int(y)}')
 
-
-    # настройка стиля окна, исходя из разрешения экрана
-    def _set_style(self) -> None:
-
-        style=ttk.Style()
-        _font = font.Font(
-            size=12, 
-        )
-        style.configure(style='.', font=_font)  # шрифт текста в кнопке
-        self.option_add("*Font", _font)  # шрифты остальных виджетов
-
-        style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
-        style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
-
-        # создание стилей фона таскбара для разных состояний
-        for status, color in MAIN_TASKBAR_COLORS.items():
-            style.configure(f'{status}.Task.TFrame', background=color)
-            style.configure(f'{status}.Task.TLabel', background=color)
-            style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
-
-        style.map(
-            "Create.Task.TButton", 
-            background=[
-                ("active", 'blue'),
-                ("!disabled", 'blue')
-            ]
-        )
+    def _set_size(self):
 
         x, y = self.size                   # забираем объявленные размеры окна
         self.geometry(f'{x}x{y}')          # и присваиваем их окну
@@ -2102,8 +2138,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 100
-        # self.size = 250, 200
+        self.size = 250, 150
         self.resizable(False, False)
         self.transient(root)
 
@@ -2129,25 +2164,39 @@ class SettingsWindow(Toplevel, WindowMixin):
              self.main_frame,
             values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
-            width=7,
+            width=9,
+        )
+        self.widgets['lbTheme'] = ttk.Label( self.main_frame)
+        self.widgets['_cmbTheme'] = ttk.Combobox(
+            self.main_frame,
+            values=ttk.Style().theme_names(),
+            state='readonly',
+            width=9,
         )
         
         # применение настроек
         def apply_settings(event):
+            Settings.theme.set(index=self.widgets['_cmbTheme'].current())
             Settings.lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
             Settings.save()
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
+
         self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
+        self.widgets['_cmbTheme'].bind('<<ComboboxSelected>>', apply_settings)
 
     # расположение виджетов
     def _pack_widgets(self):
         self.main_frame.pack(padx=10, pady=30)
 
-        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
-        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5, pady=5)
         self.widgets['_cmbLang'].current(newindex=Settings.lang.current_index)  # подставляем в ячейку текущий язык
+
+        self.widgets['lbTheme'].grid(row=1, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_cmbTheme'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        self.widgets['_cmbTheme'].current(newindex=Settings.theme.current_index)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):

@@ -128,8 +128,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 100
-        # self.size = 250, 200
+        self.size = 250, 150
         self.resizable(False, False)
         self.transient(root)
 
@@ -155,25 +154,39 @@ class SettingsWindow(Toplevel, WindowMixin):
              self.main_frame,
             values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
-            width=7,
+            width=9,
+        )
+        self.widgets['lbTheme'] = ttk.Label( self.main_frame)
+        self.widgets['_cmbTheme'] = ttk.Combobox(
+            self.main_frame,
+            values=ttk.Style().theme_names(),
+            state='readonly',
+            width=9,
         )
         
         # применение настроек
         def apply_settings(event):
+            Settings.theme.set(index=self.widgets['_cmbTheme'].current())
             Settings.lang.set(index=self.widgets['_cmbLang'].current())  # установка языка
             Settings.save()
             for w in LocalWM.all():  # перебирает все прописанные в менеджере окна
                 w.update_texts()  # для каждого обновляет текст методом из WindowMixin
 
+
         self.widgets['_cmbLang'].bind('<<ComboboxSelected>>', apply_settings)
+        self.widgets['_cmbTheme'].bind('<<ComboboxSelected>>', apply_settings)
 
     # расположение виджетов
     def _pack_widgets(self):
         self.main_frame.pack(padx=10, pady=30)
 
-        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
-        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
+        self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5, pady=5)
         self.widgets['_cmbLang'].current(newindex=Settings.lang.current_index)  # подставляем в ячейку текущий язык
+
+        self.widgets['lbTheme'].grid(row=1, column=0, sticky='e', padx=5, pady=5)
+        self.widgets['_cmbTheme'].grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        self.widgets['_cmbTheme'].current(newindex=Settings.theme.current_index)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):

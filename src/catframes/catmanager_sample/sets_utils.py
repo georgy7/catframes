@@ -46,7 +46,7 @@ class Lang:
 
             'sets.title': 'Settings',
             'sets.lbLang': 'Language:',
-            'sets.lbPortRange': 'System ports range:',
+            'sets.lbTheme': 'Theme:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
 
@@ -109,7 +109,7 @@ class Lang:
 
             'sets.title': 'Настройки',
             'sets.lbLang': 'Язык:',
-            'sets.lbPortRange': 'Диапазон портов системы:',
+            'sets.lbTheme': 'Тема:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
 
@@ -158,25 +158,82 @@ class Lang:
 
     # получение всех доступных языков
     def get_all(self) -> tuple:
-        return tuple(Lang.data.keys())
+        return tuple(self.data.keys())
 
     # установка языка по имени или индексу
     def set(self, name: str = None, index: int = None) -> None:
 
-        if name and name in Lang.data:
+        if name and name in self.data:
             self.current_index = self.get_all().index(name)
             self.current_name = name
 
-        elif isinstance(index, int) and 0 <= index < len(Lang.data):
+        elif isinstance(index, int) and 0 <= index < len(self.data):
             self.current_name = self.get_all()[index]
             self.current_index = index
 
     # получение текста по тегу
     def read(self, tag: str) -> Union[str, tuple]:
         try:
-            return Lang.data[self.current_name][tag]
+            return self.data[self.current_name][tag]
         except KeyError:  # если тег не найден
             return '-----'
+
+
+class Theme:
+    """Класс настроек ttk темы"""
+
+    master: Tk
+    style: ttk.Style
+    data: tuple
+    current_name: str
+    current_index: int
+    
+    def lazy_init(self, master: Tk):
+        self.master = master
+        self.style = ttk.Style()
+        self.data = self.style.theme_names()
+        self.set()
+
+    def set_name(self, name: str):
+        self.current_name = name
+
+    def get_all(self):
+        return self.data
+    
+    def set(self, index: Optional[int] = None):
+        if not hasattr(self, 'master'):
+            return
+
+        if index == None:
+            self.current_index = self.data.index(self.current_name)
+        else:
+            self.current_name = self.data[index]
+            self.current_index = index
+
+        self.style.theme_use(self.current_name)
+        self.set_styles()
+
+        _font = font.Font(size=12)
+        self.style.configure(style='.', font=_font)  # шрифт текста в кнопке
+        self.master.option_add("*Font", _font)  # шрифты остальных виджетов
+
+    def set_styles(self):
+        self.style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
+        self.style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
+
+        # создание стилей фона таскбара для разных состояний
+        for status, color in MAIN_TASKBAR_COLORS.items():
+            self.style.configure(f'{status}.Task.TFrame', background=color)
+            self.style.configure(f'{status}.Task.TLabel', background=color)
+            self.style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
+
+        self.style.map(
+            "Create.Task.TButton", 
+            background=[
+                ("active", 'blue'),
+                ("!disabled", 'blue')
+            ]
+        )
 
 
 class IniConfig:
@@ -198,7 +255,7 @@ class IniConfig:
         self.config['Settings'] = {
             'Language': 'english',
             'UseSystemPath': 'yes',
-            'TtkTheme': 'default'
+            'TtkTheme': 'vista' if platform.system() == 'Windows' else 'default'
         }
         self.config['AbsolutePath'] = {
             'Python': '',
@@ -221,15 +278,18 @@ class Settings:
     """Содержит объекты всех классов настроек"""
 
     lang = Lang()
+    theme = Theme()
     conf = IniConfig()
 
     @classmethod
     def save(cls):
         cls.conf.update('Settings', 'Language', cls.lang.current_name)
+        cls.conf.update('Settings', 'TtkTheme', cls.theme.current_name)
         cls.conf.save()
 
     @classmethod
     def restore(cls):
         cls.lang.set(cls.conf.config['Settings']['Language'])
+        cls.theme.set_name(cls.conf.config['Settings']['TtkTheme'])
 
 Settings.restore()

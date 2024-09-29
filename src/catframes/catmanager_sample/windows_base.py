@@ -108,8 +108,10 @@ class WindowMixin(ABC):
     def _default_set_up(self):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
-        self._set_style()     # настройка внешнего вида окна
+        self._set_size()     # настройка внешнего вида окна
         self._to_center()     # размещение окна в центре экрана
+        if self.name == 'root':
+            Settings.theme.lazy_init(master=self)
         self.after(1, self._init_widgets)  # создание виджетов
         self.after(2, self.update_texts)   # установка текста нужного языка
         self.after(3, self._pack_widgets)  # расстановка виджетов
@@ -174,33 +176,7 @@ class WindowMixin(ABC):
 
         self.geometry(f'+{int(x)}+{int(y)}')
 
-
-    # настройка стиля окна, исходя из разрешения экрана
-    def _set_style(self) -> None:
-
-        style=ttk.Style()
-        _font = font.Font(
-            size=12, 
-        )
-        style.configure(style='.', font=_font)  # шрифт текста в кнопке
-        self.option_add("*Font", _font)  # шрифты остальных виджетов
-
-        style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
-        style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
-
-        # создание стилей фона таскбара для разных состояний
-        for status, color in MAIN_TASKBAR_COLORS.items():
-            style.configure(f'{status}.Task.TFrame', background=color)
-            style.configure(f'{status}.Task.TLabel', background=color)
-            style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
-
-        style.map(
-            "Create.Task.TButton", 
-            background=[
-                ("active", 'blue'),
-                ("!disabled", 'blue')
-            ]
-        )
+    def _set_size(self):
 
         x, y = self.size                   # забираем объявленные размеры окна
         self.geometry(f'{x}x{y}')          # и присваиваем их окну
