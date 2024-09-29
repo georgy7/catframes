@@ -894,7 +894,7 @@ class DirectoryManager(ttk.Frame):
     Даёт возможность добавлять, удалять директории, 
     и менять порядок кнопками и перетаскиванием"""
 
-    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list, on_change: Callable):
+    def __init__(self, master: Union[Tk, ttk.Frame], veiw_mode: bool, dirs: list, on_change: Callable):
         super().__init__(master)
         self.name = 'dirs'
 
@@ -932,7 +932,7 @@ class DirectoryManager(ttk.Frame):
     # инициализация виджетов
     def _init_widgets(self):
 
-        self.top_frame = Frame(self)
+        self.top_frame = ttk.Frame(self)
 
         self.widgets['lbDirList'] = ttk.Label(self.top_frame)  # надпись "Список директорий:"
 
@@ -952,7 +952,7 @@ class DirectoryManager(ttk.Frame):
         self.top_frame.bind('<Configure>', on_resize)
         self.listbox.bind('<Double-Button-1>', self._on_double_click)
 
-        self.button_frame = Frame(self)
+        self.button_frame = ttk.Frame(self)
 
         # создание кнопок для управления элементами списка
         self.widgets['btAddDir'] = ttk.Button(self.button_frame, width=8, command=self._add_directory)

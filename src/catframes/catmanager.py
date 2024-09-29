@@ -1827,7 +1827,7 @@ class DirectoryManager(ttk.Frame):
     Даёт возможность добавлять, удалять директории, 
     и менять порядок кнопками и перетаскиванием"""
 
-    def __init__(self, master: Union[Tk, Frame], veiw_mode: bool, dirs: list, on_change: Callable):
+    def __init__(self, master: Union[Tk, ttk.Frame], veiw_mode: bool, dirs: list, on_change: Callable):
         super().__init__(master)
         self.name = 'dirs'
 
@@ -1865,7 +1865,7 @@ class DirectoryManager(ttk.Frame):
     # инициализация виджетов
     def _init_widgets(self):
 
-        self.top_frame = Frame(self)
+        self.top_frame = ttk.Frame(self)
 
         self.widgets['lbDirList'] = ttk.Label(self.top_frame)  # надпись "Список директорий:"
 
@@ -1885,7 +1885,7 @@ class DirectoryManager(ttk.Frame):
         self.top_frame.bind('<Configure>', on_resize)
         self.listbox.bind('<Double-Button-1>', self._on_double_click)
 
-        self.button_frame = Frame(self)
+        self.button_frame = ttk.Frame(self)
 
         # создание кнопок для управления элементами списка
         self.widgets['btAddDir'] = ttk.Button(self.button_frame, width=8, command=self._add_directory)
@@ -2156,19 +2156,20 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
-        self.main_frame = Frame(self)
+        self.main_frame = ttk.Frame(self)
+        self.content_frame = ttk.Frame(self.main_frame)
 
         # создание виджетов, привязывание функций
-        self.widgets['lbLang'] = ttk.Label( self.main_frame)
+        self.widgets['lbLang'] = ttk.Label(self.content_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
-             self.main_frame,
+             self.content_frame,
             values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=9,
         )
-        self.widgets['lbTheme'] = ttk.Label( self.main_frame)
+        self.widgets['lbTheme'] = ttk.Label(self.content_frame)
         self.widgets['_cmbTheme'] = ttk.Combobox(
-            self.main_frame,
+            self.content_frame,
             values=ttk.Style().theme_names(),
             state='readonly',
             width=9,
@@ -2188,7 +2189,8 @@ class SettingsWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
-        self.main_frame.pack(padx=10, pady=30)
+        self.main_frame.pack(expand=True, fill=BOTH)
+        self.content_frame.pack(padx=10, pady=30)
 
         self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5, pady=5)
         self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5, pady=5)
@@ -2334,7 +2336,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             background=self.task_config.get_color(),
         )
 
-        self.menu_frame = Frame(self.main_pane)    # создание табличного фрейма меню
+        self.menu_frame = ttk.Frame(self.main_pane)    # создание табличного фрейма меню
         self.main_pane.add(self.menu_frame, stretch='never')
         self.main_pane.paneconfig(self.menu_frame, minsize=250)
 
@@ -2352,7 +2354,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             on_change=set_dirs_to_task_config,  # передача ручки
         )
 
-        self.settings_grid = Frame(self.menu_frame)  # создание фрейма настроек в нижнем фрейме
+        self.settings_grid = ttk.Frame(self.menu_frame)  # создание фрейма настроек в нижнем фрейме
 
         def add_task():  # обработка кнопки добавления задачи
             self._collect_task_config()
@@ -2392,7 +2394,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.widgets['_entColor'].insert(0, color)
             update_color(color)
 
-        self.color_frame = Frame(self.settings_grid)
+        self.color_frame = ttk.Frame(self.settings_grid)
 
         def validate_color(value: str):
             if not value:
@@ -2494,7 +2496,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         
         # лейбл и кнопка копирования команды
         self.widgets['lbCopy'] = ttk.Label(self.settings_grid)
-        self.copy_frame = Frame(self.settings_grid)
+        self.copy_frame = ttk.Frame(self.settings_grid)
         self.widgets['btCopyBash'] = ttk.Button(
             self.copy_frame, command=copy_to_clip, width=3
         )
@@ -2617,7 +2619,7 @@ class WarningWindow(Toplevel, WindowMixin):
         self.accept_def: Callable = kwargs.get('accept_def')
 
         self.widgets: Dict[str, Widget] = {}
-        self.size = 260, 130
+        self.size = 260, 150
         self.resizable(False, False)
 
         super()._default_set_up()
@@ -2627,17 +2629,21 @@ class WarningWindow(Toplevel, WindowMixin):
 
         _font = font.Font(size=16)
 
+        self.main_frame = ttk.Frame(self)
+
         # два лейбла предупреждения (с крупным текстом, и обычным)
-        self.widgets['lbWarn'] = ttk.Label(self, padding=[0, 20, 0, 5], font=_font)
-        self.widgets['lbText'] = ttk.Label(self, padding=0)
+        self.widgets['lbWarn'] = ttk.Label(self.main_frame, padding=[0, 20, 0, 5], font=_font)
+        self.widgets['lbText'] = ttk.Label(self.main_frame, padding=0)
 
         # кнопки "назад" и "выйти"
-        self.choise_frame = ttk.Frame(self)
+        self.choise_frame = ttk.Frame(self.main_frame)
         self.widgets['btAccept'] = ttk.Button(self.choise_frame, command=self.accept_def)
         self.widgets['btDeny'] = ttk.Button(self.choise_frame, command=self.close)
 
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_frame.pack(expand=True, fill=BOTH)
+
         self.widgets['lbWarn'].pack(side=TOP)
         self.widgets['lbText'].pack(side=TOP)
 
