@@ -278,10 +278,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCreate'].configure(state=state)
         self.widgets['btCopyBash'].configure(state=state)
         self.widgets['btCopyWin'].configure(state=state)
+        self.widgets['cmbTime'].configure(state=state)
+        self.widgets['_btPreview'].configure(state=state)
+        self.widgets['btCreate'].configure(state=state)
 
     # создание и запуск задачи
     def _create_task_instance(self):
-
         # создание задачи через менеджер задач
         task = TaskManager.create(self.task_config)
 
@@ -294,13 +296,45 @@ class NewTaskWindow(Toplevel, WindowMixin):
             error_function=self.master.handle_error,        # обработки ошибки выполнения
             delete_function=self.master.del_task_bar,       # и удаления бара
         )
-
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
+
+    # # создание и запуск задачи
+    # def _create_task_preview(self):
+    #     task = TaskManager.create(self.task_config)
+
+    #     def update_progress(progress: float, base64_img: str = ''):
+    #         try:
+    #             print(progress)
+    #             self.widgets['_prevProgress'].config(value=progress)
+    #         except:
+    #             pass
+
+    #     def cancel_preview():
+    #         task.cancel()
+    #         self._cancel_processing_screen()
+        
+    #     self.widgets['btPrevCancel'].configure(command=cancel_preview)
+
+    #     def open_rendered(id):
+    #         print('Открываю отрендеренный файл')
+
+    #     def handle_error(id, error):
+    #         print(f'вылетела ошибка {error}')
+
+    #     gui_callback = GuiCallback(                         # создание колбека
+    #         update_function=update_progress,                # передача методов обновления,
+    #         finish_function=open_rendered,    # завершения задачи
+    #         error_function=handle_error,        # обработки ошибки выполнения
+    #         delete_function=lambda x: ...,       # и удаления бара
+    #     )
+
+    #     task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        self.main_frame = Frame(self)
         self.main_pane = PanedWindow(
-            self,
+            self.main_frame,
             orient=HORIZONTAL,
             sashwidth=5,
             background='grey',
@@ -474,10 +508,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
         ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
-        self.widgets['btCreate'] = ttk.Button(
-            self.settings_grid, command=add_task, style='Create.Task.TButton'
-        )
-
         def copy_to_clip(bash: bool = True):  # копирование команды в буфер обмена
             self._collect_task_config()
             command = ' '.join(self.task_config.convert_to_command(for_user=True, bash=bash))
@@ -494,12 +524,58 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.copy_frame, command=lambda: copy_to_clip(bash=False), width=3
         )
 
-
         if self.view_mode:  # если это режим просмотра, все виджеты, кроме копирования - недоступны
             for w_name, w in self.widgets.items():
                 if 'lb' in w_name or 'Copy' in w_name:
                     continue
                 w.configure(state='disabled')
+
+        self.create_frame = ttk.Frame(self.settings_grid)
+        
+        self.widgets['cmbTime'] = ttk.Combobox(
+            self.create_frame, 
+            state='readonly',
+            justify=CENTER,
+            width=6,
+        )
+        self.widgets['_btPreview'] = ttk.Button(
+            self.create_frame, command=self._show_processing_screen, text='>>', width=2
+        )
+
+        self.widgets['btCreate'] = ttk.Button(
+            self.create_frame, command=add_task, style='Create.Task.TButton', width=8
+        )
+
+        # далее объявляются виджеты экрана рендера предпросмотра
+        self.preview_outer_frame = ttk.Frame(self)
+        self.preview_inner_frame = ttk.Frame(self.preview_outer_frame)
+
+        self.widgets['lbPrevSign'] = ttk.Label(
+            self.preview_inner_frame,
+            font=font.Font(size=14),
+        )
+        self.widgets['_prevProgress'] = ttk.Progressbar(
+            self.preview_inner_frame,
+            length=320,
+            maximum=1,
+            value=0,
+        )
+        self.widgets['btPrevCancel'] = ttk.Button(
+            self.preview_inner_frame, 
+            command=self._cancel_processing_screen, 
+            text='cancel',
+        )
+        
+    def _show_processing_screen(self):
+        self.main_frame.pack_forget()
+        self.preview_outer_frame.pack(expand=True, fill=BOTH)
+        self.widgets['_prevProgress'].configure(value=0.3)
+        # self._collect_task_config()
+        # self._create_task_preview()
+
+    def _cancel_processing_screen(self):
+        self.main_frame.pack(expand=True, fill=BOTH)
+        self.preview_outer_frame.pack_forget()
 
     # привязка событий изменений размеров
     def _bind_resize_events(self):
@@ -542,6 +618,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_frame.pack(expand=True, fill=BOTH)
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
@@ -577,10 +654,21 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCopyWin'].pack(side=LEFT, fill=BOTH, expand=True)
 
         if not self.view_mode:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=5, column=1, sticky='e', padx=5, pady=5)
+            self.create_frame.grid(columnspan=2, row=5, column=0, sticky='e', padx=5, pady=(15, 5))
+            self.widgets['btCreate'].pack(padx=(10, 0), side=RIGHT)
+            self.widgets['_btPreview'].pack(side=RIGHT)
+            self.widgets['cmbTime'].pack(side=RIGHT)
 
         self._validate_task_config()
 
+        # далее пакуются виджеты экрана рендера предпросмотра
+        self.preview_outer_frame.grid_columnconfigure(0, weight=1)
+        self.preview_outer_frame.grid_rowconfigure(0, weight=1)
+    
+        self.preview_inner_frame.grid(row=0, column=0, sticky='')
+        self.widgets['lbPrevSign'].pack(anchor='nw')
+        self.widgets['_prevProgress'].pack(pady=10)
+        self.widgets['btPrevCancel'].pack(anchor='se')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:

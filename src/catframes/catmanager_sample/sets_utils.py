@@ -64,6 +64,10 @@ class Lang:
             'task.lbCopy': 'Copy cli:',
             'task.btCopyBash': 'Bash',
             'task.btCopyWin': 'Win',
+            'task.cmbTime': ('1 sec', '2 sec', '3 sec', '4 sec', '5 sec'),
+
+            'task.btPrevCancel': 'Cancel',
+            'task.lbPrevSign': 'Processing preview...',
 
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
@@ -127,6 +131,10 @@ class Lang:
             'task.lbCopy': 'Копировать cli:',
             'task.btCopyBash': 'Bash',
             'task.btCopyWin': 'Win',
+            'task.cmbTime': ('1 сек', '2 сек', '3 сек', '4 сек', '5 сек'),
+
+            'task.btPrevCancel': 'Отмена',
+            'task.lbPrevSign': 'Создание предпросмотра...',
 
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',

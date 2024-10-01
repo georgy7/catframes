@@ -327,11 +327,8 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
-    def update_progress(self, progress: float, delta: bool = False, base64_img: str = ''):
-        if delta:  # прогресс будет дополняться на переданное значение
-            self.progress += progress
-        else:  # прогресс будет принимать переданное значение
-            self.progress = progress
+    def update_progress(self, progress: float, base64_img: str = ''):
+        self.progress = progress
         try:
             self.widgets['_progressBar'].config(value=self.progress)
         except:  # после удаления виджета вылетает ошибка из-за большой вложенности

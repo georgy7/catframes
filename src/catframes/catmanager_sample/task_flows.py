@@ -156,7 +156,7 @@ class GuiCallback:
         
     
     @staticmethod  # метод из TaskBar
-    def update(progress: float, delta: bool = False, base64_img: str = ''):
+    def update(progress: float, base64_img: str = ''):
         """обновление полосы прогресса и превью в окне"""
         ...
 
