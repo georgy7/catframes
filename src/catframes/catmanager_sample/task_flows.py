@@ -49,10 +49,9 @@ class TaskConfig:
         self._framerate: int = 30                     # частота кадров
         self._quality: str = 'medium'                 # качество видео
         self._quality_index: int = 1                  # номер значения качества
-        # self._limit: int                              # предел видео в секундах
+        self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
-        # self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
     # установка директорий
     def set_dirs(self, dirs) -> list:
@@ -65,6 +64,10 @@ class TaskConfig:
     # установка цвета
     def set_color(self, color: str):
         self._color = color
+
+    def set_preview_params(self, limit: int, path: str):
+        self._limit = limit
+        self._filepath = path
 
     # установка частоты кадров, качества и лимита
     def set_specs(self, framerate: int, quality: int, limit: int = None):
@@ -116,9 +119,6 @@ class TaskConfig:
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
 
-        # if self._limit:                                     # ограничение времени, если есть
-        #     command.append(f"--limit={self._limit}")
-
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")
         
@@ -134,6 +134,9 @@ class TaskConfig:
 
         if not for_user:                                    # если не для пользователя, то ключ превью
             command.append("--live-preview")
+
+        if hasattr(self, '_limit'):
+            command.append(f"--limit={self._limit}")
 
         return command                                      # возврат собранной команды
 

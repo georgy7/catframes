@@ -152,7 +152,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         # создание виджетов, привязывание функций
         self.widgets['lbLang'] = ttk.Label(self.content_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
-             self.content_frame,
+            self.content_frame,
             values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=9,
@@ -211,6 +211,20 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         super()._default_set_up()
         threading.Thread(target=self.canvas_updater, daemon=True).start()
+
+    def close(self):
+        super().close()
+
+        # удаляет директорию с превью рендерами
+        dir_path = os.path.join(USER_DIRECTORY, PREVIEW_DIRNAME)
+        if not os.path.exists(dir_path):
+            return
+        while True:
+            try:
+                shutil.rmtree(dir_path)
+                break
+            except:
+                time.sleep(1)
 
     # поток, обновляющий картинку и размеры холста
     def canvas_updater(self):
@@ -278,7 +292,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCreate'].configure(state=state)
         self.widgets['btCopyBash'].configure(state=state)
         self.widgets['btCopyWin'].configure(state=state)
-        self.widgets['cmbTime'].configure(state=state)
+        self.widgets['cmbTime'].configure(state=state if state=='disabled' else 'readonly')
         self.widgets['_btPreview'].configure(state=state)
         self.widgets['btCreate'].configure(state=state)
 
@@ -298,37 +312,71 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
-    # # создание и запуск задачи
-    # def _create_task_preview(self):
-    #     task = TaskManager.create(self.task_config)
+    @staticmethod
+    def _watch_preview(link: str):
+        pass
+        # while True:
+        #     try:
+        #         subprocess.call(['open', link])
+        #         break
+        #     except Exception as e:
+        #         print(link)
+        #         print(e)
+        #         time.sleep(1)
+        # os.startfile(link)
 
-    #     def update_progress(progress: float, base64_img: str = ''):
-    #         try:
-    #             print(progress)
-    #             self.widgets['_prevProgress'].config(value=progress)
-    #         except:
-    #             pass
+    @staticmethod
+    def _create_temp_dir():
+        dir_path = os.path.join(USER_DIRECTORY, PREVIEW_DIRNAME)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
 
-    #     def cancel_preview():
-    #         task.cancel()
-    #         self._cancel_processing_screen()
-        
-    #     self.widgets['btPrevCancel'].configure(command=cancel_preview)
+    def _create_preview_config(self) -> TaskConfig:
+        preview_config = copy.deepcopy(self.task_config)
+        self._create_temp_dir()
+        extention = preview_config.get_filepath().split('.')[-1]
+        preview_path = os.path.join(
+            USER_DIRECTORY, PREVIEW_DIRNAME, PREVIEW_FILENAME.format(ex=extention)
+        )
+        limit = self.widgets['cmbTime'].current() + 1
+        preview_config.set_preview_params(limit=limit, path=preview_path)
+        return preview_config
 
-    #     def open_rendered(id):
-    #         print('Открываю отрендеренный файл')
+    # создание и запуск задачи
+    def _create_task_preview(self):
+        # для создания задачи под рендеринг превью,
+        # в коллбек передаются адапторы, 
+        # влияющие на полосу прогресса, и её отмену  
 
-    #     def handle_error(id, error):
-    #         print(f'вылетела ошибка {error}')
+        config = self._create_preview_config()
+        task = TaskManager.create(config)
+        self.widgets['btPrevCancel'].configure(command=task.cancel)
 
-    #     gui_callback = GuiCallback(                         # создание колбека
-    #         update_function=update_progress,                # передача методов обновления,
-    #         finish_function=open_rendered,    # завершения задачи
-    #         error_function=handle_error,        # обработки ошибки выполнения
-    #         delete_function=lambda x: ...,       # и удаления бара
-    #     )
+        def updating_adapter(progress: float, *args, **kwargs):
+            try:
+                self.widgets['_prevProgress'].config(value=progress)
+            except:
+                task.cancel()
 
-    #     task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
+        def deletion_adapter(*args, **kwargs):
+            self._cancel_processing_screen()
+
+        def finishing_adapter(*args, **kwargs):
+            if not task.stop_flag:
+                self._watch_preview(config.get_filepath())
+            self._cancel_processing_screen()
+
+        def handle_error(id, error):
+            print(f'ошибка {error}')
+
+        gui_callback = GuiCallback(                         # создание колбека
+            update_function=updating_adapter,               # передача методов обновления,
+            finish_function=finishing_adapter,              # завершения задачи
+            error_function=handle_error,                    # обработки ошибки выполнения
+            delete_function=deletion_adapter,               # и удаления бара
+        )
+
+        task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
     def _init_widgets(self):
@@ -535,6 +583,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['cmbTime'] = ttk.Combobox(
             self.create_frame, 
             state='readonly',
+            values=Settings.lang.read('task.cmbTime'),
             justify=CENTER,
             width=6,
         )
@@ -567,15 +616,20 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
         
     def _show_processing_screen(self):
-        self.main_frame.pack_forget()
-        self.preview_outer_frame.pack(expand=True, fill=BOTH)
-        self.widgets['_prevProgress'].configure(value=0.3)
-        # self._collect_task_config()
-        # self._create_task_preview()
+        try:
+            self.main_frame.pack_forget()
+            self.preview_outer_frame.pack(expand=True, fill=BOTH)
+            self._collect_task_config()
+            self._create_task_preview()
+        except TclError:
+            pass
 
     def _cancel_processing_screen(self):
-        self.main_frame.pack(expand=True, fill=BOTH)
-        self.preview_outer_frame.pack_forget()
+        try:
+            self.main_frame.pack(expand=True, fill=BOTH)
+            self.preview_outer_frame.pack_forget()
+        except TclError:
+            pass
 
     # привязка событий изменений размеров
     def _bind_resize_events(self):

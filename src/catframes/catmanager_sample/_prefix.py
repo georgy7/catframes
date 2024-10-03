@@ -10,6 +10,8 @@ import sys
 import os
 import io
 import re
+import copy
+import shutil
 import base64
 import configparser
 # import requests
@@ -20,7 +22,10 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
 
+USER_DIRECTORY = os.path.expanduser('~')
 CONFIG_FILENAME = '.catmanager.ini'
+PREVIEW_DIRNAME = '.cat_temp'
+PREVIEW_FILENAME = '.preview.{ex}'
 
 DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 

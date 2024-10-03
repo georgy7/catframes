@@ -10,6 +10,8 @@ import sys
 import os
 import io
 import re
+import copy
+import shutil
 import base64
 import configparser
 # import requests
@@ -20,7 +22,10 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
 
+USER_DIRECTORY = os.path.expanduser('~')
 CONFIG_FILENAME = '.catmanager.ini'
+PREVIEW_DIRNAME = '.cat_temp'
+PREVIEW_FILENAME = '.preview.{ex}'
 
 DEFAULT_CANVAS_COLOR = '#000000'  # цвет стандартного фона изображения
 
@@ -110,6 +115,10 @@ class Lang:
             'task.lbCopy': 'Copy cli:',
             'task.btCopyBash': 'Bash',
             'task.btCopyWin': 'Win',
+            'task.cmbTime': ('1 sec', '2 sec', '3 sec', '4 sec', '5 sec'),
+
+            'task.btPrevCancel': 'Cancel',
+            'task.lbPrevSign': 'Processing preview...',
 
             'dirs.lbDirList': 'List of source directories:',
             'dirs.btAddDir': 'Add',
@@ -173,6 +182,10 @@ class Lang:
             'task.lbCopy': 'Копировать cli:',
             'task.btCopyBash': 'Bash',
             'task.btCopyWin': 'Win',
+            'task.cmbTime': ('1 сек', '2 сек', '3 сек', '4 сек', '5 сек'),
+
+            'task.btPrevCancel': 'Отмена',
+            'task.lbPrevSign': 'Создание предпросмотра...',
 
             'dirs.lbDirList': 'Список директорий источников:',
             'dirs.btAddDir': 'Добавить',
@@ -394,10 +407,9 @@ class TaskConfig:
         self._framerate: int = 30                     # частота кадров
         self._quality: str = 'medium'                 # качество видео
         self._quality_index: int = 1                  # номер значения качества
-        # self._limit: int                              # предел видео в секундах
+        self._limit: int                              # предел видео в секундах
         self._filepath: str = None                    # путь к итоговому файлу
         self._rewrite: bool = False                   # перезапись файла, если существует
-        # self._ports = PortSets.get_range()            # диапазон портов для связи с ffmpeg
 
     # установка директорий
     def set_dirs(self, dirs) -> list:
@@ -410,6 +422,10 @@ class TaskConfig:
     # установка цвета
     def set_color(self, color: str):
         self._color = color
+
+    def set_preview_params(self, limit: int, path: str):
+        self._limit = limit
+        self._filepath = path
 
     # установка частоты кадров, качества и лимита
     def set_specs(self, framerate: int, quality: int, limit: int = None):
@@ -461,9 +477,6 @@ class TaskConfig:
         command.append(f"--frame-rate={self._framerate}")   # частота кадров
         command.append(f"--quality={self._quality}")        # качество рендера
 
-        # if self._limit:                                     # ограничение времени, если есть
-        #     command.append(f"--limit={self._limit}")
-
         if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
             command.append("--force")
         
@@ -479,6 +492,9 @@ class TaskConfig:
 
         if not for_user:                                    # если не для пользователя, то ключ превью
             command.append("--live-preview")
+
+        if hasattr(self, '_limit'):
+            command.append(f"--limit={self._limit}")
 
         return command                                      # возврат собранной команды
 
@@ -501,7 +517,7 @@ class GuiCallback:
         
     
     @staticmethod  # метод из TaskBar
-    def update(progress: float, delta: bool = False, base64_img: str = ''):
+    def update(progress: float, base64_img: str = ''):
         """обновление полосы прогресса и превью в окне"""
         ...
 
@@ -1260,11 +1276,8 @@ class TaskBar(ttk.Frame):
         self.update_texts()  # обновление текста виджетов
 
     # обновление линии прогресса
-    def update_progress(self, progress: float, delta: bool = False, base64_img: str = ''):
-        if delta:  # прогресс будет дополняться на переданное значение
-            self.progress += progress
-        else:  # прогресс будет принимать переданное значение
-            self.progress = progress
+    def update_progress(self, progress: float, base64_img: str = ''):
+        self.progress = progress
         try:
             self.widgets['_progressBar'].config(value=self.progress)
         except:  # после удаления виджета вылетает ошибка из-за большой вложенности
@@ -2162,7 +2175,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         # создание виджетов, привязывание функций
         self.widgets['lbLang'] = ttk.Label(self.content_frame)
         self.widgets['_cmbLang'] = ttk.Combobox(  # виджет выпадающего списка
-             self.content_frame,
+            self.content_frame,
             values=Settings.lang.get_all(),  # вытягивает список языков
             state='readonly',  # запрещает вписывать, только выбирать
             width=9,
@@ -2221,6 +2234,20 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         super()._default_set_up()
         threading.Thread(target=self.canvas_updater, daemon=True).start()
+
+    def close(self):
+        super().close()
+
+        # удаляет директорию с превью рендерами
+        dir_path = os.path.join(USER_DIRECTORY, PREVIEW_DIRNAME)
+        if not os.path.exists(dir_path):
+            return
+        while True:
+            try:
+                shutil.rmtree(dir_path)
+                break
+            except:
+                time.sleep(1)
 
     # поток, обновляющий картинку и размеры холста
     def canvas_updater(self):
@@ -2288,10 +2315,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCreate'].configure(state=state)
         self.widgets['btCopyBash'].configure(state=state)
         self.widgets['btCopyWin'].configure(state=state)
+        self.widgets['cmbTime'].configure(state=state if state=='disabled' else 'readonly')
+        self.widgets['_btPreview'].configure(state=state)
+        self.widgets['btCreate'].configure(state=state)
 
     # создание и запуск задачи
     def _create_task_instance(self):
-
         # создание задачи через менеджер задач
         task = TaskManager.create(self.task_config)
 
@@ -2304,13 +2333,79 @@ class NewTaskWindow(Toplevel, WindowMixin):
             error_function=self.master.handle_error,        # обработки ошибки выполнения
             delete_function=self.master.del_task_bar,       # и удаления бара
         )
+        task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
+
+    @staticmethod
+    def _watch_preview(link: str):
+        pass
+        # while True:
+        #     try:
+        #         subprocess.call(['open', link])
+        #         break
+        #     except Exception as e:
+        #         print(link)
+        #         print(e)
+        #         time.sleep(1)
+        # os.startfile(link)
+
+    @staticmethod
+    def _create_temp_dir():
+        dir_path = os.path.join(USER_DIRECTORY, PREVIEW_DIRNAME)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+    def _create_preview_config(self) -> TaskConfig:
+        preview_config = copy.deepcopy(self.task_config)
+        self._create_temp_dir()
+        extention = preview_config.get_filepath().split('.')[-1]
+        preview_path = os.path.join(
+            USER_DIRECTORY, PREVIEW_DIRNAME, PREVIEW_FILENAME.format(ex=extention)
+        )
+        limit = self.widgets['cmbTime'].current() + 1
+        preview_config.set_preview_params(limit=limit, path=preview_path)
+        return preview_config
+
+    # создание и запуск задачи
+    def _create_task_preview(self):
+        # для создания задачи под рендеринг превью,
+        # в коллбек передаются адапторы, 
+        # влияющие на полосу прогресса, и её отмену  
+
+        config = self._create_preview_config()
+        task = TaskManager.create(config)
+        self.widgets['btPrevCancel'].configure(command=task.cancel)
+
+        def updating_adapter(progress: float, *args, **kwargs):
+            try:
+                self.widgets['_prevProgress'].config(value=progress)
+            except:
+                task.cancel()
+
+        def deletion_adapter(*args, **kwargs):
+            self._cancel_processing_screen()
+
+        def finishing_adapter(*args, **kwargs):
+            if not task.stop_flag:
+                self._watch_preview(config.get_filepath())
+            self._cancel_processing_screen()
+
+        def handle_error(id, error):
+            print(f'ошибка {error}')
+
+        gui_callback = GuiCallback(                         # создание колбека
+            update_function=updating_adapter,               # передача методов обновления,
+            finish_function=finishing_adapter,              # завершения задачи
+            error_function=handle_error,                    # обработки ошибки выполнения
+            delete_function=deletion_adapter,               # и удаления бара
+        )
 
         task.start(gui_callback)  # инъекция колбека для обнволения gui при старте задачи
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        self.main_frame = Frame(self)
         self.main_pane = PanedWindow(
-            self,
+            self.main_frame,
             orient=HORIZONTAL,
             sashwidth=5,
             background='grey',
@@ -2484,10 +2579,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_btPath'] = ttk.Button(self.settings_grid, command=set_filepath, text=file_name)
         ToolTip(self.widgets['_btPath'], self.task_config.get_filepath)  # привязка подсказки к кнопке пути
 
-        self.widgets['btCreate'] = ttk.Button(
-            self.settings_grid, command=add_task, style='Create.Task.TButton'
-        )
-
         def copy_to_clip(bash: bool = True):  # копирование команды в буфер обмена
             self._collect_task_config()
             command = ' '.join(self.task_config.convert_to_command(for_user=True, bash=bash))
@@ -2504,12 +2595,64 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.copy_frame, command=lambda: copy_to_clip(bash=False), width=3
         )
 
-
         if self.view_mode:  # если это режим просмотра, все виджеты, кроме копирования - недоступны
             for w_name, w in self.widgets.items():
                 if 'lb' in w_name or 'Copy' in w_name:
                     continue
                 w.configure(state='disabled')
+
+        self.create_frame = ttk.Frame(self.settings_grid)
+        
+        self.widgets['cmbTime'] = ttk.Combobox(
+            self.create_frame, 
+            state='readonly',
+            values=Settings.lang.read('task.cmbTime'),
+            justify=CENTER,
+            width=6,
+        )
+        self.widgets['_btPreview'] = ttk.Button(
+            self.create_frame, command=self._show_processing_screen, text='>>', width=2
+        )
+
+        self.widgets['btCreate'] = ttk.Button(
+            self.create_frame, command=add_task, style='Create.Task.TButton', width=8
+        )
+
+        # далее объявляются виджеты экрана рендера предпросмотра
+        self.preview_outer_frame = ttk.Frame(self)
+        self.preview_inner_frame = ttk.Frame(self.preview_outer_frame)
+
+        self.widgets['lbPrevSign'] = ttk.Label(
+            self.preview_inner_frame,
+            font=font.Font(size=14),
+        )
+        self.widgets['_prevProgress'] = ttk.Progressbar(
+            self.preview_inner_frame,
+            length=320,
+            maximum=1,
+            value=0,
+        )
+        self.widgets['btPrevCancel'] = ttk.Button(
+            self.preview_inner_frame, 
+            command=self._cancel_processing_screen, 
+            text='cancel',
+        )
+        
+    def _show_processing_screen(self):
+        try:
+            self.main_frame.pack_forget()
+            self.preview_outer_frame.pack(expand=True, fill=BOTH)
+            self._collect_task_config()
+            self._create_task_preview()
+        except TclError:
+            pass
+
+    def _cancel_processing_screen(self):
+        try:
+            self.main_frame.pack(expand=True, fill=BOTH)
+            self.preview_outer_frame.pack_forget()
+        except TclError:
+            pass
 
     # привязка событий изменений размеров
     def _bind_resize_events(self):
@@ -2552,6 +2695,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     # расположение виджетов
     def _pack_widgets(self):
+        self.main_frame.pack(expand=True, fill=BOTH)
         self.main_pane.pack(expand=True, fill=BOTH)
 
         # левый и правый столбцы нижнего фрейма
@@ -2587,10 +2731,21 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['btCopyWin'].pack(side=LEFT, fill=BOTH, expand=True)
 
         if not self.view_mode:  # кнопка создания задачи
-            self.widgets['btCreate'].grid(row=5, column=1, sticky='e', padx=5, pady=5)
+            self.create_frame.grid(columnspan=2, row=5, column=0, sticky='e', padx=5, pady=(15, 5))
+            self.widgets['btCreate'].pack(padx=(10, 0), side=RIGHT)
+            self.widgets['_btPreview'].pack(side=RIGHT)
+            self.widgets['cmbTime'].pack(side=RIGHT)
 
         self._validate_task_config()
 
+        # далее пакуются виджеты экрана рендера предпросмотра
+        self.preview_outer_frame.grid_columnconfigure(0, weight=1)
+        self.preview_outer_frame.grid_rowconfigure(0, weight=1)
+    
+        self.preview_inner_frame.grid(row=0, column=0, sticky='')
+        self.widgets['lbPrevSign'].pack(anchor='nw')
+        self.widgets['_prevProgress'].pack(pady=10)
+        self.widgets['btPrevCancel'].pack(anchor='se')
 
     # расширение метода обновления текстов
     def update_texts(self) -> None:
