@@ -501,10 +501,12 @@ class NewTaskWindow(Toplevel, WindowMixin):
         self.widgets['_entColor'].bind("<FocusOut>", check_empty_color)
 
         # виджеты правого столбца (кнопка цвета, комбобоксы и кнопка создания задачи)
+        self.palette_icon = PhotoImage(data=base64.b64decode(PALETTE_ICON_BASE64))
         self.widgets['_btColor'] = ttk.Button(
             self.color_frame, 
             command=ask_color, 
-            text='+', 
+            image=self.palette_icon, 
+            compound=CENTER, 
             width=2,
         )
 
@@ -579,8 +581,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
             justify=CENTER,
             width=6,
         )
+        self.play_icon = PhotoImage(data=base64.b64decode(PLAY_ICON_BASE64))
         self.widgets['_btPreview'] = ttk.Button(
-            self.create_frame, command=self._show_processing_screen, text='>>', width=2
+            self.create_frame, 
+            command=self._show_processing_screen, 
+            image=self.play_icon, 
+            compound=CENTER, 
+            width=2
         )
 
         self.widgets['btCreate'] = ttk.Button(
