@@ -2337,16 +2337,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
     @staticmethod
     def _watch_preview(link: str):
-        pass
-        # while True:
-        #     try:
-        #         subprocess.call(['open', link])
-        #         break
-        #     except Exception as e:
-        #         print(link)
-        #         print(e)
-        #         time.sleep(1)
-        # os.startfile(link)
+        time.sleep(3)
+        os.startfile(link)
 
     @staticmethod
     def _create_temp_dir():
