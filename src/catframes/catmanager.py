@@ -422,12 +422,12 @@ class CatframesProcess:
     def __init__(self, command):
         if sys.platform == 'win32':
             # Обработка сигналов завершения в Windows выглядит как большой беспорядок.
-            # Если убрать этот флаг, CTRL+C будет отправляться как в дочерний, так и в родительский процесс.
-            # Если использовать этот флаг, CTRL+C не работает вообще, зато работает CTRL+Break.
+            # Если убрать флаг CREATE_NEW_PROCESS_GROUP, CTRL+C будет отправляться как в дочерний, так
+            # и в родительский процесс. Если использовать его — CTRL+C не работает вообще, зато работает CTRL+Break.
             # Этот флаг обязателен к использованию также и согласно документации Python, если мы хотим
             # отправлять в подпроцесс эти два сигнала:
             # https://docs.python.org/3/library/subprocess.html#subprocess.Popen.send_signal
-            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
         else:
             os_issues = {}
 
