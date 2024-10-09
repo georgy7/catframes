@@ -1,5 +1,6 @@
 from _prefix import *
 from sets_utils import PortSets
+import logging
 
 
 """
@@ -315,10 +316,11 @@ class Task:
         file = self.config.get_filepath()
         try:
             os.remove(file)
-        except:
+        except OSError as err:
             # Just in case someone opened the video in a player
             # while it was being encoded or something.
-            pass
+            logger = logging.getLogger('catmanager')
+            logger.info(f'{type(err).__name__}: Could not remove the file {file}')
 
     def delete(self):
         TaskManager.wipe(self)
