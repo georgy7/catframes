@@ -3,6 +3,7 @@ from sets_utils import Lang, PortSets
 from windows_utils import ScrollableFrame, TaskBar, ImageCanvas, DirectoryManager, ToolTip, is_dark_color
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
+from templog import TempLog
 
 
 """
@@ -128,7 +129,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size = 250, 100
+        self.size = 250, 150
         # self.size = 250, 200
         self.resizable(False, False)
         self.transient(root)
@@ -157,6 +158,22 @@ class SettingsWindow(Toplevel, WindowMixin):
             state='readonly',  # запрещает вписывать, только выбирать
             width=7,
         )
+
+        def open_logs():
+            log_paths = TempLog.get_paths()
+            if (log_paths is not None) and ('catmanager' in log_paths):
+                log_file_path = Path(log_paths['catmanager'])
+                logs_path = str(log_file_path.parent)
+                my_system = platform.system()
+                
+                if my_system == 'Windows':
+                    subprocess.run(['explorer', logs_path])
+                elif my_system == 'Linux':
+                    subprocess.run(['xdg-open', '--', logs_path])
+                elif my_system == 'Darwin':
+                    subprocess.run(['open', '--', logs_path])
+
+        self.widgets['btOpenLogs'] = ttk.Button(self.main_frame, command=open_logs)
 
         # def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
         #     return new_value.isnumeric() or not new_value
@@ -219,6 +236,8 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets['lbLang'].grid(row=0, column=0, sticky='e', padx=5)
         self.widgets['_cmbLang'].grid(row=0, column=1, sticky='ew', padx=5)
         self.widgets['_cmbLang'].current(newindex=Lang.current_index)  # подставляем в ячейку текущий язык
+
+        self.widgets['btOpenLogs'].grid(row=1, column=0, sticky='e', padx=5, pady=10)
 
         # self.widgets['lbPortRange'].grid(columnspan=2, row=2, column=0, sticky='ws', padx=15)
         # self.widgets['_entrPortFirst'].grid(row=3, column=0, sticky='wn', padx=(15, 5))

@@ -1,8 +1,4 @@
 from _prefix import *
-import tempfile
-import logging
-from logging.handlers import WatchedFileHandler
-from pathlib import Path
 
 
 class TempLog:

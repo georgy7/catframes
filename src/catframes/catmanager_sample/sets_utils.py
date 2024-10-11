@@ -52,6 +52,7 @@ class Lang:
             'sets.lbPortRange': 'System ports range:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
+            'sets.btOpenLogs': 'Open logs',
 
             'task.title': 'New Task',
             'task.title.view': 'Task settings view',
@@ -114,6 +115,7 @@ class Lang:
             'sets.lbPortRange': 'Диапазон портов системы:',
             'sets.btApply': 'Применить',
             'sets.btSave': 'Сохранить',
+            'sets.btOpenLogs': 'Показать логи',
 
             'task.title': 'Новая задача',
             'task.title.view': 'Просмотр настроек задачи',
