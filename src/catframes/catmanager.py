@@ -2161,9 +2161,20 @@ class SettingsWindow(Toplevel, WindowMixin):
         )
 
         def open_logs():
-            pass
+            log_paths = TempLog.get_paths()
+            if (log_paths is not None) and ('catmanager' in log_paths):
+                log_file_path = Path(log_paths['catmanager'])
+                logs_path = str(log_file_path.parent)
+                my_system = platform.system()
+                
+                if my_system == 'Windows':
+                    subprocess.run(['explorer', logs_path])
+                elif my_system == 'Linux':
+                    subprocess.run(['xdg-open', '--', logs_path])
+                elif my_system == 'Darwin':
+                    subprocess.run(['open', '--', logs_path])
 
-        self.widgets['btOpenLogs'] = ttk.Button(self.main_frame, command=open_logs, text="Logs")
+        self.widgets['btOpenLogs'] = ttk.Button(self.main_frame, command=open_logs)
 
         # def validate_numeric(new_value):  # валидация ввода, разрешены только цифры и пустое поле
         #     return new_value.isnumeric() or not new_value
