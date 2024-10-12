@@ -57,3 +57,7 @@ class TempLog:
 
         if self._tmp_dir:
             self._tmp_dir.__exit__(exc_type, exc_value, traceback)
+
+
+def has_console() -> bool:
+    return (sys.stdin is not None) and sys.stdin.isatty()

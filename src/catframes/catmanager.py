@@ -107,6 +107,10 @@ class TempLog:
             self._tmp_dir.__exit__(exc_type, exc_value, traceback)
 
 
+def has_console() -> bool:
+    return (sys.stdin is not None) and sys.stdin.isatty()
+
+
 
 
 
@@ -409,7 +413,29 @@ class TaskConfig:
 
     # создание консольной команды в виде списка
     def convert_to_command(self, for_user: bool = False) -> List[str]:
-        command = ['catframes']
+        logger = logging.getLogger('catmanager')
+
+        windows = (platform.system() == 'Windows')
+
+        catframes_py = Path(__file__).parent.resolve() / 'catframes.py'
+
+        custom_exe = not (sys.executable.endswith('python.exe') or sys.executable.endswith('pythonw.exe'))
+        catframes_exe = Path(sys.executable).parent.resolve() / 'catframes.exe'
+
+        if for_user:
+            command = ['catframes']
+        elif windows and __file__.endswith('.py') and catframes_py.exists():
+            logger.info('Using local catframes.py (Windows)')
+            command = [
+                str(Path(sys.executable).parent / 'python.exe'),
+                str(catframes_py)
+            ]
+        elif windows and custom_exe and catframes_exe.exists():
+            logger.info('Using local catframes.exe')
+            command = [str(catframes_exe)]
+        else:
+            logger.info('Using Catframes from PATH.')
+            command = ['catframes']
 
         for position, text in self._overlays.items():
             if text:
@@ -490,6 +516,8 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
+        logger = logging.getLogger('catmanager')
+
         if sys.platform == 'win32':
             # Обработка сигналов завершения в Windows выглядит как большой беспорядок.
             # Если убрать этот флаг, CTRL+C будет отправляться как в дочерний, так и в родительский процесс.
@@ -497,11 +525,22 @@ class CatframesProcess:
             # Этот флаг обязателен к использованию также и согласно документации Python, если мы хотим
             # отправлять в подпроцесс эти два сигнала:
             # https://docs.python.org/3/library/subprocess.html#subprocess.Popen.send_signal
-            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
         else:
             os_issues = {}
 
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)
+        logger.info(command)
+        
+        # STDIN is required when running in pythonw.exe
+        # Since the program does not require writing anything
+        # to standard input, no additional code is required.
+        self.process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            **os_issues
+        )
 
         self.error: Optional[str] = None
         self._progress = 0.0
@@ -509,10 +548,14 @@ class CatframesProcess:
         threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
+        logger = logging.getLogger('catmanager')
+
         progress_pattern = re.compile(r'Progress: +[0-9]+')
         image_base64_pattern = re.compile(r'Preview: [a-zA-Z0-9+=/]+')
 
-        for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
+        for line in io.TextIOWrapper(self.process.stdout):
+            logger.debug(f'Catframes: {line.rstrip()}')
+
             if 'FFmpeg not found' in line:
                 self.error = NO_FFMPEG_ERROR
 
@@ -538,6 +581,8 @@ class CatframesProcess:
 
     # убивает процесс (для экстренной остановки)
     def kill(self):
+        logger = logging.getLogger('catmanager')
+
         if sys.platform == 'win32':
             # CTRL_C_EVENT is ignored for process groups
             # https://learn.microsoft.com/ru-ru/windows/win32/procthread/process-creation-flags
@@ -548,8 +593,12 @@ class CatframesProcess:
         # Раз уж удаление делается не через callback или Promise, нужно сделать это синхронно.
         # Мы не можем полагаться на удачу. Мы должны всегда получить одинаковое поведение
         # (удаление видео в случае отмены).
-        while None == self.process.poll():
+        returncode = self.process.poll()
+        while None == returncode:
             time.sleep(0.1)
+            returncode = self.process.poll()
+
+        logger.info(f'Catframes return code: {returncode}')
 
 
 class Task:
@@ -617,22 +666,35 @@ class Task:
 
     # остановка задачи
     def cancel(self):
+        logger = logging.getLogger('catmanager')
+
+        logger.info('Cancelling the task...')
         self.stop_flag = True
         TaskManager.reg_finish(self)
-        self._process_thread.kill()        # убивает процесс
+
+        try:
+            logger.debug('Trying to stop catframes...')
+            self._process_thread.kill()
+        except Exception:
+            logger.exception('Could not kill the process.')
+
         self.delete_file()
         self.gui_callback.delete(self.id)  # сигнал о завершении задачи
 
     # удаляет файл в системе
     def delete_file(self):
+        logger = logging.getLogger('catmanager')
+        logger.info('Deleting video file...')
+
         file = self.config.get_filepath()
+        logger.debug(f'The file: {file}')
         try:
             os.remove(file)
-        except OSError as err:
+            logger.debug('Deleted.')
+        except OSError:
             # Just in case someone opened the video in a player
             # while it was being encoded or something.
-            logger = logging.getLogger('catmanager')
-            logger.info(f'{type(err).__name__}: Could not remove the file {file}')
+            logger.exception(f'Could not remove the file {file}')
 
     def delete(self):
         TaskManager.wipe(self)
@@ -2705,6 +2767,11 @@ def main():
     with TempLog('catmanager'):
         logger = logging.getLogger('catmanager')
         logger.info('Logging is on.')
+
+        logger.info(f'Executable: {sys.executable}')
+        logger.info(f'File: {__file__}')
+        logger.info(f'Console: {has_console()}')
+
         root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
         root.mainloop()
 
