@@ -22,46 +22,42 @@ from _prefix import *
 """
 
 
-
 class TaskConfig:
     """Настройка и хранение конфигурации задачи.
     Создаётся и настраивается на слое gui.
     Позволяет конвертировать в команду catframes."""
 
     overlays_names = [
-        '--top-left',
-        '--top',
-        '--top-right',
-        '--right',
-        '--bottom-right',
-        '--bottom',
-        '--bottom-left',
-        '--left',
+        "--top-left",
+        "--top",
+        "--top-right",
+        "--right",
+        "--bottom-right",
+        "--bottom",
+        "--bottom-left",
+        "--left",
     ]
 
-    quality_names = ('high', 'medium', 'poor')
+    quality_names = ("high", "medium", "poor")
 
     def __init__(self) -> None:
-                
-        self._dirs: List[str] = []                    # пути к директориям с изображениями
-        self._overlays: Dict[str, str] = {}           # словарь надписей
-        self._color: str = DEFAULT_CANVAS_COLOR       # цвет отступов и фона
-        self._framerate: int = 30                     # частота кадров
-        self._quality: str = 'medium'                 # качество видео
-        self._quality_index: int = 1                  # номер значения качества
-        self._limit: int                              # предел видео в секундах
-        self._filepath: str = None                    # путь к итоговому файлу
-        self._rewrite: bool = False                   # перезапись файла, если существует
 
-    # установка директорий
+        self._dirs: List[str] = []
+        self._overlays: Dict[str, str] = {}
+        self._color: str = DEFAULT_CANVAS_COLOR
+        self._framerate: int = 30
+        self._quality: str = "medium"
+        self._quality_index: int = 1
+        self._limit: int
+        self._filepath: str = ""
+        self._rewrite: bool = False
+
     def set_dirs(self, dirs) -> list:
         self._dirs = dirs
 
-    # установка оверлеев
     def set_overlays(self, overlays_texts: List[str]):
         self._overlays = dict(zip(self.overlays_names, overlays_texts))
 
-    # установка цвета
     def set_color(self, color: str):
         self._color = color
 
@@ -79,7 +75,6 @@ class TaskConfig:
     def set_resolution(self, width: int, height: int):
         self._resolution = width, height
 
-    # установка пути файла
     def set_filepath(self, filepath: str):
         self._filepath = filepath
 
@@ -88,21 +83,23 @@ class TaskConfig:
 
     def get_dirs(self) -> list:
         return self._dirs[:]
-    
+
     def get_quality(self) -> int:
         return self._quality_index
-    
+
     def get_framerate(self) -> int:
         return self._framerate
-    
+
     def get_overlays(self) -> List[str]:
         return list(self._overlays.values())
-    
+
     def get_color(self) -> str:
         return self._color
 
     # создание консольной команды в виде списка
-    def convert_to_command(self, for_user: bool = False, bash: bool = True) -> List[str]:
+    def convert_to_command(
+        self, for_user: bool = False, bash: bool = True
+    ) -> List[str]:
         command = ["catframes"]
         q = "'" if bash else '"'
 
@@ -115,30 +112,30 @@ class TaskConfig:
                     command.append(position)
                     command.append(text)
 
-        command.append(f"--margin-color={self._color}")     # параметр цвета
-        command.append(f"--frame-rate={self._framerate}")   # частота кадров
-        command.append(f"--quality={self._quality}")        # качество рендера
+        command.append(f"--margin-color={self._color}")
+        command.append(f"--frame-rate={self._framerate}")
+        command.append(f"--quality={self._quality}")
 
-        if os.path.isfile(self._filepath):                  # флаг перезаписи, если файл уже есть
+        if os.path.isfile(self._filepath):  # флаг перезаписи, если файл уже есть
             command.append("--force")
-        
-        for dir in self._dirs:                              # добавление директорий с изображениями
+
+        for dir in self._dirs:  # добавление директорий с изображениями
             if for_user:
                 dir = f"{q}{dir}{q}"
             command.append(dir)
-        
+
         if for_user:
-            command.append(f"{q}{self._filepath}{q}")       # добавление полного пути файла
+            command.append(
+                f"{q}{self._filepath}{q}"
+            )  # добавление полного пути файла в кавычках
         else:
             command.append(self._filepath)
-
-        if not for_user:                                    # если не для пользователя, то ключ превью
             command.append("--live-preview")
 
-        if hasattr(self, '_limit'):
+        if hasattr(self, "_limit"):
             command.append(f"--limit={self._limit}")
 
-        return command                                      # возврат собранной команды
+        return command
 
 
 class GuiCallback:
@@ -146,20 +143,19 @@ class GuiCallback:
     Позволяет из задачи обновлять статус на слое gui."""
 
     def __init__(
-            self,
-            update_function,
-            finish_function,
-            error_function,
-            delete_function,
-            ):
+        self,
+        update_function,
+        finish_function,
+        error_function,
+        delete_function,
+    ):
         self.update = update_function
         self.finish = finish_function
         self.set_error = error_function
         self.delete = delete_function
-        
-    
+
     @staticmethod  # метод из TaskBar
-    def update(progress: float, base64_img: str = ''):
+    def update(progress: float, base64_img: str = ""):
         """обновление полосы прогресса и превью в окне"""
         ...
 
@@ -180,62 +176,74 @@ class GuiCallback:
 
 
 class CatframesProcess:
-    """ Создаёт подпроцесс с запущенным catframes,
-    создаёт отдельный поток для чтения порта api, 
+    """Создаёт подпроцесс с запущенным catframes,
+    создаёт отдельный поток для чтения порта api,
     чтобы не задерживать обработку gui программы.
     По запросу может сообщать данные о прогрессе.
     """
 
     def __init__(self, command):
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             # Обработка сигналов завершения в Windows выглядит как большой беспорядок.
             # Если убрать этот флаг, CTRL+C будет отправляться как в дочерний, так и в родительский процесс.
             # Если использовать этот флаг, CTRL+C не работает вообще, зато работает CTRL+Break.
             # Этот флаг обязателен к использованию также и согласно документации Python, если мы хотим
             # отправлять в подпроцесс эти два сигнала:
             # https://docs.python.org/3/library/subprocess.html#subprocess.Popen.send_signal
-            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+            os_issues = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         else:
             os_issues = {}
 
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues)
+        self.process = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues
+        )
 
         self.error: Optional[str] = None
         self._progress = 0.0
-        self._image_base64 = ''
-        threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
+        self._image_base64 = ""
+        threading.Thread(
+            target=self._update_progress, daemon=True
+        ).start()  # запуск потока обновления прогресса из вывода stdout
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
-        progress_pattern = re.compile(r'Progress: +[0-9]+')
-        image_base64_pattern = re.compile(r'Preview: [a-zA-Z0-9+=/]+')
+        progress_pattern = re.compile(r"Progress: +[0-9]+")
+        image_base64_pattern = re.compile(r"Preview: [a-zA-Z0-9+=/]+")
 
-        for line in io.TextIOWrapper(self.process.stdout):  # читает строки вывода процесса
-            if 'FFmpeg not found' in line:
+        # читает строки вывода процесса
+        for line in io.TextIOWrapper(self.process.stdout):
+            if "FFmpeg not found" in line:
                 self.error = NO_FFMPEG_ERROR
 
-            progress_data = re.search(progress_pattern, line)                 # ищет в строке процент прогресса
+            # ищет в строке процент прогресса
+            progress_data = re.search(progress_pattern, line)
+
             if progress_data:
-                progress_percent = int(progress_data.group().split()[1])  # если находит, забирает число
-                if self._progress != 100:                  # если процент 100 - предерживает его
-                    self._progress = progress_percent/100  # переводит чистый процент в сотые
+                # если находит, забирает число
+                progress_percent = int(progress_data.group().split()[1])
+
+                # если процент 100 - предерживает его
+                if self._progress != 100:
+                    self._progress = progress_percent / 100
 
             image_data = re.search(image_base64_pattern, line)
             if image_data:
                 self._image_base64 = image_data.group().split()[1]
 
-        if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
-            self.error = INTERNAL_ERROR   # текст последней строки
-        self._progress == 1.0         # полный прогресс только после завершения скрипта
+        # если процесс завершился некорректно
+        if self.process.poll() != 0 and not self.error:
+            self.error = INTERNAL_ERROR  # текст последней строки
+
+        self._progress == 1.0
 
     def get_progress(self):
         return self._progress
-    
+
     def get_image_base64(self):
         return self._image_base64
 
     # убивает процесс (для экстренной остановки)
     def kill(self):
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             # CTRL_C_EVENT is ignored for process groups
             # https://learn.microsoft.com/ru-ru/windows/win32/procthread/process-creation-flags
             os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
@@ -253,25 +261,26 @@ class Task:
     """Класс самой задачи, связывающейся с catframes"""
 
     def __init__(self, id: int, task_config: TaskConfig) -> None:
-        self.config = task_config
-        self.command = task_config.convert_to_command()
+        self.config: TaskConfig = task_config
+        self.command: list = task_config.convert_to_command()
 
         self._process_thread: CatframesProcess = None
-        self.id = id  # получение уникального номера
-        self.done = False  # флаг завершённости
-        self.stop_flag = False  # требование остановки
+        self.id: int = id
+
+        self.done: bool = False  # флаг завершённости
+        self.stop_flag: bool = False  # требование остановки
 
     # запуск задачи
-    def start(self, gui_callback: GuiCallback):  # инъекция зависимосей 
-        self.gui_callback = gui_callback         # для оповещения наблюдателя
-        TaskManager.reg_start(self)              # регистрация запуска
+    def start(self, gui_callback: GuiCallback):  # инъекция колбека
+        self.gui_callback = gui_callback
+        TaskManager.reg_start(self)
 
         try:  # запуск фонового процесса catframes
             self._process_thread = CatframesProcess(self.command)
-        
+
         except FileNotFoundError:  # если catframes не найден
             return self.handle_error(NO_CATFRAMES_ERROR)
-        
+
         except Exception as e:  # если возникла другая ошибка, обработает её
             return self.handle_error(START_FAILED_ERROR)
 
@@ -281,39 +290,37 @@ class Task:
     # спрашивает о прогрессе, обновляет прогрессбар, обрабатывает завершение
     def _progress_watcher(self):
         progress: float = 0.0
-        while progress < 1.0 and not self.stop_flag:          # пока прогрес не завершён
-            time.sleep(0.2)
-            progress = self._process_thread.get_progress()    # получить инфу от потока с процессом
-            image = self._process_thread.get_image_base64()
-            self.gui_callback.update(progress, base64_img=image)  # через ручку коллбека обновить прогрессбар
 
-            if self._process_thread.error and not self.stop_flag:      # если процесс прервался не из-за юзера
-                return self.handle_error(self._process_thread.error)   # обработает ошибку             
-                
-        # если всё завершилось корректно
-        self.finish()  # обработает завершение
+        while progress < 1.0 and not self.stop_flag:  # пока прогрес не завершён
+            time.sleep(0.2)
+            progress = self._process_thread.get_progress()
+            image = self._process_thread.get_image_base64()
+
+            self.gui_callback.update(progress, base64_img=image)
+
+            if self._process_thread.error and not self.stop_flag:
+                return self.handle_error(self._process_thread.error)
+
+        self.finish()
 
     # обработка ошибки процесса
     def handle_error(self, error: str):
-        TaskManager.reg_finish(self)   # регистрация завершения
-        self.gui_callback.set_error(   # сигнал об ошибке в ходе выполнения
-            self.id,
-            error=error
-        )
+        TaskManager.reg_finish(self)
+        self.gui_callback.set_error(self.id, error=error)
 
     # обработка финиша задачи
     def finish(self):
-        self.done = True  # ставит флаг завершения задачи
-        TaskManager.reg_finish(self)       # регистрация завершения
-        self.gui_callback.finish(self.id)  # сигнал о завершении задачи
+        self.done = True
+        TaskManager.reg_finish(self)
+        self.gui_callback.finish(self.id)
 
     # остановка задачи
     def cancel(self):
         self.stop_flag = True
         TaskManager.reg_finish(self)
-        self._process_thread.kill()        # убивает процесс
+        self._process_thread.kill()
         self.delete_file()
-        self.gui_callback.delete(self.id)  # сигнал о завершении задачи
+        self.gui_callback.delete(self.id)
 
     # удаляет файл в системе
     def delete_file(self):
@@ -327,7 +334,7 @@ class Task:
 
     def delete(self):
         TaskManager.wipe(self)
-        self.gui_callback.delete(self.id)  # сигнал об удалении задачи
+        self.gui_callback.delete(self.id)
 
 
 class TaskManager:
@@ -335,17 +342,18 @@ class TaskManager:
     Позволяет регистрировать задачи,
     и управлять ими."""
 
-    _last_id: int = 0          # последний номер задачи
-    _all_tasks: dict = {}      # словарь всех задач
+    _last_id: int = 0  # последний номер задачи
+    _all_tasks: dict = {}  # словарь всех задач
     _running_tasks: dict = {}  # словарь активных задач
 
+    # фабричный метод, создания задачи с уникальным id
     @classmethod
     def create(cls, task_config: TaskConfig) -> Task:
-        cls._last_id += 1  # увеличение последнего номера задачи
-        unic_id = cls._last_id  # получение уникального номера
+        cls._last_id += 1
+        unic_id = cls._last_id
 
-        task = Task(unic_id, task_config)  # создание задачи
-        cls._reg(task)  # регистрация в менеджере
+        task = Task(unic_id, task_config)
+        cls._reg(task)
         return task
 
     # регистрация задачи
@@ -369,21 +377,19 @@ class TaskManager:
     def running_list(cls) -> list:
         return list(cls._running_tasks.values())
 
-    # удаление задачи   
+    # удаление задачи
     @classmethod
     def wipe(cls, task: Task) -> None:
         cls.reg_finish(task)
         if task.id in cls._all_tasks:
             cls._all_tasks.pop(task.id)
 
-
     # получение списка всех задач
     @classmethod
     def all_list(cls) -> list:
         return list(cls._all_tasks.values())
 
-    # проверка существования задачи    
+    # проверка существования задачи
     @classmethod
     def check(cls, task_id: int) -> bool:
         return task_id in cls._all_tasks
-    

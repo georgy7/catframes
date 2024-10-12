@@ -20,15 +20,15 @@ import os
 
 
 DIRECTORY = "src/catframes/catmanager_sample"  # путь к сборочным файлам
-OUTPUT_FILE = "src/catframes/catmanager.py" # путь к выходному файлу 
+OUTPUT_FILE = "src/catframes/catmanager.py"  # путь к выходному файлу
 
 FILE_NAMES = [  # порядок файлов для сборки
-    'sets_utils.py',
-    'task_flows.py',
-    'windows_base.py',
-    'windows_utils.py',
-    'windows.py',
-    'main.py'
+    "sets_utils.py",
+    "task_flows.py",
+    "windows_base.py",
+    "windows_utils.py",
+    "windows.py",
+    "main.py",
 ]
 
 
@@ -40,7 +40,9 @@ def collect_code(file_path, ignore_imports: bool) -> list:
         for line in lines:
             # если стоит флаг, то игнорируем строки с импортами
             if ignore_imports:
-                if line.strip().startswith("import ") or line.strip().startswith("from "):
+                if line.strip().startswith("import ") or line.strip().startswith(
+                    "from "
+                ):
                     continue
             code_lines.append(line)
 
@@ -58,21 +60,22 @@ def main():
     # добавление в начало строк из префикса
     all_code_lines = collect_code(
         os.path.join(DIRECTORY, "_prefix.py"),  # сборка пути и имени файла
-        ignore_imports=False  # импорты не игнорируются
+        ignore_imports=False,  # импорты не игнорируются
     )
-    
+
     for fn in FILE_NAMES:
-        all_code_lines += ['\n'] * 2  # строки отступов
-        all_code_lines += f'\n    #  из файла {fn}:'
+        all_code_lines += ["\n"] * 2  # строки отступов
+        all_code_lines += f"\n    #  из файла {fn}:"
 
         all_code_lines += collect_code(
             os.path.join(DIRECTORY, fn),  # сборка пути и имени файла
-            ignore_imports=True  # теперь импорты игнорируются
+            ignore_imports=True,  # теперь импорты игнорируются
         )
 
-        all_code_lines += ['\n'] * 2  # строки отступов
+        all_code_lines += ["\n"] * 2  # строки отступов
 
     write_to_file(OUTPUT_FILE, all_code_lines)  # создание выходного файла
+
 
 if __name__ == "__main__":
     main()
