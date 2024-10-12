@@ -261,13 +261,18 @@ class Task:
         self.gui_callback = gui_callback         # для оповещения наблюдателя
         TaskManager.reg_start(self)              # регистрация запуска
 
+        logger = logging.getLogger('catmanager')
+        logger.info('Logging is working in another thread!')
+
         try:  # запуск фонового процесса catframes
             self._process_thread = CatframesProcess(self.command)
         
         except FileNotFoundError:  # если catframes не найден
+            logger.exception('It seems catframes not found.')
             return self.handle_error(NO_CATFRAMES_ERROR)
         
         except Exception as e:  # если возникла другая ошибка, обработает её
+            logger.exception('')
             return self.handle_error(START_FAILED_ERROR)
 
         # запуск потока слежения за прогрессом

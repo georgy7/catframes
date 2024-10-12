@@ -60,6 +60,7 @@ class RootWindow(Tk, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        logger = logging.getLogger('catmanager')
 
         # открытие окна с новой задачей (и/или переключение на него)
         def open_new_task():
@@ -77,6 +78,8 @@ class RootWindow(Tk, WindowMixin):
         # создание виджетов, привязывание функций
         self.widgets['newTask'] = ttk.Button(upperBar, command=open_new_task)
         self.widgets['openSets'] = ttk.Button(upperBar, command=open_settings)
+
+        logger.info('Root window started.')
 
     # расположение виджетов
     def _pack_widgets(self):
