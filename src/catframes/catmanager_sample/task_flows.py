@@ -48,7 +48,7 @@ class TaskConfig:
         self._framerate: int = 30
         self._quality: str = "medium"
         self._quality_index: int = 1
-        self._limit: int
+        self._limit: Optional[int] = None
         self._filepath: str = ""
         self._rewrite: bool = False
 
@@ -132,7 +132,7 @@ class TaskConfig:
             command.append(self._filepath)
             command.append("--live-preview")
 
-        if hasattr(self, "_limit"):
+        if self._limit:
             command.append(f"--limit={self._limit}")
 
         return command
