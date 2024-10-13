@@ -424,7 +424,7 @@ class TaskConfig:
 
         if for_user:
             command = ['catframes']
-        elif windows and __file__.endswith('.py') and catframes_py.exists():
+        elif windows and __file__.endswith('catmanager.py') and catframes_py.exists():
             logger.info('Using local catframes.py (Windows)')
             command = [
                 str(Path(sys.executable).parent / 'python.exe'),
