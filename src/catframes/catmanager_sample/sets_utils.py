@@ -227,6 +227,55 @@ class Theme:
         )
 
 
+class UtilityLocator:
+    """Ищет утилиты в системе по имени"""
+
+    @staticmethod
+    def _get_paths(utility_name: str) -> List[str]:
+        system = platform.system()
+
+        if system == "Windows":
+            return [
+                os.path.join(
+                    os.environ.get("ProgramFiles", ""),
+                    utility_name,
+                    "bin",
+                    f"{utility_name}.exe",
+                ),
+                os.path.join(
+                    os.environ.get("ProgramFiles(x86)", ""),
+                    utility_name,
+                    "bin",
+                    f"{utility_name}.exe",
+                ),
+            ]
+        elif system == "Linux":
+            return [
+                "/usr/bin/" + utility_name,
+                "/usr/local/bin/" + utility_name,
+            ]
+        elif system == "Darwin":
+            return [
+                "/usr/local/bin/" + utility_name,
+                "/opt/homebrew/bin/" + utility_name,
+            ]
+
+    @staticmethod
+    def _find_in_system_path(utility_name) -> bool:
+        try:
+            result = subprocess.run(
+                [utility_name, "-version"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            output = result.stderr.decode()
+            if result.returncode == 0 or "usage" in output:
+                return True
+        except FileNotFoundError:
+            pass
+        return False
+
+
 class IniConfig:
     """Создание, чтение, и изменение внешнего файла конфига"""
 
