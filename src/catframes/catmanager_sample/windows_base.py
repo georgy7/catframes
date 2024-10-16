@@ -1,5 +1,5 @@
 from _prefix import *
-from sets_utils import Lang
+from sets_utils import Settings
 from task_flows import TaskManager
 
 
@@ -23,7 +23,6 @@ WindowMixin - это абстрактный класс, от которого н
 """
 
 
-
 class LocalWM:
     """Класс для работы с окнами.
     Позволяет регистрировать окна,
@@ -37,24 +36,27 @@ class LocalWM:
         return name in cls._all_windows
 
     # открытие окна
-    @classmethod                                         # принимает класс окна, имя окна
-    def open(cls, window_cls, name: str, master: Optional[Tk] = None, **kwargs) -> Tk:    
-        if not cls.check('root'):                        # проверяем, есть ли или корневое окно
-            return cls._reg(window_cls(), 'root')        # регистрируем окно как корневое
+    @classmethod  # принимает класс окна, имя окна
+    def open(cls, window_cls, name: str, master: Optional[Tk] = None, **kwargs) -> Tk:
 
-        if not master:                                   # если мастер не был передан
-            master = cls.call('root')                    # мастером будет корневое окно
+        # если корневого окна нет, то создаём и регистрируем
+        if not cls.check("root"):
+            return cls._reg(window_cls(), "root")
 
-        if not cls.check(name):                          # проверяем, зарегистрировано ли окно
-            window = window_cls(root=master, **kwargs)   # создаём окно, передаём мастера
-            cls._reg(window, name)                       # регистрируем окно
+        if not master:
+            master = cls.call("root")
+
+        # если окно не зарегистрировано - создаёт его и регистрирует
+        if not cls.check(name):
+            window = window_cls(root=master, **kwargs)
+            cls._reg(window, name)
+
         return cls.call(name)
-    
 
     # регистрация окна
     @classmethod
     def _reg(cls, window: Tk, name: str = None) -> None:
-        if not name:  
+        if not name:
             name = window.name
         if not cls.check(name):
             cls._all_windows[name] = window
@@ -76,7 +78,7 @@ class LocalWM:
     @classmethod
     def all(cls) -> list:
         return list(cls._all_windows.values())
-    
+
     # переключение фокуса на окно
     @classmethod
     def focus(cls, name: str) -> None:
@@ -86,145 +88,109 @@ class LocalWM:
     # обновление открытых окон после завершения задачи
     @classmethod
     def update_on_task_finish(cls):
-        if cls.check('warn') and not TaskManager.running_list():
-            cls._all_windows['warn'].destroy()
-            cls._all_windows.pop('warn')
-        ...
-    
+        if cls.check("warn") and not TaskManager.running_list():
+            cls._all_windows["warn"].destroy()
+            cls._all_windows.pop("warn")
+
 
 class WindowMixin(ABC):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
 
-    title: Tk.wm_title        # эти атрибуты и методы объекта
+    title: Tk.wm_title  # эти атрибуты и методы объекта
     protocol: Tk.wm_protocol  # появятся автоматически при
-    destroy: Tk.destroy       # наследовании от Tk или Toplevel
+    destroy: Tk.destroy  # наследовании от Tk или Toplevel
 
-    size: Tuple[int, int]     # размеры (ширина, высота) окна
-    name: str                 # имя окна для словаря всех окон
+    size: Tuple[int, int]  # размеры (ширина, высота) окна
+    name: str  # имя окна для словаря всех окон
     widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
-    # настройка окна, вызывается через super в конце __init__ окна
+    # стандартная настройка окна, вызывается в конце конструктора
     def _default_set_up(self):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
-        self._set_style()     # настройка внешнего вида окна
-        self._to_center()     # размещение окна в центре экрана
-        self.after(1, self._init_widgets)  # создание виджетов
-        self.after(2, self.update_texts)   # установка текста нужного языка
-        self.after(3, self._pack_widgets)  # расстановка виджетов
+        self._set_size()
+        self._to_center()
+
+        if self.name == "root":
+            Settings.theme.lazy_init(master=self)
+        self.after(1, self._init_widgets)
+        self.after(2, self.update_texts)
+        self.after(3, self._pack_widgets)
 
     # закрытие окна
     def close(self) -> None:
-        # удаляет регистрацию окна из менеджера
         LocalWM.wipe(self.name)
-        self.destroy()  # закрывает окно
+        self.destroy()
 
     # обновление текстов всех виджетов окна, исходя из языка
     def update_texts(self) -> None:
-        self.title(Lang.read(f'{self.name}.title'))
+        self.title(Settings.lang.read(f"{self.name}.title"))
 
         for w_name, widget in self.widgets.items():
 
-            if w_name.startswith('_'):  # если виджет начинается с "_", его обходит
+            # не применяется для виджетов, начинающихся с "_"
+            if w_name.startswith("_"):
                 continue
 
-            new_text_data = Lang.read(f'{self.name}.{w_name}')
+            new_text_data = Settings.lang.read(f"{self.name}.{w_name}")
 
-            if w_name.startswith('cmb'): # если виджет это комбобокс
-                widget.config(values=new_text_data)   
-                widget.current(newindex=0)   
-                continue    
-            
+            if w_name.startswith("cmb"):  # если виджет это комбобокс
+                widget.config(values=new_text_data)
+                widget.current(newindex=0)
+                continue
+
             widget.config(text=new_text_data)
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-        border_gap = 30  # минимальный отступ от края окна при открытии
+        border_gap: int = 30  # минимальный отступ от края окна при открытии
 
-        screen_size = self.winfo_screenwidth(), self.winfo_screenheight()
+        screen_size: tuple = self.winfo_screenwidth(), self.winfo_screenheight()
 
         # если это не побочное окно, то размещаем по центру экрана
         if not isinstance(self, Toplevel):
             x = (screen_size[0] - self.size[0]) / 2
             y = (screen_size[1] - self.size[1]) / 2
-            self.geometry(f'+{int(x)}+{int(y)}')
+            self.geometry(f"+{int(x)}+{int(y)}")
             return
 
         # далее для побочных окон:
         master_size = self.master.winfo_width(), self.master.winfo_height()
-        x = self.master.winfo_x() + master_size[0]/2 - self.size[0]/2  # размещаем по центру
-        y = self.master.winfo_y() + master_size[1]/2 - self.size[1]/2  # главного окна
+        x = self.master.winfo_x() + master_size[0] / 2 - self.size[0] / 2
+        y = self.master.winfo_y() + master_size[1] / 2 - self.size[1] / 2
 
-        # если окно вышло за левый край экрана
-        if x < border_gap:  
+        # далее описаны сценарии для случаев, когда новое окно,
+        # при появлении, выходит за границы экрана
+
+        if x < border_gap:
             x = border_gap
 
-        # если окно вышло за правый край экрана
-        if x+self.size[0]+border_gap > screen_size[0]:
-            x = screen_size[0]-self.size[0]-border_gap
+        if x + self.size[0] + border_gap > screen_size[0]:
+            x = screen_size[0] - self.size[0] - border_gap
 
-        # если окно вышло за верхнюю границу
-        if y < border_gap:  
+        if y < border_gap:
             y = border_gap
 
-        # если окно вышло за низнюю границу экрана
-        if y+self.size[1]+(border_gap*3) > screen_size[1]:  # отступ больше в три раза, 
-            y = screen_size[1]-self.size[1]-(border_gap*3)  # учитывая панель задач или dock
+        # при выходе за нижнюю границу экрана, отсуп больше
+        if y + self.size[1] + (border_gap * 3) > screen_size[1]:
+            y = screen_size[1] - self.size[1] - (border_gap * 3)
 
-        self.geometry(f'+{int(x)}+{int(y)}')
+        self.geometry(f"+{int(x)}+{int(y)}")
 
+    def _set_size(self):
 
-    # настройка стиля окна, исходя из разрешения экрана
-    def _set_style(self) -> None:
+        x, y = self.size
+        self.geometry(f"{x}x{y}")
+        self.minsize(x, y)
 
-        # screen_height = self.winfo_screenheight()  # достаём высоту экрана
-        # scale = (screen_height/540)                # индекс масштабирования
-        # scale *= MAJOR_SCALING                     # домножаем на глобальную
-
-        style=ttk.Style()
-        _font = font.Font(
-            size=12, 
-        )
-        style.configure(style='.', font=_font)  # шрифт текста в кнопке
-        self.option_add("*Font", _font)  # шрифты остальных виджетов
-
-        style.configure('Main.TaskList.TFrame', background=MAIN_TASKLIST_COLOR)
-        style.configure('Main.ToolBar.TFrame', background=MAIN_TOOLBAR_COLOR)
-
-        # создание стилей фона таскбара для разных состояний
-        for status, color in MAIN_TASKBAR_COLORS.items():
-            style.configure(f'{status}.Task.TFrame', background=color)
-            style.configure(f'{status}.Task.TLabel', background=color)
-            style.configure(f'{status}.Task.Horizontal.TProgressbar', background=color)
-
-        style.map(
-            "Create.Task.TButton", 
-            background=[
-                ("active", 'blue'),
-                ("!disabled", 'blue')
-            ]
-        )
-
-        x, y = self.size                   # забираем объявленные размеры окна
-        # x, y = int(x*scale), int(y*scale)  # масштабируем их
-        self.geometry(f'{x}x{y}')          # и присваиваем их окну
-        self.minsize(x, y)                 # и устанавливаем как минимальные
-        try:
-            x, y = self.size_max               # если есть максимальные размеры
-            # x, y = int(x*scale), int(y*scale)  # масштабируем их
-            self.maxsize(x, y)
-        except AttributeError:
-            pass
-
-
+        if hasattr(self, "size_max"):
+            self.maxsize(*self.size_max)
 
     # метод для создания и настройки виджетов
     @abstractmethod
-    def _init_widgets(self) -> None:
-        ...
+    def _init_widgets(self) -> None: ...
 
     # метод для расположения виджетов
     @abstractmethod
-    def _pack_widgets(self, ) -> None:
-        ...
+    def _pack_widgets(self) -> None: ...
