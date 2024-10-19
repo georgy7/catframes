@@ -20,19 +20,20 @@ class SingleCheck(ttk.Frame):
 
     def _init_widgets(self):
         big_font = font.Font(size=20)
-        mid_font = font.Font(size=14)
+        mid_font = font.Font(size=12)
         self.top_frame = ttk.Frame()
         self.bottom_frame = ttk.Frame()
 
         self.widgets["main_label"] = ttk.Label(
             self.top_frame, font=big_font, text=f"{self.util_name}"
         )
-        self.widgets["status_image"] = ttk.Label(
-            self.top_frame, width=3, font=big_font, text="[--]"
-        )
+        self.widgets["status_image"] = ttk.Label(self.top_frame)
         self.widgets["bottom_label"] = ttk.Label(
             self.bottom_frame, font=mid_font, text = f"searching..."
         )
+
+        self.ok_image = base64_to_tk(OK_ICON_BASE64)
+        self.err_image = base64_to_tk(ERROR_ICON_BASE64)
 
     def _pack_widgets(self):
         self.top_frame.pack(expand=True, fill=X, pady=(50, 0))
@@ -43,13 +44,19 @@ class SingleCheck(ttk.Frame):
 
     def check(self):
         self.found: str = self.search_method()
+
+        text = "Not found"
+        status_image = self.err_image
         if self.found:
-            text = shrink_path(self.found, 40)
-            self.widgets["bottom_label"].configure(text=text)
-            self.widgets["status_image"].configure(text="[++]")
-        else:
-            self.widgets["bottom_label"].configure(text="Not found")
-            self.widgets["status_image"].configure(text="[XX]")
+            try:
+                text = shrink_path(self.found, 45)
+            except:
+                text = self.found
+            status_image = self.ok_image
+        
+        
+        self.widgets["bottom_label"].configure(text=text)
+        self.widgets["status_image"].configure(image=status_image)
 
 
 class UtilChecker(Tk, WindowMixin):
@@ -64,7 +71,7 @@ class UtilChecker(Tk, WindowMixin):
         self.size: Tuple[int] = 400, 400
         self.resizable(False, False)
 
-        self.all_modules_checked = True
+        self.all_checked = False
 
         super()._default_set_up()
         self.after(1000, self.start_check)
@@ -91,13 +98,34 @@ class UtilChecker(Tk, WindowMixin):
         self.catframes.pack(expand=True)
 
     def start_check(self):
-        100, self.pil.check()
-        1500, self.ffmpeg.check()
-        2000, self.catframes.check()
+        self.pil.check()
+        self.ffmpeg.check()
+        self.catframes.check()
+        self.all_checked = \
+                    self.pil.found \
+                    and self.ffmpeg.found \
+                    and self.catframes.found
+        if self.all_checked:
+            self.save_settings()
+            self.after(5000, self.destroy)
+
+    def save_settings(self):
+            Settings.conf.update(
+                "AbsolutePath", "FFmpeg", Settings.util_locatior.ffmpeg_full_path
+            )
+            Settings.conf.update(
+                "SystemPath", "FFmpeg", "yes" if Settings.util_locatior.ffmpeg_in_sys_path else "no"
+            )
+            Settings.conf.update(
+                "AbsolutePath", "Catframes", Settings.util_locatior.catframes_full_path
+            )
+            Settings.conf.update(
+                "SystemPath", "Catframes", "yes" if Settings.util_locatior.catframes_in_sys_path else "no"
+            )
+            Settings.save()
 
     def close(self):
-        if self.all_modules_checked:
-            Settings.save()
+        if self.all_checked:
             self.destroy()
         else:
             exit()

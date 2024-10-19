@@ -15,17 +15,11 @@ def start_catmanager():
     root.mainloop()
 
 
-# def main():
-#     Settings.restore()
-#     check_utils()
-#     # start_catmanager()
-
 def main():
     Settings.restore()
     if not Settings.conf.file_exists:
         check_utils()
     start_catmanager()
-
 
 
 if __name__ == "__main__":

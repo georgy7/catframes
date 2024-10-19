@@ -237,8 +237,16 @@ class UtilityLocator:
     ffmpeg_in_sys_path: bool
     catframes_in_sys_path: bool
 
-    ffmpeg_full_paths: list
-    catframes_full_paths: list
+    ffmpeg_full_path: str
+    catframes_full_path: str
+
+    def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
+        self.ffmpeg_in_sys_path = is_in_sys_path
+        self.ffmpeg_full_path = full_path
+
+    def set_catframes(self, is_in_sys_path: bool, full_path: str):
+        self.catframes_in_sys_path = is_in_sys_path
+        self.catframes_full_path = full_path
 
     # метод для поиска ffmpeg в системе
     def find_ffmpeg(self) -> None:
@@ -349,7 +357,10 @@ class IniConfig:
             "TtkTheme": "vista" if platform.system() == "Windows" else "default",
         }
         self.config["AbsolutePath"] = {
-            "Python": "",
+            "FFmpeg": "",
+            "Catframes": "",
+        }
+        self.config["SystemPath"] = {
             "FFmpeg": "",
             "Catframes": "",
         }
@@ -383,3 +394,11 @@ class Settings:
     def restore(cls):
         cls.lang.set(cls.conf.config["Settings"]["Language"])
         cls.theme.set_name(cls.conf.config["Settings"]["TtkTheme"])
+        cls.util_locatior.set_ffmpeg(
+            is_in_sys_path=cls.conf.config["SystemPath"]["FFmpeg"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["FFmpeg"]
+        )
+        cls.util_locatior.set_catframes(
+            is_in_sys_path=cls.conf.config["SystemPath"]["Catframes"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["Catframes"]
+        )
