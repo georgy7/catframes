@@ -82,6 +82,7 @@ class Lang:
             "noti.lbWarn": "Invalid port range!",
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
+            "checker.title": "Necessary modules check",
         },
         "русский": {
             "root.title": "CatFrames",
@@ -140,6 +141,7 @@ class Lang:
             "noti.lbWarn": "Неверный диапазон портов!",
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
+            "checker.title": "Проверка необходимых модулей",
         },
     }
 

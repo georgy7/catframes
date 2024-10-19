@@ -21,7 +21,11 @@ from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
-from PIL import Image, ImageTk
+try:
+    from PIL import Image, ImageTk
+    PIL_FOUND_FLAG = True
+except:
+    PIL_FOUND_FLAG = False
 
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
@@ -161,6 +165,7 @@ class Lang:
             "noti.lbWarn": "Invalid port range!",
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
+            "checker.title": "Necessary modules check",
         },
         "русский": {
             "root.title": "CatFrames",
@@ -219,6 +224,7 @@ class Lang:
             "noti.lbWarn": "Неверный диапазон портов!",
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
+            "checker.title": "Проверка необходимых модулей",
         },
     }
 
@@ -3073,14 +3079,58 @@ class NotifyWindow(Toplevel, WindowMixin):
 
 
 
+    #  из файла util_checker.py:
+
+class UtilChecker(Tk, WindowMixin):
+    """Окно, в котором происходит первичная проверка необходимых утилит"""
+
+    def __init__(self):
+        super().__init__()
+        self.name: str = "checker"
+
+        self.widgets: Dict[str, ttk.Widget] = {}
+
+        self.size: Tuple[int] = 400, 400
+        self.resizable(False, False)
+
+        self.all_modules_checked = True
+
+        super()._default_set_up()
+
+    def _init_widgets(self):
+        pass
+
+    def _pack_widgets(self):
+        pass
+
+    def close(self):
+        if self.all_modules_checked:
+            Settings.save()
+            self.destroy()
+        else:
+            exit()
+
+
+
+
     #  из файла main.py:
+
+def check_utils():
+    checker = UtilChecker()
+    checker.mainloop()
+
+
+def start_catmanager():
+    root = LocalWM.open(RootWindow, "root")  # открываем главное окно
+    root.mainloop()
+
 
 def main():
     Settings.restore()
     if not Settings.conf.file_exists:
-        print("TODO вызов первичной проверки")
-    root = LocalWM.open(RootWindow, "root")  # открываем главное окно
-    root.mainloop()
+        check_utils()
+    start_catmanager()
+
 
 
 if __name__ == "__main__":

@@ -21,7 +21,11 @@ from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
-from PIL import Image, ImageTk
+try:
+    from PIL import Image, ImageTk
+    PIL_FOUND_FLAG = True
+except:
+    PIL_FOUND_FLAG = False
 
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
