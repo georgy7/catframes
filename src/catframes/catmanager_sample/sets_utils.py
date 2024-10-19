@@ -230,6 +230,51 @@ class Theme:
 class UtilityLocator:
     """Ищет утилиты в системе по имени"""
 
+    use_system_path: bool
+
+    ffmpeg_in_sys_path: bool
+    catframes_in_sys_path: bool
+
+    ffmpeg_full_paths: list
+    catframes_full_paths: list
+
+    # метод инициализации 
+    def find_utils(self) -> None:
+        self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
+        self.ffmpeg_full_path = self.find_full_paths('ffmpeg', self.ffmpeg_in_sys_path)
+
+        self.catframes_in_sys_path = self.find_in_sys_path('catframes')
+        self.catframes_full_path = self.find_full_paths('catframes', self.catframes_in_sys_path)
+
+    # ищет полный путь для утилиты
+    # если она есть в path, то ищет консолью
+    @staticmethod
+    def find_full_paths(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
+        if is_in_sys_path:
+            return UtilityLocator.find_by_console(utility_name)
+
+        paths_to_check = UtilityLocator._get_paths(utility_name)
+        for path in paths_to_check:
+            if os.path.isfile(path):
+                return path
+
+    # ниходит полный путь утилиты при помощи консоли,
+    # если она есть в системном path
+    @staticmethod
+    def find_by_console(utility_name) -> list:
+        command = "where" if platform.system() == "Windows" else "which"
+        result = subprocess.run(
+            [command, utility_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        paths = result.stdout.decode()
+        paths = map(lambda x: x.strip('\r '), paths.split('\n'))
+        paths = filter(lambda x: x.endswith('.exe'), paths)
+
+        return list(paths)[0] if paths else None
+
+    # возвращает пути, по которым может быть утилита, исходя из системы
     @staticmethod
     def _get_paths(utility_name: str) -> List[str]:
         system = platform.system()
@@ -260,8 +305,9 @@ class UtilityLocator:
                 "/opt/homebrew/bin/" + utility_name,
             ]
 
+    # проверка, есть ли утилита в системном path
     @staticmethod
-    def _find_in_system_path(utility_name) -> bool:
+    def find_in_sys_path(utility_name) -> bool:
         try:
             result = subprocess.run(
                 [utility_name, "-version"],
@@ -281,12 +327,13 @@ class IniConfig:
 
     def __init__(self):
         self.file_path = os.path.join(os.path.expanduser("~"), CONFIG_FILENAME)
-
+        self.file_exists = os.path.isfile(self.file_path)
         self.config = configparser.ConfigParser()
 
-        if not os.path.isfile(self.file_path):
+        if self.file_exists:
+            self.config.read(self.file_path)
+        else:
             self.set_default()
-        self.config.read(self.file_path)
 
     # создание стандартного конфиг файла
     def set_default(self):
@@ -300,7 +347,6 @@ class IniConfig:
             "FFmpeg": "",
             "Catframes": "",
         }
-        self.save()
 
     # редактирование ключа в секции конфиг файла
     def update(self, section: str, key: str, value: Union[str, int]):
@@ -310,6 +356,7 @@ class IniConfig:
     def save(self):
         with open(self.file_path, "w") as configfile:
             self.config.write(configfile)
+        self.file_exists = True
 
 
 class Settings:
@@ -317,6 +364,7 @@ class Settings:
 
     lang = Lang()
     theme = Theme()
+    util_locatior = UtilityLocator()
     conf = IniConfig()
 
     @classmethod
@@ -329,6 +377,3 @@ class Settings:
     def restore(cls):
         cls.lang.set(cls.conf.config["Settings"]["Language"])
         cls.theme.set_name(cls.conf.config["Settings"]["TtkTheme"])
-
-
-Settings.restore()
