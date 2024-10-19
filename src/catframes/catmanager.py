@@ -80,6 +80,22 @@ DsMAAA7DAcdvqGQAAABeSURBVDhPzdCxDcAgDERRZmEelmVCJ1eArJMJtinCk67B0i8o8qq9zWnW24or
 YZZUCGPpEKYdhbDhOITBPaHh/89mqZAlHFoJhb64Qzuu0J7IA1aJ3KICtYk1AAAAAElFTkSuQmCC
 """
 
+ERROR_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAADPSURBVEhLtZTBDcIwDEUNI/TMkRnYgzM7MAw7cIU56C6wQhpbSVUSfzug5EtRo8R+cr/d7t6HY6AB
+2qdnd31VPN3uaUf0uV7SzhbKWcEScD7Joeg5u3ArB1sRE7bVlKqghWyPAdyDitiKvMLjFVTF819ieFXjBquJ/onAXdkPdY6b
+XjULNFn1WAJzhZYAlAWb58INKGvYlwfBrs/xThvFLBXc3DwDXoEhlP3WPEfw7VD3/EBWcGtCa6w9FWCkWuYcg5059eDjf/S9
+ZXv8t4gWlzE1GW5peVYAAAAASUVORK5CYII=
+"""
+
+OK_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAAC5SURBVEhL1ZXbCYRADEXjVuC/f7ZgGws2sWVtExZiGf5vBy4XJpJ5JGYdhfXA4CB6c8gEbfrpudIF
+PML1dKqN5+EVdkTD/A67SmOEtt24LVnkslYcDmZbjf8yLtl+lum8w7OIxk0bHYnHFmzG/AIvWYQp3dNQW6GFe2yB2WMZ/ost
+yHqcGgFYAa8tiIzxEIdIEFgqaJG1QgtPsWxBscfecAv18KzwPVtgTkWNuetDn47ani242z+P6Atnwl4nWv9uvAAAAABJRU5E
+rkJggg==
+"""
+
 
 
     #  из файла sets_utils.py:
@@ -320,16 +336,28 @@ class UtilityLocator:
     ffmpeg_in_sys_path: bool
     catframes_in_sys_path: bool
 
-    ffmpeg_full_paths: list
-    catframes_full_paths: list
+    ffmpeg_full_path: str
+    catframes_full_path: str
 
-    # метод инициализации 
-    def find_utils(self) -> None:
+    def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
+        self.ffmpeg_in_sys_path = is_in_sys_path
+        self.ffmpeg_full_path = full_path
+
+    def set_catframes(self, is_in_sys_path: bool, full_path: str):
+        self.catframes_in_sys_path = is_in_sys_path
+        self.catframes_full_path = full_path
+
+    # метод для поиска ffmpeg в системе
+    def find_ffmpeg(self) -> None:
         self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
         self.ffmpeg_full_path = self.find_full_paths('ffmpeg', self.ffmpeg_in_sys_path)
+        return self.ffmpeg_full_path
 
+    # такой же, но для catframes
+    def find_catframes(self) -> None:
         self.catframes_in_sys_path = self.find_in_sys_path('catframes')
         self.catframes_full_path = self.find_full_paths('catframes', self.catframes_in_sys_path)
+        return self.catframes_full_path
 
     # ищет полный путь для утилиты
     # если она есть в path, то ищет консолью
@@ -428,7 +456,10 @@ class IniConfig:
             "TtkTheme": "vista" if platform.system() == "Windows" else "default",
         }
         self.config["AbsolutePath"] = {
-            "Python": "",
+            "FFmpeg": "",
+            "Catframes": "",
+        }
+        self.config["SystemPath"] = {
             "FFmpeg": "",
             "Catframes": "",
         }
@@ -462,6 +493,14 @@ class Settings:
     def restore(cls):
         cls.lang.set(cls.conf.config["Settings"]["Language"])
         cls.theme.set_name(cls.conf.config["Settings"]["TtkTheme"])
+        cls.util_locatior.set_ffmpeg(
+            is_in_sys_path=cls.conf.config["SystemPath"]["FFmpeg"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["FFmpeg"]
+        )
+        cls.util_locatior.set_catframes(
+            is_in_sys_path=cls.conf.config["SystemPath"]["Catframes"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["Catframes"]
+        )
 
 
 
@@ -977,7 +1016,7 @@ class WindowMixin(ABC):
         self._set_size()
         self._to_center()
 
-        if self.name == "root":
+        if self.name in ("root", "checker"):
             Settings.theme.lazy_init(master=self)
         self.after(1, self._init_widgets)
         self.after(2, self.update_texts)
@@ -3081,6 +3120,61 @@ class NotifyWindow(Toplevel, WindowMixin):
 
     #  из файла util_checker.py:
 
+class SingleCheck(ttk.Frame):
+
+    def __init__(self, master: ttk.Frame, util_name: str, search_method: Callable):
+        super().__init__(master)
+        self.widgets: Dict[str, ttk.Widget] = {}
+        self.util_name = util_name
+        self.search_method = search_method
+        self._init_widgets()
+        self._pack_widgets()
+
+    @abstractmethod
+    def search_method() -> str:
+        ...
+
+    def _init_widgets(self):
+        big_font = font.Font(size=20)
+        mid_font = font.Font(size=12)
+        self.top_frame = ttk.Frame()
+        self.bottom_frame = ttk.Frame()
+
+        self.widgets["main_label"] = ttk.Label(
+            self.top_frame, font=big_font, text=f"{self.util_name}"
+        )
+        self.widgets["status_image"] = ttk.Label(self.top_frame)
+        self.widgets["bottom_label"] = ttk.Label(
+            self.bottom_frame, font=mid_font, text = f"searching..."
+        )
+
+        self.ok_image = base64_to_tk(OK_ICON_BASE64)
+        self.err_image = base64_to_tk(ERROR_ICON_BASE64)
+
+    def _pack_widgets(self):
+        self.top_frame.pack(expand=True, fill=X, pady=(50, 0))
+        self.bottom_frame.pack(expand=True, fill=X, pady=(0, 10))
+        self.widgets["main_label"].pack(side=LEFT, padx=20)
+        self.widgets["status_image"].pack(side=RIGHT, padx=20)
+        self.widgets["bottom_label"].pack(side=LEFT, padx=20)
+
+    def check(self):
+        self.found: str = self.search_method()
+
+        text = "Not found"
+        status_image = self.err_image
+        if self.found:
+            try:
+                text = shrink_path(self.found, 45)
+            except:
+                text = self.found
+            status_image = self.ok_image
+        
+        
+        self.widgets["bottom_label"].configure(text=text)
+        self.widgets["status_image"].configure(image=status_image)
+
+
 class UtilChecker(Tk, WindowMixin):
     """Окно, в котором происходит первичная проверка необходимых утилит"""
 
@@ -3093,22 +3187,65 @@ class UtilChecker(Tk, WindowMixin):
         self.size: Tuple[int] = 400, 400
         self.resizable(False, False)
 
-        self.all_modules_checked = True
+        self.all_checked = False
 
         super()._default_set_up()
+        self.after(1000, self.start_check)
 
-    def _init_widgets(self):
-        self.widgets["lbPillow"] = ttk.Label(self)
+    def _init_widgets(self): 
+        self.main_frame = ttk.Frame(self)
+        
+        def pil_search():
+            if PIL_FOUND_FLAG:
+                return "Installed in the current environment."
+            
+        self.pil = SingleCheck(self.main_frame, "Pillow", pil_search)
+        self.ffmpeg = SingleCheck(
+            self.main_frame, "FFmpeg", Settings.util_locatior.find_ffmpeg
+        )
+        self.catframes = SingleCheck(
+            self.main_frame, "Catframes", Settings.util_locatior.find_catframes
+        )
 
     def _pack_widgets(self):
-        self.widgets["lbPillow"].grid()
+        self.main_frame.pack(expand=True, padx=50, pady=100)
+        self.pil.pack(expand=True)
+        self.ffmpeg.pack(expand=True)
+        self.catframes.pack(expand=True)
+
+    def start_check(self):
+        self.pil.check()
+        self.ffmpeg.check()
+        self.catframes.check()
+        self.all_checked = \
+                    self.pil.found \
+                    and self.ffmpeg.found \
+                    and self.catframes.found
+        if self.all_checked:
+            self.save_settings()
+            self.after(5000, self.destroy)
+
+    def save_settings(self):
+            Settings.conf.update(
+                "AbsolutePath", "FFmpeg", Settings.util_locatior.ffmpeg_full_path
+            )
+            Settings.conf.update(
+                "SystemPath", "FFmpeg", "yes" if Settings.util_locatior.ffmpeg_in_sys_path else "no"
+            )
+            Settings.conf.update(
+                "AbsolutePath", "Catframes", Settings.util_locatior.catframes_full_path
+            )
+            Settings.conf.update(
+                "SystemPath", "Catframes", "yes" if Settings.util_locatior.catframes_in_sys_path else "no"
+            )
+            Settings.save()
 
     def close(self):
-        if self.all_modules_checked:
-            Settings.save()
+        if self.all_checked:
             self.destroy()
         else:
             exit()
+
 
 
 
@@ -3127,15 +3264,9 @@ def start_catmanager():
 
 def main():
     Settings.restore()
-    check_utils()
-    # start_catmanager()
-
-# def main():
-#     Settings.restore()
-#     if not Settings.conf.file_exists:
-#         check_utils()
-#     start_catmanager()
-
+    if not Settings.conf.file_exists:
+        check_utils()
+    start_catmanager()
 
 
 if __name__ == "__main__":
