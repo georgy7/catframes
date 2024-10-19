@@ -3098,10 +3098,10 @@ class UtilChecker(Tk, WindowMixin):
         super()._default_set_up()
 
     def _init_widgets(self):
-        pass
+        self.widgets["lbPillow"] = ttk.Label(self)
 
     def _pack_widgets(self):
-        pass
+        self.widgets["lbPillow"].grid()
 
     def close(self):
         if self.all_modules_checked:
@@ -3127,9 +3127,14 @@ def start_catmanager():
 
 def main():
     Settings.restore()
-    if not Settings.conf.file_exists:
-        check_utils()
-    start_catmanager()
+    check_utils()
+    # start_catmanager()
+
+# def main():
+#     Settings.restore()
+#     if not Settings.conf.file_exists:
+#         check_utils()
+#     start_catmanager()
 
 
 

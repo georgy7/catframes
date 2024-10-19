@@ -112,7 +112,7 @@ class WindowMixin(ABC):
         self._set_size()
         self._to_center()
 
-        if self.name == "root":
+        if self.name in ("root", "checker"):
             Settings.theme.lazy_init(master=self)
         self.after(1, self._init_widgets)
         self.after(2, self.update_texts)

@@ -240,13 +240,17 @@ class UtilityLocator:
     ffmpeg_full_paths: list
     catframes_full_paths: list
 
-    # метод инициализации 
-    def find_utils(self) -> None:
+    # метод для поиска ffmpeg в системе
+    def find_ffmpeg(self) -> None:
         self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
         self.ffmpeg_full_path = self.find_full_paths('ffmpeg', self.ffmpeg_in_sys_path)
+        return self.ffmpeg_full_path
 
+    # такой же, но для catframes
+    def find_catframes(self) -> None:
         self.catframes_in_sys_path = self.find_in_sys_path('catframes')
         self.catframes_full_path = self.find_full_paths('catframes', self.catframes_in_sys_path)
+        return self.catframes_full_path
 
     # ищет полный путь для утилиты
     # если она есть в path, то ищет консолью
