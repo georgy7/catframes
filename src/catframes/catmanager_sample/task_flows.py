@@ -274,12 +274,19 @@ class CatframesProcess:
     # убивает процесс (для экстренной остановки)
     def kill(self):
         logger = logging.getLogger('catmanager')
+        windows = (sys.platform == 'win32')
 
-        if sys.platform == 'win32':
+        if windows and has_console():
             # CTRL_C_EVENT is ignored for process groups
             # https://learn.microsoft.com/ru-ru/windows/win32/procthread/process-creation-flags
+            logger.info('Using CTRL+BREAK signal...')
             os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+        elif windows:
+            logger.info('Using CTRL+C signal emulation via stdin...')
+            self.process.stdin.write('<CANCEL>'.encode('utf-8'))
+            self.process.stdin.flush()
         else:
+            logger.info('Using CTRL+C signal...')
             os.kill(self.process.pid, signal.SIGTERM)
 
         # Раз уж удаление делается не через callback или Promise, нужно сделать это синхронно.
@@ -381,8 +388,11 @@ class Task:
         file = self.config.get_filepath()
         logger.debug(f'The file: {file}')
         try:
-            os.remove(file)
-            logger.debug('Deleted.')
+            if os.path.isfile(file):
+                os.remove(file)
+                logger.debug('Deleted.')
+            else:
+                logger.debug('There is no such file.')
         except OSError:
             # Just in case someone opened the video in a player
             # while it was being encoded or something.

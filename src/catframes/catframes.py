@@ -73,6 +73,11 @@ from unittest import TestCase
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
+if 'Windows' == platform.system():
+    import ctypes
+    from ctypes import wintypes
+    from _thread import interrupt_main
+
 
 __version__ = '2024.8.0-SNAPSHOT'
 __license__ = 'Zlib'
@@ -2865,8 +2870,32 @@ class ConsoleInterface:
             print('...', flush=True)
 
 
+def seek_signals():
+    """The only reason this function exists is because of the broken signals in Windows."""
+    buffer = deque(maxlen = 10)
+    while True:
+        sleep(0.05)
+        character = sys.stdin.read(1)
+        if character:
+            buffer.append(str(character))
+            if '<CANCEL>' in (''.join(buffer)):
+                interrupt_main()
+                break
+
+
 def main():
     gc.set_threshold(100, 10, 10)   # По-умолчанию 700-10-10.
+
+    if 'Windows' == platform.system():
+        # Explanation: https://stackoverflow.com/a/69727088/1240328
+        # Windows standard handle -10 refers to stdin
+        # Console mode 0 means "no flags" such as line-mode.
+        kernel32 = ctypes.windll.kernel32
+        initial_input_mode = ctypes.wintypes.DWORD()
+        kernel32.GetConsoleMode(kernel32.GetStdHandle(-10), ctypes.byref(initial_input_mode))
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-10), 0)
+        threading.Thread(target=seek_signals, daemon=True).start()
+
     try:
         if not shutil.which('ffmpeg'):
             raise ValueError('FFmpeg not found.')
@@ -2929,6 +2958,10 @@ def main():
     except ValueError as err:
         print(f'\n{err}\n', file=sys.stderr, flush=True)
         sys.exit(1)
+    
+    finally:
+        if 'Windows' == platform.system():
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-10), initial_input_mode)
 
 
 if __name__ == "__main__":
