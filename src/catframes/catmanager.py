@@ -350,19 +350,19 @@ class UtilityLocator:
     # метод для поиска ffmpeg в системе
     def find_ffmpeg(self) -> None:
         self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
-        self.ffmpeg_full_path = self.find_full_paths('ffmpeg', self.ffmpeg_in_sys_path)
+        self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.ffmpeg_in_sys_path)
         return self.ffmpeg_full_path
 
     # такой же, но для catframes
     def find_catframes(self) -> None:
         self.catframes_in_sys_path = self.find_in_sys_path('catframes')
-        self.catframes_full_path = self.find_full_paths('catframes', self.catframes_in_sys_path)
+        self.catframes_full_path = self.find_full_path('catframes', self.catframes_in_sys_path)
         return self.catframes_full_path
 
     # ищет полный путь для утилиты
     # если она есть в path, то ищет консолью
     @staticmethod
-    def find_full_paths(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
+    def find_full_path(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
         if is_in_sys_path:
             return UtilityLocator.find_by_console(utility_name)
 
@@ -375,7 +375,7 @@ class UtilityLocator:
     # если она есть в системном path
     @staticmethod
     def find_by_console(utility_name) -> list:
-        command = "where" if platform.system() == "Windows" else "which"
+        command = "where" if platform.system()== "Windows" else "which"
         result = subprocess.run(
             [command, utility_name],
             stdout=subprocess.PIPE,
@@ -383,9 +383,12 @@ class UtilityLocator:
         )
         paths = result.stdout.decode()
         paths = map(lambda x: x.strip('\r '), paths.split('\n'))
-        paths = filter(lambda x: x.endswith('.exe'), paths)
 
-        return list(paths)[0] if paths else None
+        if platform.system().lower() == "Windows":
+            paths = filter(lambda x: x.endswith('.exe'), paths)
+
+        paths = list(paths)
+        return paths[0] if paths else None
 
     # возвращает пути, по которым может быть утилита, исходя из системы
     @staticmethod
@@ -423,12 +426,15 @@ class UtilityLocator:
     def find_in_sys_path(utility_name) -> bool:
         try:
             result = subprocess.run(
-                [utility_name, "-version"],
+                [utility_name, "--version"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
-            output = result.stderr.decode()
-            if result.returncode == 0 or "usage" in output:
+            output = ''
+            for i in range(3):
+                output += result.stderr.decode()
+            if result.returncode == 0 or ("usage" in output):
+                print('ok')
                 return True
         except FileNotFoundError:
             pass
