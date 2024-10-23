@@ -58,6 +58,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from _thread import interrupt_main
 import textwrap
 from queue import Queue, Empty, Full
 from collections import deque
@@ -76,7 +77,6 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont
 if 'Windows' == platform.system():
     import ctypes
     from ctypes import wintypes
-    from _thread import interrupt_main
 
 
 __version__ = '2024.8.0-SNAPSHOT'
