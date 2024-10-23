@@ -2253,7 +2253,7 @@ class SettingsWindow(Toplevel, WindowMixin):
                 if my_system == 'Windows':
                     subprocess.run(['explorer', logs_path])
                 elif my_system == 'Linux':
-                    subprocess.run(['xdg-open', '--', logs_path])
+                    subprocess.run(['xdg-open', logs_path])
                 elif my_system == 'Darwin':
                     subprocess.run(['open', '--', logs_path])
 
