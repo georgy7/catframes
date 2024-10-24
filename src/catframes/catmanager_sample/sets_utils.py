@@ -327,7 +327,7 @@ class UtilityLocator:
     def find_in_sys_path(utility_name) -> bool:
         try:
             result = subprocess.run(
-                [utility_name, "--version"],
+                [utility_name],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -335,7 +335,6 @@ class UtilityLocator:
             for i in range(3):
                 output += result.stderr.decode()
             if result.returncode == 0 or ("usage" in output):
-                print('ok')
                 return True
         except FileNotFoundError:
             pass
