@@ -29,6 +29,7 @@ FILE_NAMES = [  # порядок файлов для сборки
     "windows_utils.py",
     "windows.py",
     "util_checker.py",
+    "tests.py",
     "main.py",
 ]
 

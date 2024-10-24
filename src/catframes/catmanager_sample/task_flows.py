@@ -52,7 +52,7 @@ class TaskConfig:
         self._filepath: str = ""
         self._rewrite: bool = False
 
-    def set_dirs(self, dirs) -> list:
+    def set_dirs(self, dirs: List[str]) -> list:
         self._dirs = dirs
 
     def set_overlays(self, overlays_texts: List[str]):
@@ -71,9 +71,6 @@ class TaskConfig:
         self._quality_index = quality
         self._quality = self.quality_names[quality]
         self._limit = limit
-
-    def set_resolution(self, width: int, height: int):
-        self._resolution = width, height
 
     def set_filepath(self, filepath: str):
         self._filepath = filepath

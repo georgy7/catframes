@@ -144,7 +144,6 @@ class WindowMixin(ABC):
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-        border_gap: int = 30  # минимальный отступ от края окна при открытии
 
         screen_size: tuple = self.winfo_screenwidth(), self.winfo_screenheight()
 
@@ -157,8 +156,19 @@ class WindowMixin(ABC):
 
         # далее для побочных окон:
         master_size = self.master.winfo_width(), self.master.winfo_height()
-        x = self.master.winfo_x() + master_size[0] / 2 - self.size[0] / 2
-        y = self.master.winfo_y() + master_size[1] / 2 - self.size[1] / 2
+        master_coords = self.master.winfo_x(), self.master.winfo_y()
+
+        x, y = self._calculate_coords(master_coords, master_size, self.size, screen_size)
+
+        self.geometry(f"+{int(x)}+{int(y)}")
+
+    @staticmethod
+    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
+        
+        border_gap: int = 30  # минимальный отступ от края окна при открытии
+
+        x = master_coords[0] + master_size[0] / 2 - window_size[0] / 2
+        y = master_coords[1] + master_size[1] / 2 - window_size[1] / 2
 
         # далее описаны сценарии для случаев, когда новое окно,
         # при появлении, выходит за границы экрана
@@ -166,17 +176,18 @@ class WindowMixin(ABC):
         if x < border_gap:
             x = border_gap
 
-        if x + self.size[0] + border_gap > screen_size[0]:
-            x = screen_size[0] - self.size[0] - border_gap
+        if x + window_size[0] + border_gap > screen_size[0]:
+            x = screen_size[0] - window_size[0] - border_gap
 
         if y < border_gap:
             y = border_gap
 
         # при выходе за нижнюю границу экрана, отсуп больше
-        if y + self.size[1] + (border_gap * 3) > screen_size[1]:
-            y = screen_size[1] - self.size[1] - (border_gap * 3)
+        if y + window_size[1] + (border_gap * 3) > screen_size[1]:
+            y = screen_size[1] - window_size[1] - (border_gap * 3)
 
-        self.geometry(f"+{int(x)}+{int(y)}")
+        return int(x), int(y)
+    
 
     def _set_size(self):
 

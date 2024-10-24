@@ -19,6 +19,7 @@ import configparser
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
+from unittest import TestCase
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 try:
@@ -426,7 +427,7 @@ class UtilityLocator:
     def find_in_sys_path(utility_name) -> bool:
         try:
             result = subprocess.run(
-                [utility_name, "--version"],
+                [utility_name],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -434,7 +435,6 @@ class UtilityLocator:
             for i in range(3):
                 output += result.stderr.decode()
             if result.returncode == 0 or ("usage" in output):
-                print('ok')
                 return True
         except FileNotFoundError:
             pass
@@ -565,7 +565,7 @@ class TaskConfig:
         self._filepath: str = ""
         self._rewrite: bool = False
 
-    def set_dirs(self, dirs) -> list:
+    def set_dirs(self, dirs: List[str]) -> list:
         self._dirs = dirs
 
     def set_overlays(self, overlays_texts: List[str]):
@@ -584,9 +584,6 @@ class TaskConfig:
         self._quality_index = quality
         self._quality = self.quality_names[quality]
         self._limit = limit
-
-    def set_resolution(self, width: int, height: int):
-        self._resolution = width, height
 
     def set_filepath(self, filepath: str):
         self._filepath = filepath
@@ -1054,7 +1051,6 @@ class WindowMixin(ABC):
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-        border_gap: int = 30  # минимальный отступ от края окна при открытии
 
         screen_size: tuple = self.winfo_screenwidth(), self.winfo_screenheight()
 
@@ -1067,8 +1063,19 @@ class WindowMixin(ABC):
 
         # далее для побочных окон:
         master_size = self.master.winfo_width(), self.master.winfo_height()
-        x = self.master.winfo_x() + master_size[0] / 2 - self.size[0] / 2
-        y = self.master.winfo_y() + master_size[1] / 2 - self.size[1] / 2
+        master_coords = self.master.winfo_x(), self.master.winfo_y()
+
+        x, y = self._calculate_coords(master_coords, master_size, self.size, screen_size)
+
+        self.geometry(f"+{int(x)}+{int(y)}")
+
+    @staticmethod
+    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
+        
+        border_gap: int = 30  # минимальный отступ от края окна при открытии
+
+        x = master_coords[0] + master_size[0] / 2 - window_size[0] / 2
+        y = master_coords[1] + master_size[1] / 2 - window_size[1] / 2
 
         # далее описаны сценарии для случаев, когда новое окно,
         # при появлении, выходит за границы экрана
@@ -1076,17 +1083,18 @@ class WindowMixin(ABC):
         if x < border_gap:
             x = border_gap
 
-        if x + self.size[0] + border_gap > screen_size[0]:
-            x = screen_size[0] - self.size[0] - border_gap
+        if x + window_size[0] + border_gap > screen_size[0]:
+            x = screen_size[0] - window_size[0] - border_gap
 
         if y < border_gap:
             y = border_gap
 
         # при выходе за нижнюю границу экрана, отсуп больше
-        if y + self.size[1] + (border_gap * 3) > screen_size[1]:
-            y = screen_size[1] - self.size[1] - (border_gap * 3)
+        if y + window_size[1] + (border_gap * 3) > screen_size[1]:
+            y = screen_size[1] - window_size[1] - (border_gap * 3)
 
-        self.geometry(f"+{int(x)}+{int(y)}")
+        return int(x), int(y)
+    
 
     def _set_size(self):
 
@@ -2263,6 +2271,7 @@ class ToolTip:
 
 
 
+
     #  из файла windows.py:
 
 """
@@ -2650,6 +2659,31 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
         task.start(gui_callback)
 
+
+    @staticmethod
+    def validate_color(value: str) -> bool:
+        if not value:
+            return True
+        if value.count("#") > 1:
+            return False
+        if value.count("#") == 1 and not value.startswith("#"):
+            return False
+        value = value.lstrip("#")
+        if len(value) > 6:
+            return False
+        for v in value:
+            if v.lower() not in "0123456789abcdef":
+                return False
+        return True
+        
+    @staticmethod
+    def validate_fps(value) -> bool:
+        if not value:
+            return True
+        if not value.isdigit():
+            return False
+        return 0 <= int(value) <= 60
+
     def _init_widgets(self):
         self.main_frame = Frame(self)
         self.main_pane = PanedWindow(
@@ -2736,22 +2770,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self.color_frame = ttk.Frame(self.settings_grid)
 
-        def validate_color(value: str):
-            if not value:
-                return True
-            if value.count("#") > 1:
-                return False
-            if value.count("#") == 1 and not value.startswith("#"):
-                return False
-            value = value.lstrip("#")
-            if len(value) > 6:
-                return False
-            for v in value:
-                if v.lower() not in "0123456789abcdef":
-                    return False
-            return True
 
-        v_color = self.register(validate_color), "%P"
+        v_color = self.register(self.validate_color), "%P"
 
         self.widgets["_entColor"] = ttk.Entry(
             self.color_frame,
@@ -2789,14 +2809,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=2,
         )
 
-        def validate_fps(value):
-            if not value:
-                return True
-            if not value.isdigit():
-                return False
-            return 0 <= int(value) <= 60
 
-        v_fps = self.register(validate_fps), "%P"
+        v_fps = self.register(self.validate_fps), "%P"
 
         self.widgets["_spnFramerate"] = ttk.Spinbox(  # виджет выбора фреймрейта
             self.settings_grid,
@@ -3251,6 +3265,102 @@ class UtilChecker(Tk, WindowMixin):
             self.destroy()
         else:
             exit()
+
+
+
+
+
+    #  из файла tests.py:
+
+class _TestUtils(TestCase):
+
+    def test_shrink_path(self):
+        path = r"C:\Users\Test\AppData\Local\Microsoft\WindowsApps"
+        shrinked = shrink_path(path, 20)
+        self.assertEqual(shrinked, r"C:\...ft\WindowsApps")
+
+        path = r"/home/test/.config/"
+        shrinked = shrink_path(path, 30)
+        self.assertEqual(shrinked, path)
+
+        path = r"/home/test/.config/gnome_shell"
+        shrinked = shrink_path(path, 10)
+        self.assertEqual(shrinked, r"/home/.../gnome_shell")
+
+    def test_is_dark_color(self):
+        self.assertTrue(is_dark_color(0, 0, 0))
+
+        self.assertTrue(is_dark_color(0, 0, 255))
+        self.assertTrue(is_dark_color(255, 0, 0))
+        self.assertTrue(is_dark_color(255, 0, 255))
+
+        self.assertFalse(is_dark_color(0, 255, 0))
+        self.assertFalse(is_dark_color(0, 255, 255))
+        self.assertFalse(is_dark_color(255, 255, 0))
+
+        self.assertFalse(is_dark_color(255, 255, 255))
+    
+
+class _TestWindowPosition(TestCase):
+
+    def test_coords_calculation(self):
+        x, y = WindowMixin._calculate_coords((1005, 495), (550, 450), (250, 150), (2560, 1440))
+        self.assertTrue((x, y) == (1155, 645)) 
+        x, y = WindowMixin._calculate_coords((285, 304), (550, 450), (900, 500), (2560, 1440))
+        self.assertTrue((x, y) == (110, 279)) 
+        x, y = WindowMixin._calculate_coords((2240, 224), (550, 450), (900, 500), (2560, 1440))
+        self.assertTrue((x, y) == (1630, 199)) 
+        x, y = WindowMixin._calculate_coords((912, 1147) ,(550, 450) ,(900, 500), (2560, 1440))
+        self.assertTrue((x, y) == (737, 850)) 
+
+
+class _TestTaskConfig(TestCase):
+
+    def test_task_assembling(self):
+        for_user = [
+            'catframes', "--top-left='1'", '--margin-color=#123123', '--frame-rate=30', 
+            '--quality=poor', "'/pic/test1'", "'/pic/test2'",  "'/video/test.webm'"
+        ]
+        for_subprocess = [
+            'catframes', '--top-left', '1', '--margin-color=#123123', '--frame-rate=30', 
+            '--quality=poor', '/pic/test1', '/pic/test2', '/video/test.webm', '--live-preview'
+        ]
+        task_config = TaskConfig()
+        task_config.set_specs(30, 2)
+        task_config.set_color("#123123")
+        task_config.set_filepath("/video/test.webm")
+        task_config.set_dirs(["/pic/test1", "/pic/test2"])
+        task_config.set_overlays(["1", "", "", "", "", "", "", ""])
+
+        self.assertEqual(task_config.convert_to_command(True), for_user)
+        self.assertEqual(task_config.convert_to_command(False), for_subprocess)
+
+
+class _TestFieldsValidators(TestCase):
+
+    def test_color_validator(self):
+        self.assertTrue(NewTaskWindow.validate_color(""))
+        self.assertTrue(NewTaskWindow.validate_color("#00ff00"))
+        self.assertTrue(NewTaskWindow.validate_color("#00"))
+        self.assertTrue(NewTaskWindow.validate_color("face00"))
+        self.assertTrue(NewTaskWindow.validate_color("ffff"))
+
+        self.assertFalse(NewTaskWindow.validate_color("#0000000"))
+        self.assertFalse(NewTaskWindow.validate_color("##000000"))
+        self.assertFalse(NewTaskWindow.validate_color("#asjmi"))
+        self.assertFalse(NewTaskWindow.validate_color("000#"))
+
+    def test_fps_validator(self):
+        self.assertTrue(NewTaskWindow.validate_fps(""))
+        self.assertTrue(NewTaskWindow.validate_fps("0"))
+        self.assertTrue(NewTaskWindow.validate_fps("1"))
+        self.assertTrue(NewTaskWindow.validate_fps("60"))
+
+        self.assertFalse(NewTaskWindow.validate_fps(" "))
+        self.assertFalse(NewTaskWindow.validate_fps("-1"))
+        self.assertFalse(NewTaskWindow.validate_fps("61"))
+        self.assertFalse(NewTaskWindow.validate_fps("a"))
+        self.assertFalse(NewTaskWindow.validate_fps("$"))
 
 
 

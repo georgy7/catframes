@@ -19,6 +19,7 @@ import configparser
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
+from unittest import TestCase
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 try:
