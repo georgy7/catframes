@@ -167,7 +167,7 @@ class Lang:
             'sets.lbPortRange': 'System ports range:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
-            'sets.btOpenLogs': 'Open logs',
+            'sets.btOpenLogs': 'Show logs',
 
             'task.title': 'New Task',
             'task.title.view': 'Task settings view',
@@ -1028,7 +1028,7 @@ class WindowMixin(ABC):
 
 # возвращает список всех изображений в директории
 def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
-    img_list = [f for f in os.listdir(dir) if f.endswith(('.png', '.jpg'))]
+    img_list = [f for f in os.listdir(dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.qoi', '.pcx'))]
     if full_path:
         img_list = list(map(lambda x: f'{dir}/{x}', img_list))  # добавляет путь к названию
     return img_list
@@ -1978,11 +1978,19 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self, initialdir=self._initial_dir)
+        logger = logging.getLogger('catmanager')
+        logger.info(f'Ask directory: initialdir = {self._initial_dir}')
+        dir_name = filedialog.askdirectory(parent=self, initialdir=self._initial_dir, mustexist=True)
+        logger.info(f'Ask directory result is {type(dir_name)}')
+        logger.info(f'Ask directory returned {dir_name}')
+
         if not dir_name or dir_name in self.dirs:
+            logger.info(f'Asked directory is already in list.')
             return
         if not find_img_in_dir(dir_name):
+            logger.info(f'Asked directory does not contain images.')
             return
+
         self._initial_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)  # добавление в список директорий

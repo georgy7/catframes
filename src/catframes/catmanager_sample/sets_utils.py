@@ -52,7 +52,7 @@ class Lang:
             'sets.lbPortRange': 'System ports range:',
             'sets.btApply': 'Apply',
             'sets.btSave': 'Save',
-            'sets.btOpenLogs': 'Open logs',
+            'sets.btOpenLogs': 'Show logs',
 
             'task.title': 'New Task',
             'task.title.view': 'Task settings view',
