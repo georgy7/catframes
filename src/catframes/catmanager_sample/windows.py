@@ -391,6 +391,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
         task.start(gui_callback)
 
 
+    # Валидация для поля ввода цвета
+    # Должна пропускать любые 16-р значения
+    # до 6ти знаков, с "#" вначале и без.
+    # Пустая строка допустима.  
     @staticmethod
     def validate_color(value: str) -> bool:
         if not value:
@@ -407,6 +411,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 return False
         return True
         
+    # Валидация для поля ввода фпс.
+    # Должна пропускать любые числа от 0 до 60.
+    # Пустая строка так же допустима.
     @staticmethod
     def validate_fps(value) -> bool:
         if not value:

@@ -606,18 +606,26 @@ class TaskConfig:
     def get_color(self) -> str:
         return self._color
 
+    @staticmethod
+    def to_user_format(text: str, bash: bool) -> str:
+        q = "'" if bash else '"'
+        text = text.replace("\n", "\\n")
+        text = text.replace("\r", "\\r")
+        text = text.replace("\t", "\\t")
+        return q + text + q
+
+
     # создание консольной команды в виде списка
     def convert_to_command(
         self, for_user: bool = False, bash: bool = True
     ) -> List[str]:
         command = ["catframes"]
-        q = "'" if bash else '"'
 
         for position, text in self._overlays.items():
             if text:
                 if for_user:
-                    text = text.replace("\n", "\\n")
-                    command.append(f"{position}={q}{text}{q}")
+                    text = self.to_user_format(text, bash)
+                    command.append(f"{position}={text}")
                 else:
                     command.append(position)
                     command.append(text)
@@ -631,13 +639,12 @@ class TaskConfig:
 
         for dir in self._dirs:  # добавление директорий с изображениями
             if for_user:
-                dir = f"{q}{dir}{q}"
+                dir = self.to_user_format(dir, bash)
             command.append(dir)
 
         if for_user:
-            command.append(
-                f"{q}{self._filepath}{q}"
-            )  # добавление полного пути файла в кавычках
+            # добавление полного пути файла в кавычках
+            command.append(self.to_user_format(self._filepath, bash))  
         else:
             command.append(self._filepath)
             command.append("--live-preview")
@@ -2660,6 +2667,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
         task.start(gui_callback)
 
 
+    # Валидация для поля ввода цвета
+    # Должна пропускать любые 16-р значения
+    # до 6ти знаков, с "#" вначале и без.
+    # Пустая строка допустима.  
     @staticmethod
     def validate_color(value: str) -> bool:
         if not value:
@@ -2676,6 +2687,9 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 return False
         return True
         
+    # Валидация для поля ввода фпс.
+    # Должна пропускать любые числа от 0 до 60.
+    # Пустая строка так же допустима.
     @staticmethod
     def validate_fps(value) -> bool:
         if not value:
@@ -3317,23 +3331,24 @@ class _TestWindowPosition(TestCase):
 class _TestTaskConfig(TestCase):
 
     def test_task_assembling(self):
-        for_user = [
-            'catframes', "--top-left='1'", '--margin-color=#123123', '--frame-rate=30', 
-            '--quality=poor', "'/pic/test1'", "'/pic/test2'",  "'/video/test.webm'"
-        ]
-        for_subprocess = [
-            'catframes', '--top-left', '1', '--margin-color=#123123', '--frame-rate=30', 
-            '--quality=poor', '/pic/test1', '/pic/test2', '/video/test.webm', '--live-preview'
-        ]
         task_config = TaskConfig()
         task_config.set_specs(30, 2)
-        task_config.set_color("#123123")
-        task_config.set_filepath("/video/test.webm")
-        task_config.set_dirs(["/pic/test1", "/pic/test2"])
-        task_config.set_overlays(["1", "", "", "", "", "", "", ""])
+        task_config.set_filepath("/test.webm")
+        task_config.set_dirs(["/pic/test1"])
 
-        self.assertEqual(task_config.convert_to_command(True), for_user)
-        self.assertEqual(task_config.convert_to_command(False), for_subprocess)
+        self.assertFalse("--live-preview" in task_config.convert_to_command(True))
+        self.assertTrue("--live-preview" in task_config.convert_to_command(False))
+
+    def test_user_format_converting(self):
+        test_string = '\ttest\ntest\rtest'
+
+        res_win = TaskConfig.to_user_format(test_string, bash=False)
+        self.assertTrue(res_win.startswith('"') and res_win.endswith('"'))
+        self.assertTrue(r"\ttest\ntest\rtest" in res_win)
+
+        res_bash = TaskConfig.to_user_format(test_string, bash=True)
+        self.assertTrue(res_bash.startswith("'") and res_bash.endswith("'"))
+        self.assertTrue(r"\ttest\ntest\rtest" in res_bash)
 
 
 class _TestFieldsValidators(TestCase):

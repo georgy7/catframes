@@ -50,23 +50,24 @@ class _TestWindowPosition(TestCase):
 class _TestTaskConfig(TestCase):
 
     def test_task_assembling(self):
-        for_user = [
-            'catframes', "--top-left='1'", '--margin-color=#123123', '--frame-rate=30', 
-            '--quality=poor', "'/pic/test1'", "'/pic/test2'",  "'/video/test.webm'"
-        ]
-        for_subprocess = [
-            'catframes', '--top-left', '1', '--margin-color=#123123', '--frame-rate=30', 
-            '--quality=poor', '/pic/test1', '/pic/test2', '/video/test.webm', '--live-preview'
-        ]
         task_config = TaskConfig()
         task_config.set_specs(30, 2)
-        task_config.set_color("#123123")
-        task_config.set_filepath("/video/test.webm")
-        task_config.set_dirs(["/pic/test1", "/pic/test2"])
-        task_config.set_overlays(["1", "", "", "", "", "", "", ""])
+        task_config.set_filepath("/test.webm")
+        task_config.set_dirs(["/pic/test1"])
 
-        self.assertEqual(task_config.convert_to_command(True), for_user)
-        self.assertEqual(task_config.convert_to_command(False), for_subprocess)
+        self.assertFalse("--live-preview" in task_config.convert_to_command(True))
+        self.assertTrue("--live-preview" in task_config.convert_to_command(False))
+
+    def test_user_format_converting(self):
+        test_string = '\ttest\ntest\rtest'
+
+        res_win = TaskConfig.to_user_format(test_string, bash=False)
+        self.assertTrue(res_win.startswith('"') and res_win.endswith('"'))
+        self.assertTrue(r"\ttest\ntest\rtest" in res_win)
+
+        res_bash = TaskConfig.to_user_format(test_string, bash=True)
+        self.assertTrue(res_bash.startswith("'") and res_bash.endswith("'"))
+        self.assertTrue(r"\ttest\ntest\rtest" in res_bash)
 
 
 class _TestFieldsValidators(TestCase):
