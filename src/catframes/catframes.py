@@ -79,7 +79,7 @@ if 'Windows' == platform.system():
     from ctypes import wintypes
 
 
-__version__ = '2024.8.2'
+__version__ = '2024.8.3'
 __license__ = 'Zlib'
 
 
