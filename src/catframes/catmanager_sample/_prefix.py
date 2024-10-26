@@ -19,7 +19,7 @@ from logging.handlers import WatchedFileHandler
 from pathlib import Path
 
 from tkinter import *
-from tkinter import ttk, font, filedialog, colorchooser
+from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk

@@ -19,7 +19,7 @@ from logging.handlers import WatchedFileHandler
 from pathlib import Path
 
 from tkinter import *
-from tkinter import ttk, font, filedialog, colorchooser
+from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 from PIL import Image, ImageTk
@@ -204,7 +204,9 @@ class Lang:
             'noti.lbWarn': 'Invalid port range!',
             'noti.lbText': 'The acceptable range is from 10240 to 65025',
             'noti.lbText2': 'The number of ports is at least 100',
-            
+
+            'emptyFolder.title': 'Empty folder',
+            'emptyFolder.theFollowingFolders': 'The following folders do not contain images. Therefore, they were not added.',
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -266,7 +268,10 @@ class Lang:
             'noti.title': 'Ошибка',
             'noti.lbWarn': 'Неверный диапазон портов!',
             'noti.lbText': 'Допустимы значения от 10240 до 65025',
-            'noti.lbText2': 'Количество портов не менее 100'
+            'noti.lbText2': 'Количество портов не менее 100',
+
+            'emptyFolder.title': 'Пустая директория',
+            'emptyFolder.theFollowingFolders': 'Следующие папки не были добавлены, т.к. не содержат изображений.',
         },
     }
 
@@ -1002,6 +1007,44 @@ class WindowMixin(ABC):
     @abstractmethod
     def _pack_widgets(self, ) -> None:
         ...
+
+
+class TextDialog(Toplevel, WindowMixin):
+    """Показывает произвольный текст с прокруткой без возможности его редактирования."""
+
+    def __init__(self, root: Tk, window_name: str, text: str):
+        super().__init__(master=root)
+        self.name = window_name
+        self.text = text
+
+        self.widgets: Dict[str, ttk.Widget] = {}
+
+        self.size = 650, 300
+        self.resizable(False, False)
+        self.transient(root)
+
+        # Сокрытие при анфокусе скопировано из SettingsWindow.
+        self.bind("<FocusOut>", self._on_focus_out)
+
+        super()._default_set_up()
+
+    def _set_style(self) -> None:
+        super()._set_style()
+        self.minsize(200, 150)
+
+    def _init_widgets(self):
+        self.main_frame = Frame(self)
+        self.non_localized_text = scrolledtext.ScrolledText(self.main_frame, padx=10, pady=10)
+        self.non_localized_text.insert(END, self.text + '\n')
+        self.non_localized_text['state'] = 'disabled'
+
+    def _pack_widgets(self):
+        self.main_frame.pack(fill=BOTH, expand=True)
+        self.non_localized_text.pack(side=TOP, fill=BOTH, expand=True)
+
+    def _on_focus_out(self, event):
+        if not self.focus_get():
+            return self.close()
 
 
 
@@ -1989,6 +2032,17 @@ class DirectoryManager(ttk.Frame):
             return
         if not find_img_in_dir(dir_name):
             logger.info(f'Asked directory does not contain images.')
+            msg_window_name = 'emptyFolder'
+
+            message = Lang.read(f'{msg_window_name}.theFollowingFolders')
+            message += '\n\n'
+            message += f'    • {dir_name}\n'
+
+            LocalWM.open(TextDialog,
+                         msg_window_name,
+                         LocalWM.call('task'),
+                         window_name=msg_window_name,
+                         text=message).focus()
             return
 
         self._initial_dir = os.path.dirname(dir_name)

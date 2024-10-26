@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Lang
 from task_flows import Task
-from windows_base import LocalWM
+from windows_base import LocalWM, TextDialog
 
 
 """
@@ -984,6 +984,17 @@ class DirectoryManager(ttk.Frame):
             return
         if not find_img_in_dir(dir_name):
             logger.info(f'Asked directory does not contain images.')
+            msg_window_name = 'emptyFolder'
+
+            message = Lang.read(f'{msg_window_name}.theFollowingFolders')
+            message += '\n\n'
+            message += f'    • {dir_name}\n'
+
+            LocalWM.open(TextDialog,
+                         msg_window_name,
+                         LocalWM.call('task'),
+                         window_name=msg_window_name,
+                         text=message).focus()
             return
 
         self._initial_dir = os.path.dirname(dir_name)

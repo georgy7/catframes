@@ -89,7 +89,9 @@ class Lang:
             'noti.lbWarn': 'Invalid port range!',
             'noti.lbText': 'The acceptable range is from 10240 to 65025',
             'noti.lbText2': 'The number of ports is at least 100',
-            
+
+            'emptyFolder.title': 'Empty folder',
+            'emptyFolder.theFollowingFolders': 'The following folders do not contain images. Therefore, they were not added.',
         },
         'русский': {
             'root.title': 'CatFrames',
@@ -151,7 +153,10 @@ class Lang:
             'noti.title': 'Ошибка',
             'noti.lbWarn': 'Неверный диапазон портов!',
             'noti.lbText': 'Допустимы значения от 10240 до 65025',
-            'noti.lbText2': 'Количество портов не менее 100'
+            'noti.lbText2': 'Количество портов не менее 100',
+
+            'emptyFolder.title': 'Пустая директория',
+            'emptyFolder.theFollowingFolders': 'Следующие папки не были добавлены, т.к. не содержат изображений.',
         },
     }
 
