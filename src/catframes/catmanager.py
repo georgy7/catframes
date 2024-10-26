@@ -2410,6 +2410,13 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.view_mode: bool = True  # устанавливает флаг "режима просмотра"
 
         self.size = 900, 500
+
+        # Временный хак.
+        # У дефолтной страшненькой темы Tk в Линуксе виджеты больше по высоте,
+        # и все кнопки не влезают в 500 пикселей.
+        if 'Linux' == platform.system():
+            self.size = 900, 620
+
         self.resizable(True, True)
 
         super()._default_set_up()
