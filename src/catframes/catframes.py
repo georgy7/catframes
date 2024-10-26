@@ -1509,7 +1509,15 @@ class OutputProcessor:
             def read_write_thread_messages():
                 while not write_thread_messages.empty():
                     message = write_thread_messages.get_nowait()
-                    if int == type(message):
+
+                    # The second condition guarantees that 100% will not fall out here.
+                    # The fact is that this queue shows which frame was sent for compression,
+                    # and not which one has already been compressed. If we mistakenly decide
+                    # that the file is ready, and if the operating system allows it to be
+                    # copied before FFmpeg finishes working, we will get a broken file.
+                    # Encoding 10 seconds or more after sending the last frame to FFmpeg
+                    # has been empirically confirmed.
+                    if (int == type(message)) and (message < len(frames)):
                         set_processed(message)
 
             with process.stdout:
