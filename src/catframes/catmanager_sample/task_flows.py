@@ -261,8 +261,12 @@ class CatframesProcess:
             if image_data:
                 self._image_base64 = image_data.group().split()[1]
 
-        if self.process.poll() != 0 and not self.error:  # если процесс завершился некорректно
-            self.error = INTERNAL_ERROR   # текст последней строки
+        ret_code = None
+        while ret_code is None:
+            ret_code = self.process.poll()
+
+        if ret_code != 0 and not self.error:
+            self.error = INTERNAL_ERROR
         self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):

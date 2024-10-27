@@ -91,7 +91,7 @@ class Lang:
             'noti.lbText2': 'The number of ports is at least 100',
 
             'emptyFolder.title': 'Empty folder',
-            'emptyFolder.theFollowingFolders': 'The following folders do not contain images. Therefore, they were not added.',
+            'emptyFolder.theFollowingFolders': 'The following folders do not contain images.\nTherefore, they were not added.',
         },
         'русский': {
             'root.title': 'CatFrames',
