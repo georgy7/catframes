@@ -5,6 +5,11 @@ from windows_utils import *
 
 
 class SingleCheck(ttk.Frame):
+    """Проверка для конкретной утилиты.
+    Представляет собой "бар" с названием утилиты,
+    информацией по статусу поиска, и значком.
+    При инициализации принимает инъекцией метод
+    для поиска утилиты в системе"""
 
     def __init__(self, master: ttk.Frame, util_name: str, search_method: Callable):
         super().__init__(master)
@@ -72,9 +77,10 @@ class UtilChecker(Tk, WindowMixin):
         self.resizable(False, False)
 
         self.all_checked = False
-
         super()._default_set_up()
-        self.after(1000, self.start_check)
+
+        self.check_thread = threading.Thread(target=self.start_check, daemon=True)
+        self.after(1000, self.check_thread.start)
 
     def _init_widgets(self): 
         self.main_frame = ttk.Frame(self)
@@ -107,7 +113,7 @@ class UtilChecker(Tk, WindowMixin):
                     and self.catframes.found
         if self.all_checked:
             self.save_settings()
-            self.after(5000, self.destroy)
+            self.after(3000, self.destroy)
 
     def save_settings(self):
             Settings.conf.update(
