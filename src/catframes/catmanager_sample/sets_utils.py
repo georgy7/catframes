@@ -285,7 +285,7 @@ class UtilityLocator:
         paths = result.stdout.decode()
         paths = map(lambda x: x.strip('\r '), paths.split('\n'))
 
-        if platform.system().lower() == "Windows":
+        if platform.system() == "Windows":
             paths = filter(lambda x: x.endswith('.exe'), paths)
 
         paths = list(paths)
