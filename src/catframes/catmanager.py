@@ -19,9 +19,14 @@ import configparser
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
+from unittest import TestCase
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
-from PIL import Image, ImageTk
+try:
+    from PIL import Image, ImageTk
+    PIL_FOUND_FLAG = True
+except:
+    PIL_FOUND_FLAG = False
 
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
@@ -46,6 +51,8 @@ INTERNAL_ERROR = "internal"
 NO_FFMPEG_ERROR = "noffmpeg"
 NO_CATFRAMES_ERROR = "nocatframes"
 START_FAILED_ERROR = "failed"
+
+SYSTEM_PATH = "system_path"
 
 FOLDER_ICON_BASE64 = """
 iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA
@@ -72,6 +79,22 @@ PLAY_ICON_BASE64 = """
 iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
 DsMAAA7DAcdvqGQAAABeSURBVDhPzdCxDcAgDERRZmEelmVCJ1eArJMJtinCk67B0i8o8qq9zWnW24orxO8Wd4hvLBTiuxYO
 YZZUCGPpEKYdhbDhOITBPaHh/89mqZAlHFoJhb64Qzuu0J7IA1aJ3KICtYk1AAAAAElFTkSuQmCC
+"""
+
+ERROR_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAADPSURBVEhLtZTBDcIwDEUNI/TMkRnYgzM7MAw7cIU56C6wQhpbSVUSfzug5EtRo8R+cr/d7t6HY6AB
+2qdnd31VPN3uaUf0uV7SzhbKWcEScD7Joeg5u3ArB1sRE7bVlKqghWyPAdyDitiKvMLjFVTF819ieFXjBquJ/onAXdkPdY6b
+XjULNFn1WAJzhZYAlAWb58INKGvYlwfBrs/xThvFLBXc3DwDXoEhlP3WPEfw7VD3/EBWcGtCa6w9FWCkWuYcg5059eDjf/S9
+ZXv8t4gWlzE1GW5peVYAAAAASUVORK5CYII=
+"""
+
+OK_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAAC5SURBVEhL1ZXbCYRADEXjVuC/f7ZgGws2sWVtExZiGf5vBy4XJpJ5JGYdhfXA4CB6c8gEbfrpudIF
+PML1dKqN5+EVdkTD/A67SmOEtt24LVnkslYcDmZbjf8yLtl+lum8w7OIxk0bHYnHFmzG/AIvWYQp3dNQW6GFe2yB2WMZ/ost
+yHqcGgFYAa8tiIzxEIdIEFgqaJG1QgtPsWxBscfecAv18KzwPVtgTkWNuetDn47ani242z+P6Atnwl4nWv9uvAAAAABJRU5E
+rkJggg==
 """
 
 
@@ -159,6 +182,7 @@ class Lang:
             "noti.lbWarn": "Invalid port range!",
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
+            "checker.title": "Necessary modules check",
         },
         "русский": {
             "root.title": "CatFrames",
@@ -217,6 +241,7 @@ class Lang:
             "noti.lbWarn": "Неверный диапазон портов!",
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
+            "checker.title": "Проверка необходимых модулей",
         },
     }
 
@@ -304,17 +329,130 @@ class Theme:
         )
 
 
+class UtilityLocator:
+    """Ищет утилиты в системе по имени"""
+
+    use_system_path: bool
+
+    ffmpeg_in_sys_path: bool
+    catframes_in_sys_path: bool
+
+    ffmpeg_full_path: str
+    catframes_full_path: str
+
+    def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
+        self.ffmpeg_in_sys_path = is_in_sys_path
+        self.ffmpeg_full_path = full_path
+
+    def set_catframes(self, is_in_sys_path: bool, full_path: str):
+        self.catframes_in_sys_path = is_in_sys_path
+        self.catframes_full_path = full_path
+
+    # метод для поиска ffmpeg в системе
+    def find_ffmpeg(self) -> None:
+        self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
+        self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.ffmpeg_in_sys_path)
+        return self.ffmpeg_full_path
+
+    # такой же, но для catframes
+    def find_catframes(self) -> None:
+        self.catframes_in_sys_path = self.find_in_sys_path('catframes')
+        self.catframes_full_path = self.find_full_path('catframes', self.catframes_in_sys_path)
+        return self.catframes_full_path
+
+    # ищет полный путь для утилиты
+    # если она есть в path, то ищет консолью
+    @staticmethod
+    def find_full_path(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
+        if is_in_sys_path:
+            return UtilityLocator.find_by_console(utility_name)
+
+        paths_to_check = UtilityLocator._get_paths(utility_name)
+        for path in paths_to_check:
+            if os.path.isfile(path):
+                return path
+
+    # ниходит полный путь утилиты при помощи консоли,
+    # если она есть в системном path
+    @staticmethod
+    def find_by_console(utility_name) -> list:
+        command = "where" if platform.system()== "Windows" else "which"
+        result = subprocess.run(
+            [command, utility_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        paths = result.stdout.decode()
+        paths = map(lambda x: x.strip('\r '), paths.split('\n'))
+
+        if platform.system() == "Windows":
+            paths = filter(lambda x: x.endswith('.exe'), paths)
+
+        paths = list(paths)
+        return paths[0] if paths else None
+
+    # возвращает пути, по которым может быть утилита, исходя из системы
+    @staticmethod
+    def _get_paths(utility_name: str) -> List[str]:
+        system = platform.system()
+
+        if system == "Windows":
+            return [
+                os.path.join(
+                    os.environ.get("ProgramFiles", ""),
+                    utility_name,
+                    "bin",
+                    f"{utility_name}.exe",
+                ),
+                os.path.join(
+                    os.environ.get("ProgramFiles(x86)", ""),
+                    utility_name,
+                    "bin",
+                    f"{utility_name}.exe",
+                ),
+            ]
+        elif system == "Linux":
+            return [
+                "/usr/bin/" + utility_name,
+                "/usr/local/bin/" + utility_name,
+            ]
+        elif system == "Darwin":
+            return [
+                "/usr/local/bin/" + utility_name,
+                "/opt/homebrew/bin/" + utility_name,
+            ]
+
+    # проверка, есть ли утилита в системном path
+    @staticmethod
+    def find_in_sys_path(utility_name) -> bool:
+        try:
+            result = subprocess.run(
+                [utility_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            output = ''
+            for i in range(3):
+                output += result.stderr.decode()
+            if result.returncode == 0 or ("usage" in output):
+                return True
+        except FileNotFoundError:
+            pass
+        return False
+
+
 class IniConfig:
     """Создание, чтение, и изменение внешнего файла конфига"""
 
     def __init__(self):
         self.file_path = os.path.join(os.path.expanduser("~"), CONFIG_FILENAME)
-
+        self.file_exists = os.path.isfile(self.file_path)
         self.config = configparser.ConfigParser()
 
-        if not os.path.isfile(self.file_path):
+        if self.file_exists:
+            self.config.read(self.file_path)
+        else:
             self.set_default()
-        self.config.read(self.file_path)
 
     # создание стандартного конфиг файла
     def set_default(self):
@@ -324,11 +462,13 @@ class IniConfig:
             "TtkTheme": "vista" if platform.system() == "Windows" else "default",
         }
         self.config["AbsolutePath"] = {
-            "Python": "",
             "FFmpeg": "",
             "Catframes": "",
         }
-        self.save()
+        self.config["SystemPath"] = {
+            "FFmpeg": "",
+            "Catframes": "",
+        }
 
     # редактирование ключа в секции конфиг файла
     def update(self, section: str, key: str, value: Union[str, int]):
@@ -338,6 +478,7 @@ class IniConfig:
     def save(self):
         with open(self.file_path, "w") as configfile:
             self.config.write(configfile)
+        self.file_exists = True
 
 
 class Settings:
@@ -345,6 +486,7 @@ class Settings:
 
     lang = Lang()
     theme = Theme()
+    util_locatior = UtilityLocator()
     conf = IniConfig()
 
     @classmethod
@@ -357,9 +499,14 @@ class Settings:
     def restore(cls):
         cls.lang.set(cls.conf.config["Settings"]["Language"])
         cls.theme.set_name(cls.conf.config["Settings"]["TtkTheme"])
-
-
-Settings.restore()
+        cls.util_locatior.set_ffmpeg(
+            is_in_sys_path=cls.conf.config["SystemPath"]["FFmpeg"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["FFmpeg"]
+        )
+        cls.util_locatior.set_catframes(
+            is_in_sys_path=cls.conf.config["SystemPath"]["Catframes"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["Catframes"]
+        )
 
 
 
@@ -418,7 +565,7 @@ class TaskConfig:
         self._filepath: str = ""
         self._rewrite: bool = False
 
-    def set_dirs(self, dirs) -> list:
+    def set_dirs(self, dirs: List[str]) -> list:
         self._dirs = dirs
 
     def set_overlays(self, overlays_texts: List[str]):
@@ -437,9 +584,6 @@ class TaskConfig:
         self._quality_index = quality
         self._quality = self.quality_names[quality]
         self._limit = limit
-
-    def set_resolution(self, width: int, height: int):
-        self._resolution = width, height
 
     def set_filepath(self, filepath: str):
         self._filepath = filepath
@@ -462,18 +606,26 @@ class TaskConfig:
     def get_color(self) -> str:
         return self._color
 
+    @staticmethod
+    def to_user_format(text: str, bash: bool) -> str:
+        q = "'" if bash else '"'
+        text = text.replace("\n", "\\n")
+        text = text.replace("\r", "\\r")
+        text = text.replace("\t", "\\t")
+        return q + text + q
+
+
     # создание консольной команды в виде списка
     def convert_to_command(
         self, for_user: bool = False, bash: bool = True
     ) -> List[str]:
         command = ["catframes"]
-        q = "'" if bash else '"'
 
         for position, text in self._overlays.items():
             if text:
                 if for_user:
-                    text = text.replace("\n", "\\n")
-                    command.append(f"{position}={q}{text}{q}")
+                    text = self.to_user_format(text, bash)
+                    command.append(f"{position}={text}")
                 else:
                     command.append(position)
                     command.append(text)
@@ -487,13 +639,12 @@ class TaskConfig:
 
         for dir in self._dirs:  # добавление директорий с изображениями
             if for_user:
-                dir = f"{q}{dir}{q}"
+                dir = self.to_user_format(dir, bash)
             command.append(dir)
 
         if for_user:
-            command.append(
-                f"{q}{self._filepath}{q}"
-            )  # добавление полного пути файла в кавычках
+            # добавление полного пути файла в кавычках
+            command.append(self.to_user_format(self._filepath, bash))  
         else:
             command.append(self._filepath)
             command.append("--live-preview")
@@ -875,7 +1026,7 @@ class WindowMixin(ABC):
         self._set_size()
         self._to_center()
 
-        if self.name == "root":
+        if self.name in ("root", "checker"):
             Settings.theme.lazy_init(master=self)
         self.after(1, self._init_widgets)
         self.after(2, self.update_texts)
@@ -907,7 +1058,6 @@ class WindowMixin(ABC):
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-        border_gap: int = 30  # минимальный отступ от края окна при открытии
 
         screen_size: tuple = self.winfo_screenwidth(), self.winfo_screenheight()
 
@@ -920,8 +1070,19 @@ class WindowMixin(ABC):
 
         # далее для побочных окон:
         master_size = self.master.winfo_width(), self.master.winfo_height()
-        x = self.master.winfo_x() + master_size[0] / 2 - self.size[0] / 2
-        y = self.master.winfo_y() + master_size[1] / 2 - self.size[1] / 2
+        master_coords = self.master.winfo_x(), self.master.winfo_y()
+
+        x, y = self._calculate_coords(master_coords, master_size, self.size, screen_size)
+
+        self.geometry(f"+{int(x)}+{int(y)}")
+
+    @staticmethod
+    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
+        
+        border_gap: int = 30  # минимальный отступ от края окна при открытии
+
+        x = master_coords[0] + master_size[0] / 2 - window_size[0] / 2
+        y = master_coords[1] + master_size[1] / 2 - window_size[1] / 2
 
         # далее описаны сценарии для случаев, когда новое окно,
         # при появлении, выходит за границы экрана
@@ -929,17 +1090,18 @@ class WindowMixin(ABC):
         if x < border_gap:
             x = border_gap
 
-        if x + self.size[0] + border_gap > screen_size[0]:
-            x = screen_size[0] - self.size[0] - border_gap
+        if x + window_size[0] + border_gap > screen_size[0]:
+            x = screen_size[0] - window_size[0] - border_gap
 
         if y < border_gap:
             y = border_gap
 
         # при выходе за нижнюю границу экрана, отсуп больше
-        if y + self.size[1] + (border_gap * 3) > screen_size[1]:
-            y = screen_size[1] - self.size[1] - (border_gap * 3)
+        if y + window_size[1] + (border_gap * 3) > screen_size[1]:
+            y = screen_size[1] - window_size[1] - (border_gap * 3)
 
-        self.geometry(f"+{int(x)}+{int(y)}")
+        return int(x), int(y)
+    
 
     def _set_size(self):
 
@@ -2116,6 +2278,7 @@ class ToolTip:
 
 
 
+
     #  из файла windows.py:
 
 """
@@ -2503,6 +2666,38 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
         task.start(gui_callback)
 
+
+    # Валидация для поля ввода цвета
+    # Должна пропускать любые 16-р значения
+    # до 6ти знаков, с "#" вначале и без.
+    # Пустая строка допустима.  
+    @staticmethod
+    def validate_color(value: str) -> bool:
+        if not value:
+            return True
+        if value.count("#") > 1:
+            return False
+        if value.count("#") == 1 and not value.startswith("#"):
+            return False
+        value = value.lstrip("#")
+        if len(value) > 6:
+            return False
+        for v in value:
+            if v.lower() not in "0123456789abcdef":
+                return False
+        return True
+        
+    # Валидация для поля ввода фпс.
+    # Должна пропускать любые числа от 0 до 60.
+    # Пустая строка так же допустима.
+    @staticmethod
+    def validate_fps(value) -> bool:
+        if not value:
+            return True
+        if not value.isdigit():
+            return False
+        return 0 <= int(value) <= 60
+
     def _init_widgets(self):
         self.main_frame = Frame(self)
         self.main_pane = PanedWindow(
@@ -2589,22 +2784,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self.color_frame = ttk.Frame(self.settings_grid)
 
-        def validate_color(value: str):
-            if not value:
-                return True
-            if value.count("#") > 1:
-                return False
-            if value.count("#") == 1 and not value.startswith("#"):
-                return False
-            value = value.lstrip("#")
-            if len(value) > 6:
-                return False
-            for v in value:
-                if v.lower() not in "0123456789abcdef":
-                    return False
-            return True
 
-        v_color = self.register(validate_color), "%P"
+        v_color = self.register(self.validate_color), "%P"
 
         self.widgets["_entColor"] = ttk.Entry(
             self.color_frame,
@@ -2642,14 +2823,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=2,
         )
 
-        def validate_fps(value):
-            if not value:
-                return True
-            if not value.isdigit():
-                return False
-            return 0 <= int(value) <= 60
 
-        v_fps = self.register(validate_fps), "%P"
+        v_fps = self.register(self.validate_fps), "%P"
 
         self.widgets["_spnFramerate"] = ttk.Spinbox(  # виджет выбора фреймрейта
             self.settings_grid,
@@ -2977,11 +3152,258 @@ class NotifyWindow(Toplevel, WindowMixin):
 
 
 
+    #  из файла util_checker.py:
+
+class SingleCheck(ttk.Frame):
+    """Проверка для конкретной утилиты.
+    Представляет собой "бар" с названием утилиты,
+    информацией по статусу поиска, и значком.
+    При инициализации принимает инъекцией метод
+    для поиска утилиты в системе"""
+
+    def __init__(self, master: ttk.Frame, util_name: str, search_method: Callable):
+        super().__init__(master)
+        self.widgets: Dict[str, ttk.Widget] = {}
+        self.util_name = util_name
+        self.search_method = search_method
+        self._init_widgets()
+        self._pack_widgets()
+
+    @abstractmethod
+    def search_method() -> str:
+        ...
+
+    def _init_widgets(self):
+        big_font = font.Font(size=20)
+        mid_font = font.Font(size=12)
+        self.top_frame = ttk.Frame()
+        self.bottom_frame = ttk.Frame()
+
+        self.widgets["main_label"] = ttk.Label(
+            self.top_frame, font=big_font, text=f"{self.util_name}"
+        )
+        self.widgets["status_image"] = ttk.Label(self.top_frame)
+        self.widgets["bottom_label"] = ttk.Label(
+            self.bottom_frame, font=mid_font, text = f"searching..."
+        )
+
+        self.ok_image = base64_to_tk(OK_ICON_BASE64)
+        self.err_image = base64_to_tk(ERROR_ICON_BASE64)
+
+    def _pack_widgets(self):
+        self.top_frame.pack(expand=True, fill=X, pady=(50, 0))
+        self.bottom_frame.pack(expand=True, fill=X, pady=(0, 10))
+        self.widgets["main_label"].pack(side=LEFT, padx=20)
+        self.widgets["status_image"].pack(side=RIGHT, padx=20)
+        self.widgets["bottom_label"].pack(side=LEFT, padx=20)
+
+    def check(self):
+        self.found: str = self.search_method()
+
+        text = "Not found"
+        status_image = self.err_image
+        if self.found:
+            try:
+                text = shrink_path(self.found, 45)
+            except:
+                text = self.found
+            status_image = self.ok_image
+        
+        
+        self.widgets["bottom_label"].configure(text=text)
+        self.widgets["status_image"].configure(image=status_image)
+
+
+class UtilChecker(Tk, WindowMixin):
+    """Окно, в котором происходит первичная проверка необходимых утилит"""
+
+    def __init__(self):
+        super().__init__()
+        self.name: str = "checker"
+
+        self.widgets: Dict[str, ttk.Widget] = {}
+
+        self.size: Tuple[int] = 400, 400
+        self.resizable(False, False)
+
+        self.all_checked = False
+        super()._default_set_up()
+
+        self.check_thread = threading.Thread(target=self.start_check, daemon=True)
+        self.after(1000, self.check_thread.start)
+
+    def _init_widgets(self): 
+        self.main_frame = ttk.Frame(self)
+        
+        def pil_search():
+            if PIL_FOUND_FLAG:
+                return "Installed in the current environment."
+            
+        self.pil = SingleCheck(self.main_frame, "Pillow", pil_search)
+        self.ffmpeg = SingleCheck(
+            self.main_frame, "FFmpeg", Settings.util_locatior.find_ffmpeg
+        )
+        self.catframes = SingleCheck(
+            self.main_frame, "Catframes", Settings.util_locatior.find_catframes
+        )
+
+    def _pack_widgets(self):
+        self.main_frame.pack(expand=True, padx=50, pady=100)
+        self.pil.pack(expand=True)
+        self.ffmpeg.pack(expand=True)
+        self.catframes.pack(expand=True)
+
+    def start_check(self):
+        self.pil.check()
+        self.ffmpeg.check()
+        self.catframes.check()
+        self.all_checked = \
+                    self.pil.found \
+                    and self.ffmpeg.found \
+                    and self.catframes.found
+        if self.all_checked:
+            self.save_settings()
+            self.after(3000, self.destroy)
+
+    def save_settings(self):
+            Settings.conf.update(
+                "AbsolutePath", "FFmpeg", Settings.util_locatior.ffmpeg_full_path
+            )
+            Settings.conf.update(
+                "SystemPath", "FFmpeg", "yes" if Settings.util_locatior.ffmpeg_in_sys_path else "no"
+            )
+            Settings.conf.update(
+                "AbsolutePath", "Catframes", Settings.util_locatior.catframes_full_path
+            )
+            Settings.conf.update(
+                "SystemPath", "Catframes", "yes" if Settings.util_locatior.catframes_in_sys_path else "no"
+            )
+            Settings.save()
+
+    def close(self):
+        if self.all_checked:
+            self.destroy()
+        else:
+            exit()
+
+
+
+
+
+    #  из файла tests.py:
+
+class _TestUtils(TestCase):
+
+    def test_shrink_path(self):
+        path = r"C:\Users\Test\AppData\Local\Microsoft\WindowsApps"
+        shrinked = shrink_path(path, 20)
+        self.assertEqual(shrinked, r"C:\...ft\WindowsApps")
+
+        path = r"/home/test/.config/"
+        shrinked = shrink_path(path, 30)
+        self.assertEqual(shrinked, path)
+
+        path = r"/home/test/.config/gnome_shell"
+        shrinked = shrink_path(path, 10)
+        self.assertEqual(shrinked, r"/home/.../gnome_shell")
+
+    def test_is_dark_color(self):
+        self.assertTrue(is_dark_color(0, 0, 0))
+
+        self.assertTrue(is_dark_color(0, 0, 255))
+        self.assertTrue(is_dark_color(255, 0, 0))
+        self.assertTrue(is_dark_color(255, 0, 255))
+
+        self.assertFalse(is_dark_color(0, 255, 0))
+        self.assertFalse(is_dark_color(0, 255, 255))
+        self.assertFalse(is_dark_color(255, 255, 0))
+
+        self.assertFalse(is_dark_color(255, 255, 255))
+    
+
+class _TestWindowPosition(TestCase):
+
+    def test_coords_calculation(self):
+        x, y = WindowMixin._calculate_coords((1005, 495), (550, 450), (250, 150), (2560, 1440))
+        self.assertTrue((x, y) == (1155, 645)) 
+        x, y = WindowMixin._calculate_coords((285, 304), (550, 450), (900, 500), (2560, 1440))
+        self.assertTrue((x, y) == (110, 279)) 
+        x, y = WindowMixin._calculate_coords((2240, 224), (550, 450), (900, 500), (2560, 1440))
+        self.assertTrue((x, y) == (1630, 199)) 
+        x, y = WindowMixin._calculate_coords((912, 1147) ,(550, 450) ,(900, 500), (2560, 1440))
+        self.assertTrue((x, y) == (737, 850)) 
+
+
+class _TestTaskConfig(TestCase):
+
+    def test_task_assembling(self):
+        task_config = TaskConfig()
+        task_config.set_specs(30, 2)
+        task_config.set_filepath("/test.webm")
+        task_config.set_dirs(["/pic/test1"])
+
+        self.assertFalse("--live-preview" in task_config.convert_to_command(True))
+        self.assertTrue("--live-preview" in task_config.convert_to_command(False))
+
+    def test_user_format_converting(self):
+        test_string = '\ttest\ntest\rtest'
+
+        res_win = TaskConfig.to_user_format(test_string, bash=False)
+        self.assertTrue(res_win.startswith('"') and res_win.endswith('"'))
+        self.assertTrue(r"\ttest\ntest\rtest" in res_win)
+
+        res_bash = TaskConfig.to_user_format(test_string, bash=True)
+        self.assertTrue(res_bash.startswith("'") and res_bash.endswith("'"))
+        self.assertTrue(r"\ttest\ntest\rtest" in res_bash)
+
+
+class _TestFieldsValidators(TestCase):
+
+    def test_color_validator(self):
+        self.assertTrue(NewTaskWindow.validate_color(""))
+        self.assertTrue(NewTaskWindow.validate_color("#00ff00"))
+        self.assertTrue(NewTaskWindow.validate_color("#00"))
+        self.assertTrue(NewTaskWindow.validate_color("face00"))
+        self.assertTrue(NewTaskWindow.validate_color("ffff"))
+
+        self.assertFalse(NewTaskWindow.validate_color("#0000000"))
+        self.assertFalse(NewTaskWindow.validate_color("##000000"))
+        self.assertFalse(NewTaskWindow.validate_color("#asjmi"))
+        self.assertFalse(NewTaskWindow.validate_color("000#"))
+
+    def test_fps_validator(self):
+        self.assertTrue(NewTaskWindow.validate_fps(""))
+        self.assertTrue(NewTaskWindow.validate_fps("0"))
+        self.assertTrue(NewTaskWindow.validate_fps("1"))
+        self.assertTrue(NewTaskWindow.validate_fps("60"))
+
+        self.assertFalse(NewTaskWindow.validate_fps(" "))
+        self.assertFalse(NewTaskWindow.validate_fps("-1"))
+        self.assertFalse(NewTaskWindow.validate_fps("61"))
+        self.assertFalse(NewTaskWindow.validate_fps("a"))
+        self.assertFalse(NewTaskWindow.validate_fps("$"))
+
+
+
+
+
     #  из файла main.py:
 
-def main():
+def check_utils():
+    checker = UtilChecker()
+    checker.mainloop()
+
+
+def start_catmanager():
     root = LocalWM.open(RootWindow, "root")  # открываем главное окно
     root.mainloop()
+
+
+def main():
+    Settings.restore()
+    if not Settings.conf.file_exists:
+        check_utils()
+    start_catmanager()
 
 
 if __name__ == "__main__":

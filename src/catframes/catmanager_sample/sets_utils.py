@@ -82,6 +82,7 @@ class Lang:
             "noti.lbWarn": "Invalid port range!",
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
+            "checker.title": "Necessary modules check",
         },
         "русский": {
             "root.title": "CatFrames",
@@ -140,6 +141,7 @@ class Lang:
             "noti.lbWarn": "Неверный диапазон портов!",
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
+            "checker.title": "Проверка необходимых модулей",
         },
     }
 
@@ -227,17 +229,130 @@ class Theme:
         )
 
 
+class UtilityLocator:
+    """Ищет утилиты в системе по имени"""
+
+    use_system_path: bool
+
+    ffmpeg_in_sys_path: bool
+    catframes_in_sys_path: bool
+
+    ffmpeg_full_path: str
+    catframes_full_path: str
+
+    def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
+        self.ffmpeg_in_sys_path = is_in_sys_path
+        self.ffmpeg_full_path = full_path
+
+    def set_catframes(self, is_in_sys_path: bool, full_path: str):
+        self.catframes_in_sys_path = is_in_sys_path
+        self.catframes_full_path = full_path
+
+    # метод для поиска ffmpeg в системе
+    def find_ffmpeg(self) -> None:
+        self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
+        self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.ffmpeg_in_sys_path)
+        return self.ffmpeg_full_path
+
+    # такой же, но для catframes
+    def find_catframes(self) -> None:
+        self.catframes_in_sys_path = self.find_in_sys_path('catframes')
+        self.catframes_full_path = self.find_full_path('catframes', self.catframes_in_sys_path)
+        return self.catframes_full_path
+
+    # ищет полный путь для утилиты
+    # если она есть в path, то ищет консолью
+    @staticmethod
+    def find_full_path(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
+        if is_in_sys_path:
+            return UtilityLocator.find_by_console(utility_name)
+
+        paths_to_check = UtilityLocator._get_paths(utility_name)
+        for path in paths_to_check:
+            if os.path.isfile(path):
+                return path
+
+    # ниходит полный путь утилиты при помощи консоли,
+    # если она есть в системном path
+    @staticmethod
+    def find_by_console(utility_name) -> list:
+        command = "where" if platform.system()== "Windows" else "which"
+        result = subprocess.run(
+            [command, utility_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        paths = result.stdout.decode()
+        paths = map(lambda x: x.strip('\r '), paths.split('\n'))
+
+        if platform.system() == "Windows":
+            paths = filter(lambda x: x.endswith('.exe'), paths)
+
+        paths = list(paths)
+        return paths[0] if paths else None
+
+    # возвращает пути, по которым может быть утилита, исходя из системы
+    @staticmethod
+    def _get_paths(utility_name: str) -> List[str]:
+        system = platform.system()
+
+        if system == "Windows":
+            return [
+                os.path.join(
+                    os.environ.get("ProgramFiles", ""),
+                    utility_name,
+                    "bin",
+                    f"{utility_name}.exe",
+                ),
+                os.path.join(
+                    os.environ.get("ProgramFiles(x86)", ""),
+                    utility_name,
+                    "bin",
+                    f"{utility_name}.exe",
+                ),
+            ]
+        elif system == "Linux":
+            return [
+                "/usr/bin/" + utility_name,
+                "/usr/local/bin/" + utility_name,
+            ]
+        elif system == "Darwin":
+            return [
+                "/usr/local/bin/" + utility_name,
+                "/opt/homebrew/bin/" + utility_name,
+            ]
+
+    # проверка, есть ли утилита в системном path
+    @staticmethod
+    def find_in_sys_path(utility_name) -> bool:
+        try:
+            result = subprocess.run(
+                [utility_name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            output = ''
+            for i in range(3):
+                output += result.stderr.decode()
+            if result.returncode == 0 or ("usage" in output):
+                return True
+        except FileNotFoundError:
+            pass
+        return False
+
+
 class IniConfig:
     """Создание, чтение, и изменение внешнего файла конфига"""
 
     def __init__(self):
         self.file_path = os.path.join(os.path.expanduser("~"), CONFIG_FILENAME)
-
+        self.file_exists = os.path.isfile(self.file_path)
         self.config = configparser.ConfigParser()
 
-        if not os.path.isfile(self.file_path):
+        if self.file_exists:
+            self.config.read(self.file_path)
+        else:
             self.set_default()
-        self.config.read(self.file_path)
 
     # создание стандартного конфиг файла
     def set_default(self):
@@ -247,11 +362,13 @@ class IniConfig:
             "TtkTheme": "vista" if platform.system() == "Windows" else "default",
         }
         self.config["AbsolutePath"] = {
-            "Python": "",
             "FFmpeg": "",
             "Catframes": "",
         }
-        self.save()
+        self.config["SystemPath"] = {
+            "FFmpeg": "",
+            "Catframes": "",
+        }
 
     # редактирование ключа в секции конфиг файла
     def update(self, section: str, key: str, value: Union[str, int]):
@@ -261,6 +378,7 @@ class IniConfig:
     def save(self):
         with open(self.file_path, "w") as configfile:
             self.config.write(configfile)
+        self.file_exists = True
 
 
 class Settings:
@@ -268,6 +386,7 @@ class Settings:
 
     lang = Lang()
     theme = Theme()
+    util_locatior = UtilityLocator()
     conf = IniConfig()
 
     @classmethod
@@ -280,6 +399,11 @@ class Settings:
     def restore(cls):
         cls.lang.set(cls.conf.config["Settings"]["Language"])
         cls.theme.set_name(cls.conf.config["Settings"]["TtkTheme"])
-
-
-Settings.restore()
+        cls.util_locatior.set_ffmpeg(
+            is_in_sys_path=cls.conf.config["SystemPath"]["FFmpeg"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["FFmpeg"]
+        )
+        cls.util_locatior.set_catframes(
+            is_in_sys_path=cls.conf.config["SystemPath"]["Catframes"]=='yes',
+            full_path=cls.conf.config["AbsolutePath"]["Catframes"]
+        )

@@ -390,6 +390,38 @@ class NewTaskWindow(Toplevel, WindowMixin):
         )
         task.start(gui_callback)
 
+
+    # Валидация для поля ввода цвета
+    # Должна пропускать любые 16-р значения
+    # до 6ти знаков, с "#" вначале и без.
+    # Пустая строка допустима.  
+    @staticmethod
+    def validate_color(value: str) -> bool:
+        if not value:
+            return True
+        if value.count("#") > 1:
+            return False
+        if value.count("#") == 1 and not value.startswith("#"):
+            return False
+        value = value.lstrip("#")
+        if len(value) > 6:
+            return False
+        for v in value:
+            if v.lower() not in "0123456789abcdef":
+                return False
+        return True
+        
+    # Валидация для поля ввода фпс.
+    # Должна пропускать любые числа от 0 до 60.
+    # Пустая строка так же допустима.
+    @staticmethod
+    def validate_fps(value) -> bool:
+        if not value:
+            return True
+        if not value.isdigit():
+            return False
+        return 0 <= int(value) <= 60
+
     def _init_widgets(self):
         self.main_frame = Frame(self)
         self.main_pane = PanedWindow(
@@ -476,22 +508,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
 
         self.color_frame = ttk.Frame(self.settings_grid)
 
-        def validate_color(value: str):
-            if not value:
-                return True
-            if value.count("#") > 1:
-                return False
-            if value.count("#") == 1 and not value.startswith("#"):
-                return False
-            value = value.lstrip("#")
-            if len(value) > 6:
-                return False
-            for v in value:
-                if v.lower() not in "0123456789abcdef":
-                    return False
-            return True
 
-        v_color = self.register(validate_color), "%P"
+        v_color = self.register(self.validate_color), "%P"
 
         self.widgets["_entColor"] = ttk.Entry(
             self.color_frame,
@@ -529,14 +547,8 @@ class NewTaskWindow(Toplevel, WindowMixin):
             width=2,
         )
 
-        def validate_fps(value):
-            if not value:
-                return True
-            if not value.isdigit():
-                return False
-            return 0 <= int(value) <= 60
 
-        v_fps = self.register(validate_fps), "%P"
+        v_fps = self.register(self.validate_fps), "%P"
 
         self.widgets["_spnFramerate"] = ttk.Spinbox(  # виджет выбора фреймрейта
             self.settings_grid,

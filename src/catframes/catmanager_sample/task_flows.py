@@ -52,7 +52,7 @@ class TaskConfig:
         self._filepath: str = ""
         self._rewrite: bool = False
 
-    def set_dirs(self, dirs) -> list:
+    def set_dirs(self, dirs: List[str]) -> list:
         self._dirs = dirs
 
     def set_overlays(self, overlays_texts: List[str]):
@@ -71,9 +71,6 @@ class TaskConfig:
         self._quality_index = quality
         self._quality = self.quality_names[quality]
         self._limit = limit
-
-    def set_resolution(self, width: int, height: int):
-        self._resolution = width, height
 
     def set_filepath(self, filepath: str):
         self._filepath = filepath
@@ -96,18 +93,26 @@ class TaskConfig:
     def get_color(self) -> str:
         return self._color
 
+    @staticmethod
+    def to_user_format(text: str, bash: bool) -> str:
+        q = "'" if bash else '"'
+        text = text.replace("\n", "\\n")
+        text = text.replace("\r", "\\r")
+        text = text.replace("\t", "\\t")
+        return q + text + q
+
+
     # создание консольной команды в виде списка
     def convert_to_command(
         self, for_user: bool = False, bash: bool = True
     ) -> List[str]:
         command = ["catframes"]
-        q = "'" if bash else '"'
 
         for position, text in self._overlays.items():
             if text:
                 if for_user:
-                    text = text.replace("\n", "\\n")
-                    command.append(f"{position}={q}{text}{q}")
+                    text = self.to_user_format(text, bash)
+                    command.append(f"{position}={text}")
                 else:
                     command.append(position)
                     command.append(text)
@@ -121,13 +126,12 @@ class TaskConfig:
 
         for dir in self._dirs:  # добавление директорий с изображениями
             if for_user:
-                dir = f"{q}{dir}{q}"
+                dir = self.to_user_format(dir, bash)
             command.append(dir)
 
         if for_user:
-            command.append(
-                f"{q}{self._filepath}{q}"
-            )  # добавление полного пути файла в кавычках
+            # добавление полного пути файла в кавычках
+            command.append(self.to_user_format(self._filepath, bash))  
         else:
             command.append(self._filepath)
             command.append("--live-preview")

@@ -19,9 +19,14 @@ import configparser
 
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser
+from unittest import TestCase
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
-from PIL import Image, ImageTk
+try:
+    from PIL import Image, ImageTk
+    PIL_FOUND_FLAG = True
+except:
+    PIL_FOUND_FLAG = False
 
 
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
@@ -46,6 +51,8 @@ INTERNAL_ERROR = "internal"
 NO_FFMPEG_ERROR = "noffmpeg"
 NO_CATFRAMES_ERROR = "nocatframes"
 START_FAILED_ERROR = "failed"
+
+SYSTEM_PATH = "system_path"
 
 FOLDER_ICON_BASE64 = """
 iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA
@@ -72,4 +79,20 @@ PLAY_ICON_BASE64 = """
 iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
 DsMAAA7DAcdvqGQAAABeSURBVDhPzdCxDcAgDERRZmEelmVCJ1eArJMJtinCk67B0i8o8qq9zWnW24orxO8Wd4hvLBTiuxYO
 YZZUCGPpEKYdhbDhOITBPaHh/89mqZAlHFoJhb64Qzuu0J7IA1aJ3KICtYk1AAAAAElFTkSuQmCC
+"""
+
+ERROR_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAADPSURBVEhLtZTBDcIwDEUNI/TMkRnYgzM7MAw7cIU56C6wQhpbSVUSfzug5EtRo8R+cr/d7t6HY6AB
+2qdnd31VPN3uaUf0uV7SzhbKWcEScD7Joeg5u3ArB1sRE7bVlKqghWyPAdyDitiKvMLjFVTF819ieFXjBquJ/onAXdkPdY6b
+XjULNFn1WAJzhZYAlAWb58INKGvYlwfBrs/xThvFLBXc3DwDXoEhlP3WPEfw7VD3/EBWcGtCa6w9FWCkWuYcg5059eDjf/S9
+ZXv8t4gWlzE1GW5peVYAAAAASUVORK5CYII=
+"""
+
+OK_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAAC5SURBVEhL1ZXbCYRADEXjVuC/f7ZgGws2sWVtExZiGf5vBy4XJpJ5JGYdhfXA4CB6c8gEbfrpudIF
+PML1dKqN5+EVdkTD/A67SmOEtt24LVnkslYcDmZbjf8yLtl+lum8w7OIxk0bHYnHFmzG/AIvWYQp3dNQW6GFe2yB2WMZ/ost
+yHqcGgFYAa8tiIzxEIdIEFgqaJG1QgtPsWxBscfecAv18KzwPVtgTkWNuetDn47ani242z+P6Atnwl4nWv9uvAAAAABJRU5E
+rkJggg==
 """
