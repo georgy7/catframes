@@ -36,7 +36,15 @@ Do this as root for system-wide installation:
 python3 -m pip install catframes
 ```
 
-You can also copy `catframes.py` to `/usr/local/bin` manually.
+Or you may install it only for your user:
+
+```
+sudo apt install pipx
+pipx install catframes
+pipx ensurepath
+```
+
+You may also copy `catframes.py` to `/usr/local/bin` manually.
 But then you will also need to install [Pillow](https://pypi.org/project/Pillow/#files).
 
 Dependencies that are not installable from PYPI:
