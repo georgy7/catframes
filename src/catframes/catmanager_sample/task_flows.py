@@ -140,6 +140,14 @@ class TaskConfig:
             elif windows and compiled() and catframes_exe.exists():
                 logger.info('Using local catframes.exe')
                 command = [str(catframes_exe)]
+            elif not compiled() and catframes_py.exists() and shutil.which('python'):
+                logger.info('Using local catframes.py (POSIX)')
+                logger.info(f'Python executable: python')
+                command = ['python', str(catframes_py)]
+            elif not compiled() and catframes_py.exists() and shutil.which('python3'):
+                logger.info('Using local catframes.py (POSIX)')
+                logger.info(f'Python executable: python3')
+                command = ['python3', str(catframes_py)]
             else:
                 logger.info('Using Catframes from PATH.')
                 command = ['catframes']
