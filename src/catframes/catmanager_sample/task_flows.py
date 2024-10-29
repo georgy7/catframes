@@ -95,12 +95,15 @@ class TaskConfig:
 
     @staticmethod
     def to_user_format(text: str, bash: bool) -> str:
-        q = "'" if bash else '"'
         text = text.replace("\n", "\\n")
         text = text.replace("\r", "\\r")
         text = text.replace("\t", "\\t")
+        return TaskConfig.wrap_quots(text, bash)
+    
+    @staticmethod
+    def wrap_quots(text: str, bash: bool) -> str:
+        q = "'" if bash else '"'
         return q + text + q
-
 
     # создание консольной команды в виде списка
     def convert_to_command(
@@ -117,7 +120,8 @@ class TaskConfig:
                     command.append(position)
                     command.append(text)
 
-        command.append(f"--margin-color={self._color}")
+        color = self.wrap_quots(self._color, bash)
+        command.append(f"--margin-color={color}")
         command.append(f"--frame-rate={self._framerate}")
         command.append(f"--quality={self._quality}")
 
