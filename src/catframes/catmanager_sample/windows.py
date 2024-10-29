@@ -819,9 +819,12 @@ class WarningWindow(Toplevel, WindowMixin):
 
         # кнопки "назад" и "выйти"
         self.choise_frame = ttk.Frame(self.main_frame)
-        self.widgets["btAccept"] = ttk.Button(
-            self.choise_frame, command=self.accept_def
-        )
+
+        def accept():
+            self.accept_def()
+            self.close()
+
+        self.widgets["btAccept"] = ttk.Button(self.choise_frame, command=accept)
         self.widgets["btDeny"] = ttk.Button(self.choise_frame, command=self.close)
 
     def _pack_widgets(self):
