@@ -61,3 +61,6 @@ class TempLog:
 
 def has_console() -> bool:
     return (sys.stdin is not None) and sys.stdin.isatty()
+
+def compiled() -> bool:
+    return '__compiled__' in globals()

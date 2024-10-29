@@ -2,7 +2,7 @@ from _prefix import *
 from windows import RootWindow
 from windows_base import LocalWM
 # from task_flows import CatframesProcess
-from templog import TempLog, has_console
+from templog import TempLog, has_console, compiled
 
 
 def main():
@@ -18,17 +18,11 @@ def main():
         logger.info(f'Executable: {sys.executable}')
         logger.info(f'File: {__file__}\n')
 
-        compiled: bool = '__compiled__' in globals()
-        logger.info(f"'__compiled__' in globals(): {compiled}\n")
-        if compiled:
-            logger.info(f"__compiled__: {globals()['__compiled__']}\n")
-
         logger.info(f'platform.system(): {platform.system()}')
         logger.info(f'sys.platform: {sys.platform}\n')
 
         logger.info(f'Console: {has_console()}')
-        logger.info(f'Standard input type: {type(sys.stdin)}')
-        logger.info(f'Standard output type: {type(sys.stdout)}\n')
+        logger.info(f'Compiled: {compiled()}\n')
 
         root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
         root.mainloop()
