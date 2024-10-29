@@ -213,7 +213,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name: str = "task"
         self.widgets: Dict[str, Widget] = {}
-        self._initial_filepath: str = "~"
 
         self.task_config: TaskConfig = TaskConfig()
         self.view_mode: bool = False
@@ -477,10 +476,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 parent=self,
                 filetypes=filetypes,
                 defaultextension=".mp4",
-                initialdir=self._initial_filepath,
+                initialdir=GlobalStates.last_dir,
             )
             if filepath:
-                self._initial_filepath = os.path.dirname(filepath)
+                GlobalStates.last_dir = os.path.dirname(filepath)
                 self.task_config.set_filepath(filepath)
                 self.widgets["_btPath"].configure(text=filepath.split("/")[-1])
                 self._validate_task_config()
