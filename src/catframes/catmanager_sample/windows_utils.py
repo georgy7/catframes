@@ -1045,7 +1045,7 @@ class DirectoryManager(ttk.Frame):
     # добавление директории
     def _add_directory(self):
         dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir)
-        if not dir_name or dir_name in self.dirs:
+        if not dir_name:
             return
         if not find_img_in_dir(dir_name):
             return
