@@ -34,6 +34,9 @@ except:
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
 
 
+# коэффициент масштабирования окна в линуксе
+LINUX_SIZING = 1.1
+
 USER_DIRECTORY = os.path.expanduser("~")
 CONFIG_FILENAME = ".catmanager.ini"
 PREVIEW_DIRNAME = ".cat_temp"

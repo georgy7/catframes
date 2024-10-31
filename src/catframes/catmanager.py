@@ -34,6 +34,9 @@ except:
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
 
 
+# коэффициент масштабирования окна в линуксе
+LINUX_SIZING = 1.1
+
 USER_DIRECTORY = os.path.expanduser("~")
 CONFIG_FILENAME = ".catmanager.ini"
 PREVIEW_DIRNAME = ".cat_temp"
@@ -1027,6 +1030,8 @@ class WindowMixin(ABC):
     def _default_set_up(self):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
+        if platform.system() == "Linux":
+            self._set_linux_sizes()
         self._set_size()
         self._to_center()
 
@@ -1106,6 +1111,14 @@ class WindowMixin(ABC):
 
         return int(x), int(y)
     
+    def _set_linux_sizes(self):
+        x, y = self.size
+        self.size = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
+
+        if hasattr(self, "size_max"):
+            x, y = self.size_max
+            self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
+            
 
     def _set_size(self):
 
@@ -2424,7 +2437,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 250, 150
+        self.size: Tuple[int] = 250, 120
         self.resizable(False, False)
         self.transient(root)
 

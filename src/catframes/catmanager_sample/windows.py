@@ -136,7 +136,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 250, 150
+        self.size: Tuple[int] = 250, 120
         self.resizable(False, False)
         self.transient(root)
 
