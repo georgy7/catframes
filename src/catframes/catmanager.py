@@ -2226,7 +2226,12 @@ class DirectoryManager(ttk.Frame):
         index = selected_index[0]
         dir_to_open = self.dirs[index]
         try:
-            os.startfile(dir_to_open)
+            if platform.system() == "Windows":
+                os.startfile(dir_to_open)
+            elif platform.system() == "Linux":
+                os.system(f"xdg-open {dir_to_open}")
+            else:
+                os.system(f"open -- {dir_to_open}")
         except:
             self.listbox.delete(index)
             self.listbox.insert(index, Settings.lang.read("dirs.DirNotExists"))
