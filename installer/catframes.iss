@@ -12,6 +12,8 @@
 #define MyAppURL "https://itustinov.ru/"
 #define MyAppExeName "catmanager.exe"
 
+#include "environment.iss"
+
 [Setup]
 AppId={{6A8E9B88-538C-4D2C-AEA1-254E62224518}
 AppName={#MyAppName}
@@ -36,6 +38,21 @@ OutputBaseFilename=catframes-{#MyAppVersion}-w32-installer
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+ChangesEnvironment=true
+
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+    if CurStep = ssPostInstall 
+     then EnvAddPath(ExpandConstant('{app}'));
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+    if CurUninstallStep = usPostUninstall
+    then EnvRemovePath(ExpandConstant('{app}'));
+end;
 
 
 [Languages]
@@ -69,6 +86,7 @@ Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: envPath; Description: "Add to PATH variable" 
 
 [Files]
 Source: "build\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

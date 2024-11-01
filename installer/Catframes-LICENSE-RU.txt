@@ -12,9 +12,9 @@
 
 ______________
 
-Лицензии стороннего ПО
+Стороннее ПО
 
-Python — PSF License Agreement и лицензии его компонентов
+Python — PSF License Agreement и лицензии компонентов
 https://docs.python.org/3.8/license.html
 
 Pillow — лицензия HPND
