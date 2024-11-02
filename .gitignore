@@ -12,3 +12,7 @@ src/catframes.egg-info/
 .directory
 *.kate-swp
 *~
+/installer/*.o
+/installer/*.exe
+/installer/*.out
+/installer/*.err
