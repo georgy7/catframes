@@ -3,10 +3,10 @@ uses sysutils;
 
 { Use -MANSISTRINGS compiler option in Free Pascal: https://www.freepascal.org/docs-html/user/usersu16.html }
 
-function IsPathInList(Path: String; Paths: String): Boolean;
+function IsPathInList(Path: string; Paths: string): boolean;
 var
-    X, Tail: String;
-    P: Integer;
+    X, Tail: string;
+    P: integer;
 begin
     IsPathInList := false;
 

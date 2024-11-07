@@ -4,7 +4,7 @@
 ; Modified to be used at the current user level (if there are no administrator privileges).
 
 [Code]
-procedure SelectEnvKeys(VAR RootKey: Integer; VAR EnvironmentKey: String);
+procedure SelectEnvKeys(var RootKey: integer; var EnvironmentKey: string);
 begin
     if IsAdminInstallMode() then
     begin
@@ -19,10 +19,10 @@ begin
 end;
 
 
-function IsPathInList(Path: String; Paths: String): Boolean;
+function IsPathInList(Path: string; Paths: string): boolean;
 var
-    X, Tail: String;
-    P: Integer;
+    X, Tail: string;
+    P: integer;
 begin
     IsPathInList := false;
 
@@ -53,9 +53,9 @@ end;
 
 procedure EnvAddPath(Path: string);
 var
-    RootKey: Integer;
-    EnvironmentKey: String;
-    Paths: String;
+    RootKey: integer;
+    EnvironmentKey: string;
+    Paths: string;
 begin
     SelectEnvKeys(RootKey, EnvironmentKey);
 
@@ -81,10 +81,10 @@ end;
 
 procedure EnvRemovePath(Path: string);
 var
-    RootKey: Integer;
-    EnvironmentKey: String;
-    Paths: String;
-    P: Integer;
+    RootKey: integer;
+    EnvironmentKey: string;
+    Paths: string;
+    P: integer;
 begin
     SelectEnvKeys(RootKey, EnvironmentKey);
 
