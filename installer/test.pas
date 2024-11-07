@@ -26,7 +26,7 @@ begin
             Tail := Copy(Tail, P+1, Length(Tail)-P);
         end;
 
-        if SameStr(X, Path) then
+        if SameStr(Uppercase(X), Uppercase(Path)) then
         begin
             IsPathInList := true;
             break;
@@ -80,11 +80,17 @@ writeln(IsPathInList('C:\Program Files\ffmpeg-6.0-full_build\bin', 'C:\WINDOWS\s
         'C:\Program Files (x86)\Nmap;'));
 
 
-{ Short string in the second argument. }
-{ This returns TRUE even if you forgot to add -MANSISTRINGS option. }
 writeln();
 writeln('Short string (must work even without ANSISTRINGS):');
 writeln(IsPathInList('C:\Program Files (x86)\Nmap', ''+
+        'C:\Users\1\AppData\Local\Microsoft\WindowsApps;C:\Strawberry\perl\bin;C:\Ruby27-x64\msys64\mingw64\bin;'+
+        'C:\Program Files\jdk-21.0.1\bin;C:\texlive\2023\bin\windows;C:\Program Files\ffmpeg-6.0-full_build\bin;'+
+        'C:\Program Files (x86)\Nmap;'));
+
+
+writeln();
+writeln('Case insensitive:');
+writeln(IsPathInList('C:\TEXLIVE\2023\bin\WinDoWS', ''+
         'C:\Users\1\AppData\Local\Microsoft\WindowsApps;C:\Strawberry\perl\bin;C:\Ruby27-x64\msys64\mingw64\bin;'+
         'C:\Program Files\jdk-21.0.1\bin;C:\texlive\2023\bin\windows;C:\Program Files\ffmpeg-6.0-full_build\bin;'+
         'C:\Program Files (x86)\Nmap;'));

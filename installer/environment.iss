@@ -42,7 +42,7 @@ begin
             Tail := Copy(Tail, P+1, Length(Tail)-P);
         end;
 
-        if SameStr(X, Path) then
+        if SameStr(Uppercase(X), Uppercase(Path)) then
         begin
             IsPathInList := true;
             break;
