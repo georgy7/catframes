@@ -70,6 +70,10 @@ def shrink_path(path: str, limit: int) -> str:
     return new_path if len(new_path) < len(path) else path
 
 
+class GlobalStates:
+    last_dir = "~"
+
+
 class ScrollableFrame(ttk.Frame):
     """Прокручиваемый (умный) фрейм"""
 
@@ -960,7 +964,6 @@ class DirectoryManager(ttk.Frame):
         self.name: str = "dirs"
 
         self.widgets: Dict[str, Widget] = {}
-        self._initial_dir: str = "~"
         self.drag_data: dict = {"start_index": None, "item": None}
         self.on_change: Callable = on_change
 
@@ -1041,12 +1044,12 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self, initialdir=self._initial_dir)
-        if not dir_name or dir_name in self.dirs:
+        dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir)
+        if not dir_name:
             return
         if not find_img_in_dir(dir_name):
             return
-        self._initial_dir = os.path.dirname(dir_name)
+        GlobalStates.last_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)
         self.on_change(self.dirs[:])
@@ -1097,7 +1100,12 @@ class DirectoryManager(ttk.Frame):
         index = selected_index[0]
         dir_to_open = self.dirs[index]
         try:
-            os.startfile(dir_to_open)
+            if platform.system() == "Windows":
+                os.startfile(dir_to_open)
+            elif platform.system() == "Linux":
+                os.system(f"xdg-open {dir_to_open}")
+            else:
+                os.system(f"open -- {dir_to_open}")
         except:
             self.listbox.delete(index)
             self.listbox.insert(index, Settings.lang.read("dirs.DirNotExists"))

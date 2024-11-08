@@ -136,7 +136,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 250, 150
+        self.size: Tuple[int] = 250, 120
         self.resizable(False, False)
         self.transient(root)
 
@@ -213,7 +213,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name: str = "task"
         self.widgets: Dict[str, Widget] = {}
-        self._initial_filepath: str = "~"
 
         self.task_config: TaskConfig = TaskConfig()
         self.view_mode: bool = False
@@ -477,10 +476,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 parent=self,
                 filetypes=filetypes,
                 defaultextension=".mp4",
-                initialdir=self._initial_filepath,
+                initialdir=GlobalStates.last_dir,
             )
             if filepath:
-                self._initial_filepath = os.path.dirname(filepath)
+                GlobalStates.last_dir = os.path.dirname(filepath)
                 self.task_config.set_filepath(filepath)
                 self.widgets["_btPath"].configure(text=filepath.split("/")[-1])
                 self._validate_task_config()
@@ -819,9 +818,12 @@ class WarningWindow(Toplevel, WindowMixin):
 
         # кнопки "назад" и "выйти"
         self.choise_frame = ttk.Frame(self.main_frame)
-        self.widgets["btAccept"] = ttk.Button(
-            self.choise_frame, command=self.accept_def
-        )
+
+        def accept():
+            self.accept_def()
+            self.close()
+
+        self.widgets["btAccept"] = ttk.Button(self.choise_frame, command=accept)
         self.widgets["btDeny"] = ttk.Button(self.choise_frame, command=self.close)
 
     def _pack_widgets(self):

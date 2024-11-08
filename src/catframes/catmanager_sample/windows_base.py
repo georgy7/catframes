@@ -109,6 +109,8 @@ class WindowMixin(ABC):
     def _default_set_up(self):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
+        if platform.system() == "Linux":
+            self._set_linux_sizes()
         self._set_size()
         self._to_center()
 
@@ -188,6 +190,14 @@ class WindowMixin(ABC):
 
         return int(x), int(y)
     
+    def _set_linux_sizes(self):
+        x, y = self.size
+        self.size = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
+
+        if hasattr(self, "size_max"):
+            x, y = self.size_max
+            self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
+            
 
     def _set_size(self):
 

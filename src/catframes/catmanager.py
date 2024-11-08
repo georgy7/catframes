@@ -34,6 +34,9 @@ except:
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
 
 
+# коэффициент масштабирования окна в линуксе
+LINUX_SIZING = 1.1
+
 USER_DIRECTORY = os.path.expanduser("~")
 CONFIG_FILENAME = ".catmanager.ini"
 PREVIEW_DIRNAME = ".cat_temp"
@@ -608,12 +611,15 @@ class TaskConfig:
 
     @staticmethod
     def to_user_format(text: str, bash: bool) -> str:
-        q = "'" if bash else '"'
         text = text.replace("\n", "\\n")
         text = text.replace("\r", "\\r")
         text = text.replace("\t", "\\t")
+        return TaskConfig.wrap_quots(text, bash)
+    
+    @staticmethod
+    def wrap_quots(text: str, bash: bool) -> str:
+        q = "'" if bash else '"'
         return q + text + q
-
 
     # создание консольной команды в виде списка
     def convert_to_command(
@@ -630,7 +636,8 @@ class TaskConfig:
                     command.append(position)
                     command.append(text)
 
-        command.append(f"--margin-color={self._color}")
+        color = self.wrap_quots(self._color, bash)
+        command.append(f"--margin-color={color}")
         command.append(f"--frame-rate={self._framerate}")
         command.append(f"--quality={self._quality}")
 
@@ -1023,6 +1030,8 @@ class WindowMixin(ABC):
     def _default_set_up(self):
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
+        if platform.system() == "Linux":
+            self._set_linux_sizes()
         self._set_size()
         self._to_center()
 
@@ -1102,6 +1111,14 @@ class WindowMixin(ABC):
 
         return int(x), int(y)
     
+    def _set_linux_sizes(self):
+        x, y = self.size
+        self.size = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
+
+        if hasattr(self, "size_max"):
+            x, y = self.size_max
+            self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
+            
 
     def _set_size(self):
 
@@ -1190,6 +1207,10 @@ def shrink_path(path: str, limit: int) -> str:
     # сборка строки нового пути, передача её, если она короче изначальной
     new_path = f"{shrink[0]}{s}...{s.join(shrink[1:])}"
     return new_path if len(new_path) < len(path) else path
+
+
+class GlobalStates:
+    last_dir = "~"
 
 
 class ScrollableFrame(ttk.Frame):
@@ -2082,7 +2103,6 @@ class DirectoryManager(ttk.Frame):
         self.name: str = "dirs"
 
         self.widgets: Dict[str, Widget] = {}
-        self._initial_dir: str = "~"
         self.drag_data: dict = {"start_index": None, "item": None}
         self.on_change: Callable = on_change
 
@@ -2163,12 +2183,12 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self, initialdir=self._initial_dir)
-        if not dir_name or dir_name in self.dirs:
+        dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir)
+        if not dir_name:
             return
         if not find_img_in_dir(dir_name):
             return
-        self._initial_dir = os.path.dirname(dir_name)
+        GlobalStates.last_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)
         self.on_change(self.dirs[:])
@@ -2219,7 +2239,12 @@ class DirectoryManager(ttk.Frame):
         index = selected_index[0]
         dir_to_open = self.dirs[index]
         try:
-            os.startfile(dir_to_open)
+            if platform.system() == "Windows":
+                os.startfile(dir_to_open)
+            elif platform.system() == "Linux":
+                os.system(f"xdg-open {dir_to_open}")
+            else:
+                os.system(f"open -- {dir_to_open}")
         except:
             self.listbox.delete(index)
             self.listbox.insert(index, Settings.lang.read("dirs.DirNotExists"))
@@ -2412,7 +2437,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 250, 150
+        self.size: Tuple[int] = 250, 120
         self.resizable(False, False)
         self.transient(root)
 
@@ -2489,7 +2514,6 @@ class NewTaskWindow(Toplevel, WindowMixin):
         super().__init__(master=root)
         self.name: str = "task"
         self.widgets: Dict[str, Widget] = {}
-        self._initial_filepath: str = "~"
 
         self.task_config: TaskConfig = TaskConfig()
         self.view_mode: bool = False
@@ -2753,10 +2777,10 @@ class NewTaskWindow(Toplevel, WindowMixin):
                 parent=self,
                 filetypes=filetypes,
                 defaultextension=".mp4",
-                initialdir=self._initial_filepath,
+                initialdir=GlobalStates.last_dir,
             )
             if filepath:
-                self._initial_filepath = os.path.dirname(filepath)
+                GlobalStates.last_dir = os.path.dirname(filepath)
                 self.task_config.set_filepath(filepath)
                 self.widgets["_btPath"].configure(text=filepath.split("/")[-1])
                 self._validate_task_config()
@@ -3095,9 +3119,12 @@ class WarningWindow(Toplevel, WindowMixin):
 
         # кнопки "назад" и "выйти"
         self.choise_frame = ttk.Frame(self.main_frame)
-        self.widgets["btAccept"] = ttk.Button(
-            self.choise_frame, command=self.accept_def
-        )
+
+        def accept():
+            self.accept_def()
+            self.close()
+
+        self.widgets["btAccept"] = ttk.Button(self.choise_frame, command=accept)
         self.widgets["btDeny"] = ttk.Button(self.choise_frame, command=self.close)
 
     def _pack_widgets(self):
