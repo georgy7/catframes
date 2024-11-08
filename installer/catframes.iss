@@ -44,8 +44,8 @@ ChangesEnvironment=true
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-    if CurStep = ssPostInstall 
-     then EnvAddPath(ExpandConstant('{app}'));
+    if (CurStep = ssPostInstall) and IsTaskSelected('envPath')
+    then EnvAddPath(ExpandConstant('{app}'));
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
