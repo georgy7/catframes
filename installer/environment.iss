@@ -24,7 +24,7 @@ var
     X, Tail: string;
     P: integer;
 begin
-    IsPathInList := false;
+    Result := false;
 
     Tail := Paths;
     while Length(Tail) > 0 do
@@ -44,7 +44,7 @@ begin
 
         if SameStr(Uppercase(X), Uppercase(Path)) then
         begin
-            IsPathInList := true;
+            Result := true;
             break;
         end;
     end;
@@ -53,13 +53,13 @@ end;
 
 function StartsWith(S, Head: string): boolean;
 begin
-    StartsWith := (1=Pos(Head, S));
+    Result := (1=Pos(Head, S));
 end;
 
 
 function EndsWith(S, Tail: string): boolean;
 begin
-    EndsWith := SameStr(Tail, Copy(S, Length(S)+1-Length(Tail), Length(Tail)));
+    Result := SameStr(Tail, Copy(S, Length(S)+1-Length(Tail), Length(Tail)));
 end;
 
 
@@ -68,41 +68,41 @@ var
     Part: string;
     I: integer;
 begin
-    if SameStr(Uppercase(Path), Uppercase(S)) then WithoutPathInternal := ''
+    if SameStr(Uppercase(Path), Uppercase(S)) then Result := ''
     else
     begin
-        WithoutPathInternal := S;
+        Result := S;
 
         Part := ';'+Uppercase(Path)+';';
         repeat
-            I := Pos(Part, Uppercase(WithoutPathInternal));
-            Delete(WithoutPathInternal, I, Length(Part)-1);
+            I := Pos(Part, Uppercase(Result));
+            Delete(Result, I, Length(Part)-1);
         until 0=I;
 
         Part := Uppercase(Path)+';';
-        if StartsWith(Uppercase(WithoutPathInternal), Part) then
-            Delete(WithoutPathInternal, 1, Length(Part));
+        if StartsWith(Uppercase(Result), Part) then
+            Delete(Result, 1, Length(Part));
 
         Part := ';'+Uppercase(Path);
-        if EndsWith(Uppercase(WithoutPathInternal), Part) then
-            Delete(WithoutPathInternal, Length(WithoutPathInternal)+1-Length(Part), Length(Part));
+        if EndsWith(Uppercase(Result), Part) then
+            Delete(Result, Length(Result)+1-Length(Part), Length(Part));
 
-        if StartsWith(WithoutPathInternal, ';') then
-            Delete(WithoutPathInternal, 1, 1);
+        if StartsWith(Result, ';') then
+            Delete(Result, 1, 1);
 
-        if EndsWith(WithoutPathInternal, ';') then
-            Delete(WithoutPathInternal, Length(WithoutPathInternal), 1);
+        if EndsWith(Result, ';') then
+            Delete(Result, Length(Result), 1);
     end;
 end;
 
 
 function WithoutPath(S, Path: string): string;
 begin
-    WithoutPath := WithoutPathInternal(S, Path);
+    Result := WithoutPathInternal(S, Path);
     if EndsWith(Path, '\') then
-        WithoutPath := WithoutPathInternal(WithoutPath, Copy(Path, 1, Length(Path)-1))
+        Result := WithoutPathInternal(Result, Copy(Path, 1, Length(Path)-1))
     else
-        WithoutPath := WithoutPathInternal(WithoutPath, Path+'\');
+        Result := WithoutPathInternal(Result, Path+'\');
 end;
 
 

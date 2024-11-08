@@ -86,7 +86,7 @@ Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 
 [CustomMessages]
 AddToPath=Add it to PATH environment variable
-ru.AddToPath=Добавить в переменную окружения PATH
+russian.AddToPath=Добавить в переменную окружения PATH
 
 [Tasks]
 Name: envPath; Description: "{cm:AddToPath}"
