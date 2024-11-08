@@ -120,7 +120,9 @@ class TaskConfig:
                     command.append(position)
                     command.append(text)
 
-        color = self.wrap_quots(self._color, bash)
+        color = self._color
+        if for_user:
+            color = self.wrap_quots(color, bash)
         command.append(f"--margin-color={color}")
         command.append(f"--frame-rate={self._framerate}")
         command.append(f"--quality={self._quality}")
@@ -219,6 +221,7 @@ class CatframesProcess:
 
         # читает строки вывода процесса
         for line in io.TextIOWrapper(self.process.stdout):
+            print(line)
             if "FFmpeg not found" in line:
                 self.error = NO_FFMPEG_ERROR
 
@@ -237,8 +240,14 @@ class CatframesProcess:
             if image_data:
                 self._image_base64 = image_data.group().split()[1]
 
+
+        ret_code = self.process.poll()
+        while None == ret_code:
+            ret_code = self.process.poll()
+
         # если процесс завершился некорректно
-        if self.process.poll() != 0 and not self.error:
+        if ret_code != 0 and not self.error:
+            print(ret_code)
             self.error = INTERNAL_ERROR  # текст последней строки
 
         self._progress == 1.0
