@@ -63,6 +63,49 @@ begin
 end;
 
 
+function WithoutPathInternal(S, Path: string): string;
+var
+    Part: string;
+    I: integer;
+begin
+    if SameStr(Uppercase(Path), Uppercase(S)) then WithoutPathInternal := ''
+    else
+    begin
+        WithoutPathInternal := S;
+
+        Part := ';'+Uppercase(Path)+';';
+        repeat
+            I := Pos(Part, Uppercase(WithoutPathInternal));
+            Delete(WithoutPathInternal, I, Length(Part)-1);
+        until 0=I;
+
+        Part := Uppercase(Path)+';';
+        if StartsWith(Uppercase(WithoutPathInternal), Part) then
+            Delete(WithoutPathInternal, 1, Length(Part));
+
+        Part := ';'+Uppercase(Path);
+        if EndsWith(Uppercase(WithoutPathInternal), Part) then
+            Delete(WithoutPathInternal, Length(WithoutPathInternal)+1-Length(Part), Length(Part));
+
+        if StartsWith(WithoutPathInternal, ';') then
+            Delete(WithoutPathInternal, 1, 1);
+
+        if EndsWith(WithoutPathInternal, ';') then
+            Delete(WithoutPathInternal, Length(WithoutPathInternal), 1);
+    end;
+end;
+
+
+function WithoutPath(S, Path: string): string;
+begin
+    WithoutPath := WithoutPathInternal(S, Path);
+    if EndsWith(Path, '\') then
+        WithoutPath := WithoutPathInternal(WithoutPath, Copy(Path, 1, Length(Path)-1))
+    else
+        WithoutPath := WithoutPathInternal(WithoutPath, Path+'\');
+end;
+
+
 procedure EnvAddPath(Path: string);
 var
     RootKey: integer;
@@ -96,7 +139,6 @@ var
     RootKey: integer;
     EnvironmentKey: string;
     Paths: string;
-    P: integer;
 begin
     SelectEnvKeys(RootKey, EnvironmentKey);
 
@@ -105,10 +147,8 @@ begin
         exit;
 
     if not IsPathInList(Path, Paths) then exit;
-    P := Pos(';' + Uppercase(Path) + ';', ';' + Uppercase(Paths) + ';');
 
-    { Update path variable }
-    Delete(Paths, P - 1, Length(Path) + 1);
+    Paths := WithoutPath(Paths, Path);
 
     { Overwrite path environment variable }
     if RegWriteStringValue(RootKey, EnvironmentKey, 'Path', Paths)

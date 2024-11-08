@@ -47,6 +47,51 @@ begin
 end;
 
 
+function WithoutPathInternal(S, Path: string): string;
+var
+    Part: string;
+    I: integer;
+begin
+    if SameStr(Uppercase(Path), Uppercase(S)) then WithoutPathInternal := ''
+    else
+    begin
+        WithoutPathInternal := S;
+
+        Part := ';'+Uppercase(Path)+';';
+        repeat
+            I := Pos(Part, Uppercase(WithoutPathInternal));
+            Delete(WithoutPathInternal, I, Length(Part)-1);
+        until 0=I;
+
+        Part := Uppercase(Path)+';';
+        if StartsWith(Uppercase(WithoutPathInternal), Part) then
+            Delete(WithoutPathInternal, 1, Length(Part));
+
+        Part := ';'+Uppercase(Path);
+        if EndsWith(Uppercase(WithoutPathInternal), Part) then
+            Delete(WithoutPathInternal, Length(WithoutPathInternal)+1-Length(Part), Length(Part));
+
+        if StartsWith(WithoutPathInternal, ';') then
+            Delete(WithoutPathInternal, 1, 1);
+
+        if EndsWith(WithoutPathInternal, ';') then
+            Delete(WithoutPathInternal, Length(WithoutPathInternal), 1);
+    end;
+end;
+
+
+function WithoutPath(S, Path: string): string;
+begin
+    WithoutPath := WithoutPathInternal(S, Path);
+    if EndsWith(Path, '\') then
+        WithoutPath := WithoutPathInternal(WithoutPath, Copy(Path, 1, Length(Path)-1))
+    else
+        WithoutPath := WithoutPathInternal(WithoutPath, Path+'\');
+end;
+
+
+var
+    Env, Part: string;
 begin
 
 writeln('These lines must return TRUE (do not forget to enable ANSISTRINGS).');
@@ -383,6 +428,81 @@ writeln();
 
 writeln('EndsWith: Abcde ;');
 writeln(EndsWith('Abcde', ';'));
+
+writeln(); writeln();
+writeln('///////////');
+writeln();
+
+writeln('Testing WithoutPath function...');
+writeln();
+
+Part := 'C:\Abcd';
+Env := 'C:\Abcd';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\ABCD';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Xyz';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Part := 'C:\Program Files (x86)\Nmap';
+Env := Part+';';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Program Files (x86)\NMAP;C:\Program Files\Meld\;C:\Ruby27-x64\bin';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Program Files\Meld\;C:\Ruby27-x64\bin;C:\Program Files (x86)\NMAP';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Program Files\Meld\;C:\Program Files (x86)\NMAP;C:\Ruby27-x64\bin';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Program Files (x86)\Nmap;C:\Program Files\Meld\;C:\Program Files (x86)\Nmap;C:\Program Files (x86)\NMAP;C:\Ruby27-x64\bin;C:\Program Files (x86)\Nmap;';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Program Files (x86)\Nmap;C:\Program Files\Meld\;C:\Program Files (x86)\Nmap;C:\Program Files (x86)\NMAP;C:\Ruby27-x64\bin;C:\Program Files (x86)\Nmap';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Env := 'C:\Program Files (x86)\Nmap;C:\Program Files\Meld\;C:\Program Files (x86)\Nmap\;C:\Program Files (x86)\NMAP;C:\Ruby27-x64\bin;C:\Program Files (x86)\Nmap\';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
+writeln();
+
+Part := 'C:\Program Files (x86)\Nmap\';
+Env := 'C:\Program Files (x86)\Nmap;C:\Program Files\Meld\;C:\Program Files (x86)\Nmap\;C:\Program Files (x86)\NMAP;C:\Ruby27-x64\bin;C:\Program Files (x86)\Nmap\';
+writeln('Removing '+Part);
+writeln('From '+Env);
+writeln('Result: '+WithoutPath(Env, Part));
 writeln();
 
 end.
