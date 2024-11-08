@@ -35,6 +35,18 @@ begin
 end;
 
 
+function StartsWith(S, Head: string): boolean;
+begin
+    StartsWith := (1=Pos(Head, S));
+end;
+
+
+function EndsWith(S, Tail: string): boolean;
+begin
+    EndsWith := SameStr(Tail, Copy(S, Length(S)+1-Length(Tail), Length(Tail)));
+end;
+
+
 begin
 
 writeln('These lines must return TRUE (do not forget to enable ANSISTRINGS).');
@@ -86,6 +98,7 @@ writeln(IsPathInList('C:\Program Files (x86)\Nmap', ''+
         'C:\Users\1\AppData\Local\Microsoft\WindowsApps;C:\Strawberry\perl\bin;C:\Ruby27-x64\msys64\mingw64\bin;'+
         'C:\Program Files\jdk-21.0.1\bin;C:\texlive\2023\bin\windows;C:\Program Files\ffmpeg-6.0-full_build\bin;'+
         'C:\Program Files (x86)\Nmap;'));
+writeln(IsPathInList('C:\Program Files (x86)\Nmap', 'C:\Program Files (x86)\Nmap'));
 
 
 writeln();
@@ -333,5 +346,43 @@ writeln(IsPathInList('', 'C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbe
         'C:\Users\1\AppData\Local\Microsoft\WindowsApps;C:\Strawberry\perl\bin;C:\Ruby27-x64\msys64\mingw64\bin;'+
         'C:\Program Files\jdk-21.0.1\bin;C:\texlive\2023\bin\windows;C:\Program Files\ffmpeg-6.0-full_build\bin;'+
         'C:\Program Files (x86)\Nmap;'));
+
+writeln(); writeln();
+writeln('+++++++++++');
+writeln();
+
+writeln('StartsWith: X X');
+writeln(StartsWith('X', 'X'));
+writeln();
+
+writeln('StartsWith: Abcde Ab');
+writeln(StartsWith('Abcde', 'Ab'));
+writeln();
+
+writeln('StartsWith: Abcde A');
+writeln(StartsWith('Abcde', 'A'));
+writeln();
+
+writeln('StartsWith: Abcde de');
+writeln(StartsWith('Abcde', 'de'));
+writeln();
+
+writeln();
+
+writeln('EndsWith: X X');
+writeln(EndsWith('X', 'X'));
+writeln();
+
+writeln('EndsWith: Abcde de');
+writeln(EndsWith('Abcde', 'de'));
+writeln();
+
+writeln('EndsWith: Abcde; ;');
+writeln(EndsWith('Abcde;', ';'));
+writeln();
+
+writeln('EndsWith: Abcde ;');
+writeln(EndsWith('Abcde', ';'));
+writeln();
 
 end.

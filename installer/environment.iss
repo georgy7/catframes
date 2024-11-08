@@ -51,6 +51,18 @@ begin
 end;
 
 
+function StartsWith(S, Head: string): boolean;
+begin
+    StartsWith := (1=Pos(Head, S));
+end;
+
+
+function EndsWith(S, Tail: string): boolean;
+begin
+    EndsWith := SameStr(Tail, Copy(S, Length(S)+1-Length(Tail), Length(Tail)));
+end;
+
+
 procedure EnvAddPath(Path: string);
 var
     RootKey: integer;
@@ -67,7 +79,7 @@ begin
 
     if 0 = Length(Paths) then
         Paths := Path
-    else if SameStr(';', Copy(Paths, Length(Paths), 1)) then
+    else if EndsWith(Paths, ';') then
         Paths := Paths + Path
     else
         Paths := Paths + ';'+ Path;
