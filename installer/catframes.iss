@@ -57,6 +57,7 @@ end;
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "armenian"; MessagesFile: "compiler:Languages\Armenian.isl"
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 Name: "bulgarian"; MessagesFile: "compiler:Languages\Bulgarian.isl"
@@ -87,6 +88,7 @@ Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 [CustomMessages]
 AddToPath=Add it to PATH environment variable
 russian.AddToPath=Добавить в переменную окружения PATH
+chinesesimplified.AddToPath=将其添加到 PATH 环境变量
 
 [Tasks]
 Name: envPath; Description: "{cm:AddToPath}"
