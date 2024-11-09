@@ -221,7 +221,6 @@ class CatframesProcess:
 
         # читает строки вывода процесса
         for line in io.TextIOWrapper(self.process.stdout):
-            print(line)
             if "FFmpeg not found" in line:
                 self.error = NO_FFMPEG_ERROR
 
@@ -247,7 +246,6 @@ class CatframesProcess:
 
         # если процесс завершился некорректно
         if ret_code != 0 and not self.error:
-            print(ret_code)
             self.error = INTERNAL_ERROR  # текст последней строки
 
         self._progress == 1.0
