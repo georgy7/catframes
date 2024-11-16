@@ -26,7 +26,7 @@ class Lang:
 
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         "english": {
-            "root.title": "CatFrames",
+            "root.title": "Catmanager",
             "root.openSets": "Settings",
             "root.newTask": "Create",
             "bar.active": "processing",
@@ -47,6 +47,7 @@ class Lang:
             "sets.lbTheme": "Theme:",
             "sets.btApply": "Apply",
             "sets.btSave": "Save",
+            "sets.btOpenLogs": "Show logs",
             "task.title": "New Task",
             "task.title.view": "Task settings view",
             "task.initText": "Add a directory\nof images",
@@ -83,9 +84,12 @@ class Lang:
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
             "checker.title": "Necessary modules check",
+
+            "emptyFolder.title": "Empty folder",
+            "emptyFolder.theFollowingFolders": "The following folders do not contain images.\nTherefore, they were not added.",
         },
         "русский": {
-            "root.title": "CatFrames",
+            "root.title": "Catmanager",
             "root.openSets": "Настройки",
             "root.newTask": "Создать",
             "bar.lbActive": "обработка",
@@ -106,6 +110,7 @@ class Lang:
             "sets.lbTheme": "Тема:",
             "sets.btApply": "Применить",
             "sets.btSave": "Сохранить",
+            "sets.btOpenLogs": "Показать логи",
             "task.title": "Новая задача",
             "task.title.view": "Просмотр настроек задачи",
             "task.initText": "Добавьте папку\nс изображениями",
@@ -142,6 +147,9 @@ class Lang:
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
             "checker.title": "Проверка необходимых модулей",
+
+            "emptyFolder.title": "Пустая директория",
+            "emptyFolder.theFollowingFolders": "Следующие папки не были добавлены, т.к. не содержат изображений.",
         },
     }
 

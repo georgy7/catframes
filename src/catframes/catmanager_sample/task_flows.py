@@ -1,4 +1,5 @@
 from _prefix import *
+from templog import has_console, compiled
 
 
 """
@@ -99,7 +100,7 @@ class TaskConfig:
         text = text.replace("\r", "\\r")
         text = text.replace("\t", "\\t")
         return TaskConfig.wrap_quots(text, bash)
-    
+
     @staticmethod
     def wrap_quots(text: str, bash: bool) -> str:
         q = "'" if bash else '"'
@@ -109,7 +110,55 @@ class TaskConfig:
     def convert_to_command(
         self, for_user: bool = False, bash: bool = True
     ) -> List[str]:
-        command = ["catframes"]
+        logger = logging.getLogger('catmanager')
+
+        if for_user:
+            command = ['catframes']
+        else:
+            windows = (platform.system() == 'Windows')
+
+            ran_from_sources: bool = ('main.py' == Path(sys.argv[0]).name)
+
+            if ran_from_sources:
+                catframes_py: Path = Path(sys.argv[0]).resolve().parent.parent / 'catframes.py'
+            else:
+                catframes_py: Path = Path(sys.argv[0]).resolve().parent / 'catframes.py'
+
+            catframes_exe: Path = Path(sys.argv[0]).resolve().parent / 'catframes.exe'
+
+            # Здесь не используется sys.executable напрямую,
+            # поскольку там может быть pythonw.exe.
+            python_exe: Path = Path(sys.executable).resolve().parent / 'python.exe'
+
+            logger.debug(f'\n               windows: {windows}')
+            logger.debug(f'              compiled: {compiled()}')
+            logger.debug(f'      ran from sources: {ran_from_sources}')
+            logger.debug(f'          catframes_py: {catframes_py}')
+            logger.debug(f'         catframes_exe: {catframes_exe}')
+            logger.debug(f'            python_exe: {python_exe}\n')
+
+            logger.debug(f'   catframes_py exists: {catframes_py.exists()}')
+            logger.debug(f'  catframes_exe exists: {catframes_exe.exists()}')
+            logger.debug(f'     python_exe exists: {python_exe.exists()}\n')
+
+            if windows and not compiled() and catframes_py.exists():
+                logger.info('Using local catframes.py (Windows)')
+                logger.info(f'Python executable: {python_exe}')
+                command = [str(python_exe), str(catframes_py)]
+            elif windows and compiled() and catframes_exe.exists():
+                logger.info('Using local catframes.exe')
+                command = [str(catframes_exe)]
+            elif not compiled() and catframes_py.exists() and shutil.which('python'):
+                logger.info('Using local catframes.py (POSIX)')
+                logger.info(f'Python executable: python')
+                command = ['python', str(catframes_py)]
+            elif not compiled() and catframes_py.exists() and shutil.which('python3'):
+                logger.info('Using local catframes.py (POSIX)')
+                logger.info(f'Python executable: python3')
+                command = ['python3', str(catframes_py)]
+            else:
+                logger.info('Using Catframes from PATH.')
+                command = ["catframes"]
 
         for position, text in self._overlays.items():
             if text:
@@ -135,7 +184,7 @@ class TaskConfig:
 
         if for_user:
             # добавление полного пути файла в кавычках
-            command.append(self.to_user_format(self._filepath, bash))  
+            command.append(self.to_user_format(self._filepath, bash))
         else:
             command.append(self._filepath)
             command.append("--live-preview")
@@ -191,35 +240,52 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-        if sys.platform == "win32":
+        logger = logging.getLogger('catmanager')
+        windows = (sys.platform == 'win32')
+
+        # Почему-то при сборке с помощью Nuitka, даже если
+        # консоль отключена, она определяется как включенная.
+        if windows and has_console() and not compiled():
             # Обработка сигналов завершения в Windows выглядит как большой беспорядок.
             # Если убрать этот флаг, CTRL+C будет отправляться как в дочерний, так и в родительский процесс.
             # Если использовать этот флаг, CTRL+C не работает вообще, зато работает CTRL+Break.
             # Этот флаг обязателен к использованию также и согласно документации Python, если мы хотим
             # отправлять в подпроцесс эти два сигнала:
             # https://docs.python.org/3/library/subprocess.html#subprocess.Popen.send_signal
-            os_issues = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+        elif windows:
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
         else:
             os_issues = {}
 
+        logger.info(command)
+
+        # STDIN is required when running in pythonw.exe
+        # Since the program does not require writing anything
+        # to standard input, no additional code is required.
         self.process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            **os_issues
         )
 
         self.error: Optional[str] = None
         self._progress = 0.0
-        self._image_base64 = ""
-        threading.Thread(
-            target=self._update_progress, daemon=True
-        ).start()  # запуск потока обновления прогресса из вывода stdout
+        self._image_base64 = ''
+        threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
+        logger = logging.getLogger('catmanager')
+
         progress_pattern = re.compile(r"Progress: +[0-9]+")
         image_base64_pattern = re.compile(r"Preview: [a-zA-Z0-9+=/]+")
 
-        # читает строки вывода процесса
         for line in io.TextIOWrapper(self.process.stdout):
-            if "FFmpeg not found" in line:
+            logger.debug(f'Catframes: {line.rstrip()}')
+
+            if 'FFmpeg not found' in line:
                 self.error = NO_FFMPEG_ERROR
 
             # ищет в строке процент прогресса
@@ -237,11 +303,13 @@ class CatframesProcess:
             if image_data:
                 self._image_base64 = image_data.group().split()[1]
 
-        # если процесс завершился некорректно
-        if self.process.poll() != 0 and not self.error:
-            self.error = INTERNAL_ERROR  # текст последней строки
+        ret_code = None
+        while ret_code is None:
+            ret_code = self.process.poll()
 
-        self._progress == 1.0
+        if ret_code != 0 and not self.error:
+            self.error = INTERNAL_ERROR
+        self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):
         return self._progress
@@ -251,18 +319,31 @@ class CatframesProcess:
 
     # убивает процесс (для экстренной остановки)
     def kill(self):
-        if sys.platform == "win32":
+        logger = logging.getLogger('catmanager')
+        windows = (sys.platform == 'win32')
+
+        if windows and has_console() and not compiled():
             # CTRL_C_EVENT is ignored for process groups
             # https://learn.microsoft.com/ru-ru/windows/win32/procthread/process-creation-flags
+            logger.info('Using CTRL+BREAK signal...')
             os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+        elif windows:
+            logger.info('Using CTRL+C signal emulation via stdin...')
+            self.process.stdin.write('<CANCEL>'.encode('utf-8'))
+            self.process.stdin.flush()
         else:
+            logger.info('Using CTRL+C signal...')
             os.kill(self.process.pid, signal.SIGTERM)
 
         # Раз уж удаление делается не через callback или Promise, нужно сделать это синхронно.
         # Мы не можем полагаться на удачу. Мы должны всегда получить одинаковое поведение
         # (удаление видео в случае отмены).
-        while None == self.process.poll():
+        returncode = self.process.poll()
+        while None == returncode:
             time.sleep(0.1)
+            returncode = self.process.poll()
+
+        logger.info(f'Catframes return code: {returncode}')
 
 
 class Task:
@@ -283,13 +364,18 @@ class Task:
         self.gui_callback = gui_callback
         TaskManager.reg_start(self)
 
+        logger = logging.getLogger('catmanager')
+        logger.info('Logging is working in another thread!')
+
         try:  # запуск фонового процесса catframes
             self._process_thread = CatframesProcess(self.command)
 
         except FileNotFoundError:  # если catframes не найден
+            logger.exception('It seems catframes not found.')
             return self.handle_error(NO_CATFRAMES_ERROR)
 
         except Exception as e:  # если возникла другая ошибка, обработает её
+            logger.exception('')
             return self.handle_error(START_FAILED_ERROR)
 
         # запуск потока слежения за прогрессом
@@ -324,21 +410,38 @@ class Task:
 
     # остановка задачи
     def cancel(self):
+        logger = logging.getLogger('catmanager')
+
+        logger.info('Cancelling the task...')
         self.stop_flag = True
         TaskManager.reg_finish(self)
-        self._process_thread.kill()
+
+        try:
+            logger.debug('Trying to stop catframes...')
+            self._process_thread.kill()
+        except Exception:
+            logger.exception('Could not kill the process.')
+
         self.delete_file()
         self.gui_callback.delete(self.id)
 
     # удаляет файл в системе
     def delete_file(self):
+        logger = logging.getLogger('catmanager')
+        logger.info('Deleting video file...')
+
         file = self.config.get_filepath()
+        logger.debug(f'The file: {file}')
         try:
-            os.remove(file)
-        except:
+            if os.path.isfile(file):
+                os.remove(file)
+                logger.debug('Deleted.')
+            else:
+                logger.debug('There is no such file.')
+        except OSError:
             # Just in case someone opened the video in a player
             # while it was being encoded or something.
-            pass
+            logger.exception(f'Could not remove the file {file}')
 
     def delete(self):
         TaskManager.wipe(self)

@@ -3,6 +3,7 @@ from sets_utils import Settings
 from windows_utils import *
 from task_flows import Task, GuiCallback, TaskManager, TaskConfig
 from windows_base import WindowMixin, LocalWM
+from templog import TempLog
 
 
 """
@@ -38,6 +39,7 @@ class RootWindow(Tk, WindowMixin):
         self.widgets: Dict[str, ttk.Widget] = {}
         self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
+        # TODO: исправить тип
         self.size: Tuple[int] = 550, 450
         self.resizable(True, True)  # можно растягивать
 
@@ -64,6 +66,7 @@ class RootWindow(Tk, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        logger = logging.getLogger('catmanager')
 
         # открытие окна с новой задачей (и/или переключение на него)
         def open_new_task():
@@ -82,6 +85,8 @@ class RootWindow(Tk, WindowMixin):
         self.widgets["newTask"] = ttk.Button(upperBar, command=open_new_task)
         self.widgets["openSets"] = ttk.Button(upperBar, command=open_settings)
 
+        logger.info('Root window started.')
+
     # расположение виджетов
     def _pack_widgets(self):
         self.upper_bar.pack(fill=X)
@@ -93,12 +98,8 @@ class RootWindow(Tk, WindowMixin):
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
         # сборка функции для открытия диалога при попытке отмены задачи
-        cancel_def = lambda: LocalWM.open(
-            WarningWindow, "warn", self, type="cancel", accept_def=task.cancel
-        )
-        task_bar = TaskBar(
-            self.taskList, task, cancel_def=cancel_def, **params
-        )  # создаёт бар задачи
+        cancel_def = lambda: LocalWM.open(WarningWindow, "warn", self, type="cancel", accept_def=task.cancel)
+        task_bar = TaskBar(self.taskList, task, cancel_def=cancel_def, **params)
         self.task_bars[task.id] = task_bar
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
@@ -136,7 +137,8 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 250, 120
+        # TODO: исправить тип
+        self.size: Tuple[int] = 250, 150
         self.resizable(False, False)
         self.transient(root)
 
@@ -165,6 +167,22 @@ class SettingsWindow(Toplevel, WindowMixin):
             state="readonly",
             width=9,
         )
+
+        def open_logs():
+            log_paths = TempLog.get_paths()
+            if (log_paths is not None) and ('catmanager' in log_paths):
+                log_file_path = Path(log_paths['catmanager'])
+                logs_path = str(log_file_path.parent)
+                my_system = platform.system()
+
+                if my_system == 'Windows':
+                    subprocess.run(['explorer', logs_path])
+                elif my_system == 'Linux':
+                    subprocess.run(['xdg-open', logs_path])
+                elif my_system == 'Darwin':
+                    subprocess.run(['open', '--', logs_path])
+
+        self.widgets['btOpenLogs'] = ttk.Button(self.main_frame, command=open_logs)
 
         # виджет и комбобокс тем
         self.widgets["lbTheme"] = ttk.Label(self.content_frame)
@@ -204,6 +222,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets["lbTheme"].grid(row=1, column=0, sticky="e", padx=5, pady=5)
         self.widgets["_cmbTheme"].grid(row=1, column=1, sticky="ew", padx=5, pady=5)
         self.widgets["_cmbTheme"].current(newindex=Settings.theme.current_index)
+        self.widgets['btOpenLogs'].grid(row=1, column=0, sticky='e', padx=5, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -222,7 +241,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config = kwargs.get("task_config")
             self.view_mode = True
 
+        # TODO: исправить тип
         self.size: Tuple[int] = 900, 500
+
+        # Временный хак.
+        # У дефолтной страшненькой темы Tk в Линуксе виджеты больше по высоте,
+        # и все кнопки не влезают в 500 пикселей.
+        if 'Linux' == platform.system():
+            self.size = 900, 620
+
         self.resizable(True, True)
 
         super()._default_set_up()
@@ -393,7 +420,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
     # Валидация для поля ввода цвета
     # Должна пропускать любые 16-р значения
     # до 6ти знаков, с "#" вначале и без.
-    # Пустая строка допустима.  
+    # Пустая строка допустима.
     @staticmethod
     def validate_color(value: str) -> bool:
         if not value:
@@ -409,7 +436,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             if v.lower() not in "0123456789abcdef":
                 return False
         return True
-        
+
     # Валидация для поля ввода фпс.
     # Должна пропускать любые числа от 0 до 60.
     # Пустая строка так же допустима.

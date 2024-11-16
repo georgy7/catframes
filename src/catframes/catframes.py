@@ -58,6 +58,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from _thread import interrupt_main
 import textwrap
 from queue import Queue, Empty, Full
 from collections import deque
@@ -72,6 +73,10 @@ from time import sleep, monotonic
 from unittest import TestCase
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
+
+if 'Windows' == platform.system():
+    import ctypes
+    from ctypes import wintypes
 
 
 __version__ = '2024.8.0-SNAPSHOT'
@@ -1505,7 +1510,15 @@ class OutputProcessor:
             def read_write_thread_messages():
                 while not write_thread_messages.empty():
                     message = write_thread_messages.get_nowait()
-                    if int == type(message):
+
+                    # The second condition guarantees that 100% will not fall out here.
+                    # The fact is that this queue shows which frame was sent for compression,
+                    # and not which one has already been compressed. If we mistakenly decide
+                    # that the file is ready, and if the operating system allows it to be
+                    # copied before FFmpeg finishes working, we will get a broken file.
+                    # Encoding 10 seconds or more after sending the last frame to FFmpeg
+                    # has been empirically confirmed.
+                    if (int == type(message)) and (message < len(frames)):
                         set_processed(message)
 
             with process.stdout:
@@ -2865,8 +2878,32 @@ class ConsoleInterface:
             print('...', flush=True)
 
 
+def seek_signals():
+    """The only reason this function exists is because of the broken signals in Windows."""
+    buffer = deque(maxlen = 10)
+    while True:
+        sleep(0.05)
+        character = sys.stdin.read(1)
+        if character:
+            buffer.append(str(character))
+            if '<CANCEL>' in (''.join(buffer)):
+                interrupt_main()
+                break
+
+
 def main():
     gc.set_threshold(100, 10, 10)   # По-умолчанию 700-10-10.
+
+    if 'Windows' == platform.system():
+        # Explanation: https://stackoverflow.com/a/69727088/1240328
+        # Windows standard handle -10 refers to stdin
+        # Console mode 0 means "no flags" such as line-mode.
+        kernel32 = ctypes.windll.kernel32
+        initial_input_mode = ctypes.wintypes.DWORD()
+        kernel32.GetConsoleMode(kernel32.GetStdHandle(-10), ctypes.byref(initial_input_mode))
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-10), 0)
+        threading.Thread(target=seek_signals, daemon=True).start()
+
     try:
         if not shutil.which('ffmpeg'):
             raise ValueError('FFmpeg not found.')
@@ -2929,6 +2966,10 @@ def main():
     except ValueError as err:
         print(f'\n{err}\n', file=sys.stderr, flush=True)
         sys.exit(1)
+    
+    finally:
+        if 'Windows' == platform.system():
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-10), initial_input_mode)
 
 
 if __name__ == "__main__":

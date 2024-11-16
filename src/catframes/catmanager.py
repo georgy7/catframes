@@ -17,8 +17,13 @@ import configparser
 
 # import requests
 
+import tempfile
+import logging
+from logging.handlers import WatchedFileHandler
+from pathlib import Path
+
 from tkinter import *
-from tkinter import ttk, font, filedialog, colorchooser
+from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from unittest import TestCase
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
@@ -102,6 +107,76 @@ rkJggg==
 
 
 
+    #  из файла templog.py:
+
+class TempLog:
+    """
+    Logging into a temporary folder.
+    Use it as follows.
+
+    .. code-block:: python
+
+        def example_function():
+            logger = logging.getLogger('mylog')
+            logger.info('Something happened.')
+
+        def main():
+            with TempLog('mylog'):
+                # everything that runs
+                # in the main application thread
+            # Now the temporary folder removed.
+
+    You can also get paths of its openned files,
+    using the class method `get_paths`.
+    """
+    _paths: Dict[str, Path] = {}
+
+    @classmethod
+    def get_paths(cls) -> Dict[str, Path]:
+        return cls._paths.copy()
+
+    def __init__(self, logger_name: str):
+        self.logger_name: str = logger_name
+        self._tmp_dir: Union[tempfile.TemporaryDirectory, None] = None
+        self._file_handler: Union[WatchedFileHandler, None] = None
+
+    def __enter__(self) -> None:
+        self._tmp_dir = tempfile.TemporaryDirectory(prefix="catmanager_")
+        filepath = Path(self._tmp_dir.__enter__()) / (self.logger_name + '_debug.log')
+
+        self._file_handler = WatchedFileHandler(filepath)
+        self._file_handler.setLevel(logging.DEBUG)
+
+        logger = logging.getLogger(self.logger_name)
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(self._file_handler)
+
+        self._paths[self.logger_name] = filepath
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        del self._paths[self.logger_name]
+
+        if self._file_handler:
+            logger = logging.getLogger(self.logger_name)
+            logger.removeHandler(self._file_handler)
+            self._file_handler.flush()
+            self._file_handler.close()
+            self._file_handler = None
+
+        if self._tmp_dir:
+            self._tmp_dir.__exit__(exc_type, exc_value, traceback)
+
+
+def has_console() -> bool:
+    return (sys.stdin is not None) and sys.stdin.isatty()
+
+def compiled() -> bool:
+    return '__compiled__' in globals()
+
+
+
+
+
     #  из файла sets_utils.py:
 
 """
@@ -129,7 +204,7 @@ class Lang:
 
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         "english": {
-            "root.title": "CatFrames",
+            "root.title": "Catmanager",
             "root.openSets": "Settings",
             "root.newTask": "Create",
             "bar.active": "processing",
@@ -150,6 +225,7 @@ class Lang:
             "sets.lbTheme": "Theme:",
             "sets.btApply": "Apply",
             "sets.btSave": "Save",
+            "sets.btOpenLogs": "Show logs",
             "task.title": "New Task",
             "task.title.view": "Task settings view",
             "task.initText": "Add a directory\nof images",
@@ -186,9 +262,12 @@ class Lang:
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
             "checker.title": "Necessary modules check",
+
+            "emptyFolder.title": "Empty folder",
+            "emptyFolder.theFollowingFolders": "The following folders do not contain images.\nTherefore, they were not added.",
         },
         "русский": {
-            "root.title": "CatFrames",
+            "root.title": "Catmanager",
             "root.openSets": "Настройки",
             "root.newTask": "Создать",
             "bar.lbActive": "обработка",
@@ -209,6 +288,7 @@ class Lang:
             "sets.lbTheme": "Тема:",
             "sets.btApply": "Применить",
             "sets.btSave": "Сохранить",
+            "sets.btOpenLogs": "Показать логи",
             "task.title": "Новая задача",
             "task.title.view": "Просмотр настроек задачи",
             "task.initText": "Добавьте папку\nс изображениями",
@@ -245,6 +325,9 @@ class Lang:
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
             "checker.title": "Проверка необходимых модулей",
+
+            "emptyFolder.title": "Пустая директория",
+            "emptyFolder.theFollowingFolders": "Следующие папки не были добавлены, т.к. не содержат изображений.",
         },
     }
 
@@ -615,7 +698,7 @@ class TaskConfig:
         text = text.replace("\r", "\\r")
         text = text.replace("\t", "\\t")
         return TaskConfig.wrap_quots(text, bash)
-    
+
     @staticmethod
     def wrap_quots(text: str, bash: bool) -> str:
         q = "'" if bash else '"'
@@ -625,7 +708,55 @@ class TaskConfig:
     def convert_to_command(
         self, for_user: bool = False, bash: bool = True
     ) -> List[str]:
-        command = ["catframes"]
+        logger = logging.getLogger('catmanager')
+
+        if for_user:
+            command = ['catframes']
+        else:
+            windows = (platform.system() == 'Windows')
+
+            ran_from_sources: bool = ('main.py' == Path(sys.argv[0]).name)
+
+            if ran_from_sources:
+                catframes_py: Path = Path(sys.argv[0]).resolve().parent.parent / 'catframes.py'
+            else:
+                catframes_py: Path = Path(sys.argv[0]).resolve().parent / 'catframes.py'
+
+            catframes_exe: Path = Path(sys.argv[0]).resolve().parent / 'catframes.exe'
+
+            # Здесь не используется sys.executable напрямую,
+            # поскольку там может быть pythonw.exe.
+            python_exe: Path = Path(sys.executable).resolve().parent / 'python.exe'
+
+            logger.debug(f'\n               windows: {windows}')
+            logger.debug(f'              compiled: {compiled()}')
+            logger.debug(f'      ran from sources: {ran_from_sources}')
+            logger.debug(f'          catframes_py: {catframes_py}')
+            logger.debug(f'         catframes_exe: {catframes_exe}')
+            logger.debug(f'            python_exe: {python_exe}\n')
+
+            logger.debug(f'   catframes_py exists: {catframes_py.exists()}')
+            logger.debug(f'  catframes_exe exists: {catframes_exe.exists()}')
+            logger.debug(f'     python_exe exists: {python_exe.exists()}\n')
+
+            if windows and not compiled() and catframes_py.exists():
+                logger.info('Using local catframes.py (Windows)')
+                logger.info(f'Python executable: {python_exe}')
+                command = [str(python_exe), str(catframes_py)]
+            elif windows and compiled() and catframes_exe.exists():
+                logger.info('Using local catframes.exe')
+                command = [str(catframes_exe)]
+            elif not compiled() and catframes_py.exists() and shutil.which('python'):
+                logger.info('Using local catframes.py (POSIX)')
+                logger.info(f'Python executable: python')
+                command = ['python', str(catframes_py)]
+            elif not compiled() and catframes_py.exists() and shutil.which('python3'):
+                logger.info('Using local catframes.py (POSIX)')
+                logger.info(f'Python executable: python3')
+                command = ['python3', str(catframes_py)]
+            else:
+                logger.info('Using Catframes from PATH.')
+                command = ["catframes"]
 
         for position, text in self._overlays.items():
             if text:
@@ -651,7 +782,7 @@ class TaskConfig:
 
         if for_user:
             # добавление полного пути файла в кавычках
-            command.append(self.to_user_format(self._filepath, bash))  
+            command.append(self.to_user_format(self._filepath, bash))
         else:
             command.append(self._filepath)
             command.append("--live-preview")
@@ -707,35 +838,52 @@ class CatframesProcess:
     """
 
     def __init__(self, command):
-        if sys.platform == "win32":
+        logger = logging.getLogger('catmanager')
+        windows = (sys.platform == 'win32')
+
+        # Почему-то при сборке с помощью Nuitka, даже если
+        # консоль отключена, она определяется как включенная.
+        if windows and has_console() and not compiled():
             # Обработка сигналов завершения в Windows выглядит как большой беспорядок.
             # Если убрать этот флаг, CTRL+C будет отправляться как в дочерний, так и в родительский процесс.
             # Если использовать этот флаг, CTRL+C не работает вообще, зато работает CTRL+Break.
             # Этот флаг обязателен к использованию также и согласно документации Python, если мы хотим
             # отправлять в подпроцесс эти два сигнала:
             # https://docs.python.org/3/library/subprocess.html#subprocess.Popen.send_signal
-            os_issues = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+        elif windows:
+            os_issues = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
         else:
             os_issues = {}
 
+        logger.info(command)
+
+        # STDIN is required when running in pythonw.exe
+        # Since the program does not require writing anything
+        # to standard input, no additional code is required.
         self.process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **os_issues
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            **os_issues
         )
 
         self.error: Optional[str] = None
         self._progress = 0.0
-        self._image_base64 = ""
-        threading.Thread(
-            target=self._update_progress, daemon=True
-        ).start()  # запуск потока обновления прогресса из вывода stdout
+        self._image_base64 = ''
+        threading.Thread(target=self._update_progress, daemon=True).start()  # запуск потока обновления прогресса из вывода stdout
 
     def _update_progress(self):  # обновление прогресса, чтением вывода stdout
+        logger = logging.getLogger('catmanager')
+
         progress_pattern = re.compile(r"Progress: +[0-9]+")
         image_base64_pattern = re.compile(r"Preview: [a-zA-Z0-9+=/]+")
 
-        # читает строки вывода процесса
         for line in io.TextIOWrapper(self.process.stdout):
-            if "FFmpeg not found" in line:
+            logger.debug(f'Catframes: {line.rstrip()}')
+
+            if 'FFmpeg not found' in line:
                 self.error = NO_FFMPEG_ERROR
 
             # ищет в строке процент прогресса
@@ -753,11 +901,13 @@ class CatframesProcess:
             if image_data:
                 self._image_base64 = image_data.group().split()[1]
 
-        # если процесс завершился некорректно
-        if self.process.poll() != 0 and not self.error:
-            self.error = INTERNAL_ERROR  # текст последней строки
+        ret_code = None
+        while ret_code is None:
+            ret_code = self.process.poll()
 
-        self._progress == 1.0
+        if ret_code != 0 and not self.error:
+            self.error = INTERNAL_ERROR
+        self._progress == 1.0         # полный прогресс только после завершения скрипта
 
     def get_progress(self):
         return self._progress
@@ -767,18 +917,31 @@ class CatframesProcess:
 
     # убивает процесс (для экстренной остановки)
     def kill(self):
-        if sys.platform == "win32":
+        logger = logging.getLogger('catmanager')
+        windows = (sys.platform == 'win32')
+
+        if windows and has_console() and not compiled():
             # CTRL_C_EVENT is ignored for process groups
             # https://learn.microsoft.com/ru-ru/windows/win32/procthread/process-creation-flags
+            logger.info('Using CTRL+BREAK signal...')
             os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)
+        elif windows:
+            logger.info('Using CTRL+C signal emulation via stdin...')
+            self.process.stdin.write('<CANCEL>'.encode('utf-8'))
+            self.process.stdin.flush()
         else:
+            logger.info('Using CTRL+C signal...')
             os.kill(self.process.pid, signal.SIGTERM)
 
         # Раз уж удаление делается не через callback или Promise, нужно сделать это синхронно.
         # Мы не можем полагаться на удачу. Мы должны всегда получить одинаковое поведение
         # (удаление видео в случае отмены).
-        while None == self.process.poll():
+        returncode = self.process.poll()
+        while None == returncode:
             time.sleep(0.1)
+            returncode = self.process.poll()
+
+        logger.info(f'Catframes return code: {returncode}')
 
 
 class Task:
@@ -799,13 +962,18 @@ class Task:
         self.gui_callback = gui_callback
         TaskManager.reg_start(self)
 
+        logger = logging.getLogger('catmanager')
+        logger.info('Logging is working in another thread!')
+
         try:  # запуск фонового процесса catframes
             self._process_thread = CatframesProcess(self.command)
 
         except FileNotFoundError:  # если catframes не найден
+            logger.exception('It seems catframes not found.')
             return self.handle_error(NO_CATFRAMES_ERROR)
 
         except Exception as e:  # если возникла другая ошибка, обработает её
+            logger.exception('')
             return self.handle_error(START_FAILED_ERROR)
 
         # запуск потока слежения за прогрессом
@@ -840,21 +1008,38 @@ class Task:
 
     # остановка задачи
     def cancel(self):
+        logger = logging.getLogger('catmanager')
+
+        logger.info('Cancelling the task...')
         self.stop_flag = True
         TaskManager.reg_finish(self)
-        self._process_thread.kill()
+
+        try:
+            logger.debug('Trying to stop catframes...')
+            self._process_thread.kill()
+        except Exception:
+            logger.exception('Could not kill the process.')
+
         self.delete_file()
         self.gui_callback.delete(self.id)
 
     # удаляет файл в системе
     def delete_file(self):
+        logger = logging.getLogger('catmanager')
+        logger.info('Deleting video file...')
+
         file = self.config.get_filepath()
+        logger.debug(f'The file: {file}')
         try:
-            os.remove(file)
-        except:
+            if os.path.isfile(file):
+                os.remove(file)
+                logger.debug('Deleted.')
+            else:
+                logger.debug('There is no such file.')
+        except OSError:
             # Just in case someone opened the video in a player
             # while it was being encoded or something.
-            pass
+            logger.exception(f'Could not remove the file {file}')
 
     def delete(self):
         TaskManager.wipe(self)
@@ -1087,7 +1272,7 @@ class WindowMixin(ABC):
 
     @staticmethod
     def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
-        
+
         border_gap: int = 30  # минимальный отступ от края окна при открытии
 
         x = master_coords[0] + master_size[0] / 2 - window_size[0] / 2
@@ -1110,7 +1295,7 @@ class WindowMixin(ABC):
             y = screen_size[1] - window_size[1] - (border_gap * 3)
 
         return int(x), int(y)
-    
+
     def _set_linux_sizes(self):
         x, y = self.size
         self.size = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
@@ -1118,7 +1303,7 @@ class WindowMixin(ABC):
         if hasattr(self, "size_max"):
             x, y = self.size_max
             self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
-            
+
 
     def _set_size(self):
 
@@ -1136,6 +1321,44 @@ class WindowMixin(ABC):
     # метод для расположения виджетов
     @abstractmethod
     def _pack_widgets(self) -> None: ...
+
+
+class TextDialog(Toplevel, WindowMixin):
+    """Показывает произвольный текст с прокруткой без возможности его редактирования."""
+
+    def __init__(self, root: Tk, window_name: str, text: str):
+        super().__init__(master=root)
+        self.name = window_name
+        self.text = text
+
+        self.widgets: Dict[str, ttk.Widget] = {}
+
+        self.size = 650, 300
+        self.resizable(False, False)
+        self.transient(root)
+
+        # Сокрытие при анфокусе скопировано из SettingsWindow.
+        self.bind("<FocusOut>", self._on_focus_out)
+
+        super()._default_set_up()
+
+    def _set_style(self) -> None:
+        super()._set_style()
+        self.minsize(200, 150)
+
+    def _init_widgets(self):
+        self.main_frame = Frame(self)
+        self.non_localized_text = scrolledtext.ScrolledText(self.main_frame, padx=10, pady=10)
+        self.non_localized_text.insert(END, self.text + '\n')
+        self.non_localized_text['state'] = 'disabled'
+
+    def _pack_widgets(self):
+        self.main_frame.pack(fill=BOTH, expand=True)
+        self.non_localized_text.pack(side=TOP, fill=BOTH, expand=True)
+
+    def _on_focus_out(self, event):
+        if not self.focus_get():
+            return self.close()
 
 
 
@@ -1163,11 +1386,9 @@ class WindowMixin(ABC):
 
 # возвращает список всех изображений в директории
 def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
-    img_list = [f for f in os.listdir(dir) if f.endswith((".png", ".jpg"))]
+    img_list = [f for f in os.listdir(dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.qoi', '.pcx'))]
     if full_path:
-        img_list = list(
-            map(lambda x: f"{dir}/{x}", img_list)
-        )  # добавляет путь к названию
+        img_list = list(map(lambda x: f'{dir}/{x}', img_list))
     return img_list
 
 
@@ -1793,7 +2014,8 @@ class OverlaysUnion:
             (x_pad, self.master.height // 2),
         ]
 
-        try:  # позиционирует каждый виджет и обновляет текст
+        try:
+            # позиционирует каждый виджет и обновляет текст
             for i, pos in enumerate(positions):
                 self.overlays[i].set_coords(pos)
                 self.overlays[i].update_label()
@@ -2183,11 +2405,30 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir)
+        logger = logging.getLogger('catmanager')
+        logger.info(f'Ask directory: initialdir = {GlobalStates.last_dir}')
+        dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir, mustexist=True)
+        logger.info(f'Ask directory result is {type(dir_name)}')
+        logger.info(f'Ask directory returned {dir_name}')
+
         if not dir_name:
+            logger.info(f'The folder is not defined.')
             return
         if not find_img_in_dir(dir_name):
+            logger.info(f'Asked directory does not contain images.')
+            msg_window_name = 'emptyFolder'
+
+            message = Settings.lang.read(f'{msg_window_name}.theFollowingFolders')
+            message += '\n\n'
+            message += f'    • {dir_name}\n'
+
+            LocalWM.open(TextDialog,
+                         msg_window_name,
+                         LocalWM.call('task'),
+                         window_name=msg_window_name,
+                         text=message).focus()
             return
+
         GlobalStates.last_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)
@@ -2339,6 +2580,7 @@ class RootWindow(Tk, WindowMixin):
         self.widgets: Dict[str, ttk.Widget] = {}
         self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
+        # TODO: исправить тип
         self.size: Tuple[int] = 550, 450
         self.resizable(True, True)  # можно растягивать
 
@@ -2365,6 +2607,7 @@ class RootWindow(Tk, WindowMixin):
 
     # создание и настройка виджетов
     def _init_widgets(self):
+        logger = logging.getLogger('catmanager')
 
         # открытие окна с новой задачей (и/или переключение на него)
         def open_new_task():
@@ -2383,6 +2626,8 @@ class RootWindow(Tk, WindowMixin):
         self.widgets["newTask"] = ttk.Button(upperBar, command=open_new_task)
         self.widgets["openSets"] = ttk.Button(upperBar, command=open_settings)
 
+        logger.info('Root window started.')
+
     # расположение виджетов
     def _pack_widgets(self):
         self.upper_bar.pack(fill=X)
@@ -2394,12 +2639,8 @@ class RootWindow(Tk, WindowMixin):
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
         # сборка функции для открытия диалога при попытке отмены задачи
-        cancel_def = lambda: LocalWM.open(
-            WarningWindow, "warn", self, type="cancel", accept_def=task.cancel
-        )
-        task_bar = TaskBar(
-            self.taskList, task, cancel_def=cancel_def, **params
-        )  # создаёт бар задачи
+        cancel_def = lambda: LocalWM.open(WarningWindow, "warn", self, type="cancel", accept_def=task.cancel)
+        task_bar = TaskBar(self.taskList, task, cancel_def=cancel_def, **params)
         self.task_bars[task.id] = task_bar
         return task_bar.update_progress  # возвращает ручку полосы прогресса
 
@@ -2437,7 +2678,8 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 250, 120
+        # TODO: исправить тип
+        self.size: Tuple[int] = 250, 150
         self.resizable(False, False)
         self.transient(root)
 
@@ -2466,6 +2708,22 @@ class SettingsWindow(Toplevel, WindowMixin):
             state="readonly",
             width=9,
         )
+
+        def open_logs():
+            log_paths = TempLog.get_paths()
+            if (log_paths is not None) and ('catmanager' in log_paths):
+                log_file_path = Path(log_paths['catmanager'])
+                logs_path = str(log_file_path.parent)
+                my_system = platform.system()
+
+                if my_system == 'Windows':
+                    subprocess.run(['explorer', logs_path])
+                elif my_system == 'Linux':
+                    subprocess.run(['xdg-open', logs_path])
+                elif my_system == 'Darwin':
+                    subprocess.run(['open', '--', logs_path])
+
+        self.widgets['btOpenLogs'] = ttk.Button(self.main_frame, command=open_logs)
 
         # виджет и комбобокс тем
         self.widgets["lbTheme"] = ttk.Label(self.content_frame)
@@ -2505,6 +2763,7 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets["lbTheme"].grid(row=1, column=0, sticky="e", padx=5, pady=5)
         self.widgets["_cmbTheme"].grid(row=1, column=1, sticky="ew", padx=5, pady=5)
         self.widgets["_cmbTheme"].current(newindex=Settings.theme.current_index)
+        self.widgets['btOpenLogs'].grid(row=1, column=0, sticky='e', padx=5, pady=10)
 
 
 class NewTaskWindow(Toplevel, WindowMixin):
@@ -2523,7 +2782,15 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config = kwargs.get("task_config")
             self.view_mode = True
 
+        # TODO: исправить тип
         self.size: Tuple[int] = 900, 500
+
+        # Временный хак.
+        # У дефолтной страшненькой темы Tk в Линуксе виджеты больше по высоте,
+        # и все кнопки не влезают в 500 пикселей.
+        if 'Linux' == platform.system():
+            self.size = 900, 620
+
         self.resizable(True, True)
 
         super()._default_set_up()
@@ -2694,7 +2961,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
     # Валидация для поля ввода цвета
     # Должна пропускать любые 16-р значения
     # до 6ти знаков, с "#" вначале и без.
-    # Пустая строка допустима.  
+    # Пустая строка допустима.
     @staticmethod
     def validate_color(value: str) -> bool:
         if not value:
@@ -2710,7 +2977,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             if v.lower() not in "0123456789abcdef":
                 return False
         return True
-        
+
     # Валидация для поля ввода фпс.
     # Должна пропускать любые числа от 0 до 60.
     # Пустая строка так же допустима.
@@ -3235,8 +3502,8 @@ class SingleCheck(ttk.Frame):
             except:
                 text = self.found
             status_image = self.ok_image
-        
-        
+
+
         self.widgets["bottom_label"].configure(text=text)
         self.widgets["status_image"].configure(image=status_image)
 
@@ -3259,13 +3526,13 @@ class UtilChecker(Tk, WindowMixin):
         self.check_thread = threading.Thread(target=self.start_check, daemon=True)
         self.after(1000, self.check_thread.start)
 
-    def _init_widgets(self): 
+    def _init_widgets(self):
         self.main_frame = ttk.Frame(self)
-        
+
         def pil_search():
             if PIL_FOUND_FLAG:
                 return "Installed in the current environment."
-            
+
         self.pil = SingleCheck(self.main_frame, "Pillow", pil_search)
         self.ffmpeg = SingleCheck(
             self.main_frame, "FFmpeg", Settings.util_locatior.find_ffmpeg
@@ -3346,19 +3613,19 @@ class _TestUtils(TestCase):
         self.assertFalse(is_dark_color(255, 255, 0))
 
         self.assertFalse(is_dark_color(255, 255, 255))
-    
+
 
 class _TestWindowPosition(TestCase):
 
     def test_coords_calculation(self):
         x, y = WindowMixin._calculate_coords((1005, 495), (550, 450), (250, 150), (2560, 1440))
-        self.assertTrue((x, y) == (1155, 645)) 
+        self.assertTrue((x, y) == (1155, 645))
         x, y = WindowMixin._calculate_coords((285, 304), (550, 450), (900, 500), (2560, 1440))
-        self.assertTrue((x, y) == (110, 279)) 
+        self.assertTrue((x, y) == (110, 279))
         x, y = WindowMixin._calculate_coords((2240, 224), (550, 450), (900, 500), (2560, 1440))
-        self.assertTrue((x, y) == (1630, 199)) 
+        self.assertTrue((x, y) == (1630, 199))
         x, y = WindowMixin._calculate_coords((912, 1147) ,(550, 450) ,(900, 500), (2560, 1440))
-        self.assertTrue((x, y) == (737, 850)) 
+        self.assertTrue((x, y) == (737, 850))
 
 
 class _TestTaskConfig(TestCase):
@@ -3427,10 +3694,26 @@ def start_catmanager():
 
 
 def main():
-    Settings.restore()
-    if not Settings.conf.file_exists:
-        check_utils()
-    start_catmanager()
+    with TempLog('catmanager'):
+        logger = logging.getLogger('catmanager')
+        logger.info('Logging is on.')
+
+        logger.info(f'sys.argv[0]: {sys.argv[0]}')
+        logger.info(f'Executable: {sys.executable}')
+        logger.info(f'File: {__file__}\n')
+
+        logger.info(f'platform.system(): {platform.system()}')
+        logger.info(f'sys.platform: {sys.platform}\n')
+
+        logger.info(f'Console: {has_console()}')
+        logger.info(f'Compiled: {compiled()}\n')
+
+        root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
+
+        Settings.restore()
+        if not Settings.conf.file_exists:
+            check_utils()
+        start_catmanager()
 
 
 if __name__ == "__main__":

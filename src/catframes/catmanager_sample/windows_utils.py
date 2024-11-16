@@ -1,7 +1,7 @@
 from _prefix import *
 from sets_utils import Settings
 from task_flows import Task
-from windows_base import LocalWM
+from windows_base import LocalWM, TextDialog
 
 
 """
@@ -24,11 +24,9 @@ from windows_base import LocalWM
 
 # возвращает список всех изображений в директории
 def find_img_in_dir(dir: str, full_path: bool = False) -> List[str]:
-    img_list = [f for f in os.listdir(dir) if f.endswith((".png", ".jpg"))]
+    img_list = [f for f in os.listdir(dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.qoi', '.pcx'))]
     if full_path:
-        img_list = list(
-            map(lambda x: f"{dir}/{x}", img_list)
-        )  # добавляет путь к названию
+        img_list = list(map(lambda x: f'{dir}/{x}', img_list))
     return img_list
 
 
@@ -1044,11 +1042,30 @@ class DirectoryManager(ttk.Frame):
 
     # добавление директории
     def _add_directory(self):
-        dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir)
+        logger = logging.getLogger('catmanager')
+        logger.info(f'Ask directory: initialdir = {GlobalStates.last_dir}')
+        dir_name = filedialog.askdirectory(parent=self, initialdir=GlobalStates.last_dir, mustexist=True)
+        logger.info(f'Ask directory result is {type(dir_name)}')
+        logger.info(f'Ask directory returned {dir_name}')
+
         if not dir_name:
+            logger.info(f'The folder is not defined.')
             return
         if not find_img_in_dir(dir_name):
+            logger.info(f'Asked directory does not contain images.')
+            msg_window_name = 'emptyFolder'
+
+            message = Settings.lang.read(f'{msg_window_name}.theFollowingFolders')
+            message += '\n\n'
+            message += f'    • {dir_name}\n'
+
+            LocalWM.open(TextDialog,
+                         msg_window_name,
+                         LocalWM.call('task'),
+                         window_name=msg_window_name,
+                         text=message).focus()
             return
+
         GlobalStates.last_dir = os.path.dirname(dir_name)
         self.listbox.insert(END, shrink_path(dir_name, 25))
         self.dirs.append(dir_name)

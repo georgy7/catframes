@@ -17,8 +17,13 @@ import configparser
 
 # import requests
 
+import tempfile
+import logging
+from logging.handlers import WatchedFileHandler
+from pathlib import Path
+
 from tkinter import *
-from tkinter import ttk, font, filedialog, colorchooser
+from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from unittest import TestCase
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
