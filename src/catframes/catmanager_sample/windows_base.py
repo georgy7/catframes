@@ -166,7 +166,7 @@ class WindowMixin(ABC):
 
     @staticmethod
     def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
-        
+
         border_gap: int = 30  # минимальный отступ от края окна при открытии
 
         x = master_coords[0] + master_size[0] / 2 - window_size[0] / 2
@@ -189,7 +189,7 @@ class WindowMixin(ABC):
             y = screen_size[1] - window_size[1] - (border_gap * 3)
 
         return int(x), int(y)
-    
+
     def _set_linux_sizes(self):
         x, y = self.size
         self.size = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
@@ -197,7 +197,7 @@ class WindowMixin(ABC):
         if hasattr(self, "size_max"):
             x, y = self.size_max
             self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
-            
+
 
     def _set_size(self):
 

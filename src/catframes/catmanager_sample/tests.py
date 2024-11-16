@@ -32,19 +32,19 @@ class _TestUtils(TestCase):
         self.assertFalse(is_dark_color(255, 255, 0))
 
         self.assertFalse(is_dark_color(255, 255, 255))
-    
+
 
 class _TestWindowPosition(TestCase):
 
     def test_coords_calculation(self):
         x, y = WindowMixin._calculate_coords((1005, 495), (550, 450), (250, 150), (2560, 1440))
-        self.assertTrue((x, y) == (1155, 645)) 
+        self.assertTrue((x, y) == (1155, 645))
         x, y = WindowMixin._calculate_coords((285, 304), (550, 450), (900, 500), (2560, 1440))
-        self.assertTrue((x, y) == (110, 279)) 
+        self.assertTrue((x, y) == (110, 279))
         x, y = WindowMixin._calculate_coords((2240, 224), (550, 450), (900, 500), (2560, 1440))
-        self.assertTrue((x, y) == (1630, 199)) 
+        self.assertTrue((x, y) == (1630, 199))
         x, y = WindowMixin._calculate_coords((912, 1147) ,(550, 450) ,(900, 500), (2560, 1440))
-        self.assertTrue((x, y) == (737, 850)) 
+        self.assertTrue((x, y) == (737, 850))
 
 
 class _TestTaskConfig(TestCase):

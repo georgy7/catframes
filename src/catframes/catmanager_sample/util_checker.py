@@ -58,8 +58,8 @@ class SingleCheck(ttk.Frame):
             except:
                 text = self.found
             status_image = self.ok_image
-        
-        
+
+
         self.widgets["bottom_label"].configure(text=text)
         self.widgets["status_image"].configure(image=status_image)
 
@@ -82,13 +82,13 @@ class UtilChecker(Tk, WindowMixin):
         self.check_thread = threading.Thread(target=self.start_check, daemon=True)
         self.after(1000, self.check_thread.start)
 
-    def _init_widgets(self): 
+    def _init_widgets(self):
         self.main_frame = ttk.Frame(self)
-        
+
         def pil_search():
             if PIL_FOUND_FLAG:
                 return "Installed in the current environment."
-            
+
         self.pil = SingleCheck(self.main_frame, "Pillow", pil_search)
         self.ffmpeg = SingleCheck(
             self.main_frame, "FFmpeg", Settings.util_locatior.find_ffmpeg

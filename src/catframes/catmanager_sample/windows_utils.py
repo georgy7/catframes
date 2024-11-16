@@ -652,7 +652,8 @@ class OverlaysUnion:
             (x_pad, self.master.height // 2),
         ]
 
-        try:  # позиционирует каждый виджет и обновляет текст
+        try:
+            # позиционирует каждый виджет и обновляет текст
             for i, pos in enumerate(positions):
                 self.overlays[i].set_coords(pos)
                 self.overlays[i].update_label()

@@ -3708,8 +3708,6 @@ def main():
         logger.info(f'Console: {has_console()}')
         logger.info(f'Compiled: {compiled()}\n')
 
-        root = LocalWM.open(RootWindow, 'root')  # открываем главное окно
-
         Settings.restore()
         if not Settings.conf.file_exists:
             check_utils()
