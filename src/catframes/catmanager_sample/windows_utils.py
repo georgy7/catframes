@@ -569,7 +569,7 @@ class Overlay:
         return self.entry.get_text()
 
     # установка кординат для квадрата и лейбла
-    def set_coords(self, coords: Tuple[int]):
+    def set_coords(self, coords: Tuple[int, int]):
         self._update_shifts()
         self.master.coords(
             self.square_id, coords[0] - self.sq_size / 2, coords[1] - self.sq_size / 2
@@ -669,7 +669,7 @@ class OverlaysUnion:
 class ImageComposite:
     """Класс для хранения картинки в разных видах, и состояниях"""
 
-    def __init__(self, size: Tuple[int]):
+    def __init__(self, size: Tuple[int, int]):
         self.size: tuple = size
         self.stock: bool = True
         self.pil_orig: Image = None
@@ -726,9 +726,9 @@ class ImageUnion:
     def __init__(self, master: Canvas):
         self.master: Canvas = master
         self.stock: bool = True
-        self.size: tuple = master.width, master.height
+        self.size: tuple = (master.width, master.height)
         self.shown: Image = None
-        self.transition_stage: tuple = 1, 0
+        self.transition_stage: tuple = (1, 0)
 
         self.new = ImageComposite(self.size)
         self.old = ImageComposite(self.size)
@@ -748,7 +748,7 @@ class ImageUnion:
         self.old, self.new = self.new, self.old
         self.new.open(image_link)
 
-    def update_size(self, size: Tuple[int]):
+    def update_size(self, size: Tuple[int, int]):
         if self.size == size:
             return
         self.size = size

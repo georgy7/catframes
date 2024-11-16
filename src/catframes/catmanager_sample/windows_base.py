@@ -147,7 +147,7 @@ class WindowMixin(ABC):
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
 
-        screen_size: tuple = self.winfo_screenwidth(), self.winfo_screenheight()
+        screen_size: tuple = (self.winfo_screenwidth(), self.winfo_screenheight())
 
         # если это не побочное окно, то размещаем по центру экрана
         if not isinstance(self, Toplevel):
@@ -165,7 +165,7 @@ class WindowMixin(ABC):
         self.geometry(f"+{int(x)}+{int(y)}")
 
     @staticmethod
-    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
+    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int, int]:
 
         border_gap: int = 30  # минимальный отступ от края окна при открытии
 

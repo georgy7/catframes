@@ -39,8 +39,7 @@ class RootWindow(Tk, WindowMixin):
         self.widgets: Dict[str, ttk.Widget] = {}
         self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        # TODO: исправить тип
-        self.size: Tuple[int] = 550, 450
+        self.size: Tuple[int, int] = (550, 450)
         self.resizable(True, True)  # можно растягивать
 
         super()._default_set_up()
@@ -137,8 +136,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        # TODO: исправить тип
-        self.size: Tuple[int] = 250, 150
+        self.size: Tuple[int, int] = (250, 150)
         self.resizable(False, False)
         self.transient(root)
 
@@ -241,8 +239,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config = kwargs.get("task_config")
             self.view_mode = True
 
-        # TODO: исправить тип
-        self.size: Tuple[int] = 900, 500
+        self.size: Tuple[int, int] = (900, 500)
 
         # Временный хак.
         # У дефолтной страшненькой темы Tk в Линуксе виджеты больше по высоте,
@@ -877,7 +874,7 @@ class NotifyWindow(Toplevel, WindowMixin):
         self.name: str = "noti"
         self.widgets: Dict[str, Widget] = {}
 
-        self.size: Tuple[int] = 350, 160
+        self.size: Tuple[int, int] = (350, 160)
         self.resizable(False, False)
 
         super()._default_set_up()

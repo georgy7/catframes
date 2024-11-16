@@ -1253,7 +1253,7 @@ class WindowMixin(ABC):
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
 
-        screen_size: tuple = self.winfo_screenwidth(), self.winfo_screenheight()
+        screen_size: tuple = (self.winfo_screenwidth(), self.winfo_screenheight())
 
         # если это не побочное окно, то размещаем по центру экрана
         if not isinstance(self, Toplevel):
@@ -1271,7 +1271,7 @@ class WindowMixin(ABC):
         self.geometry(f"+{int(x)}+{int(y)}")
 
     @staticmethod
-    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int]:
+    def _calculate_coords(master_coords, master_size, window_size, screen_size) -> Tuple[int, int]:
 
         border_gap: int = 30  # минимальный отступ от края окна при открытии
 
@@ -1931,7 +1931,7 @@ class Overlay:
         return self.entry.get_text()
 
     # установка кординат для квадрата и лейбла
-    def set_coords(self, coords: Tuple[int]):
+    def set_coords(self, coords: Tuple[int, int]):
         self._update_shifts()
         self.master.coords(
             self.square_id, coords[0] - self.sq_size / 2, coords[1] - self.sq_size / 2
@@ -2031,7 +2031,7 @@ class OverlaysUnion:
 class ImageComposite:
     """Класс для хранения картинки в разных видах, и состояниях"""
 
-    def __init__(self, size: Tuple[int]):
+    def __init__(self, size: Tuple[int, int]):
         self.size: tuple = size
         self.stock: bool = True
         self.pil_orig: Image = None
@@ -2088,9 +2088,9 @@ class ImageUnion:
     def __init__(self, master: Canvas):
         self.master: Canvas = master
         self.stock: bool = True
-        self.size: tuple = master.width, master.height
+        self.size: tuple = (master.width, master.height)
         self.shown: Image = None
-        self.transition_stage: tuple = 1, 0
+        self.transition_stage: tuple = (1, 0)
 
         self.new = ImageComposite(self.size)
         self.old = ImageComposite(self.size)
@@ -2110,7 +2110,7 @@ class ImageUnion:
         self.old, self.new = self.new, self.old
         self.new.open(image_link)
 
-    def update_size(self, size: Tuple[int]):
+    def update_size(self, size: Tuple[int, int]):
         if self.size == size:
             return
         self.size = size
@@ -2580,8 +2580,7 @@ class RootWindow(Tk, WindowMixin):
         self.widgets: Dict[str, ttk.Widget] = {}
         self.task_bars: Dict[int, TaskBar] = {}  # словарь регистрации баров задач
 
-        # TODO: исправить тип
-        self.size: Tuple[int] = 550, 450
+        self.size: Tuple[int, int] = (550, 450)
         self.resizable(True, True)  # можно растягивать
 
         super()._default_set_up()
@@ -2678,8 +2677,7 @@ class SettingsWindow(Toplevel, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        # TODO: исправить тип
-        self.size: Tuple[int] = 250, 150
+        self.size: Tuple[int, int] = (250, 150)
         self.resizable(False, False)
         self.transient(root)
 
@@ -2782,8 +2780,7 @@ class NewTaskWindow(Toplevel, WindowMixin):
             self.task_config = kwargs.get("task_config")
             self.view_mode = True
 
-        # TODO: исправить тип
-        self.size: Tuple[int] = 900, 500
+        self.size: Tuple[int, int] = (900, 500)
 
         # Временный хак.
         # У дефолтной страшненькой темы Tk в Линуксе виджеты больше по высоте,
@@ -3418,7 +3415,7 @@ class NotifyWindow(Toplevel, WindowMixin):
         self.name: str = "noti"
         self.widgets: Dict[str, Widget] = {}
 
-        self.size: Tuple[int] = 350, 160
+        self.size: Tuple[int, int] = (350, 160)
         self.resizable(False, False)
 
         super()._default_set_up()
@@ -3517,7 +3514,7 @@ class UtilChecker(Tk, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 400, 400
+        self.size: Tuple[int, int] = (400, 400)
         self.resizable(False, False)
 
         self.all_checked = False

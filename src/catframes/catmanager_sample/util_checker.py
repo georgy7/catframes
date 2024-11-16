@@ -73,7 +73,7 @@ class UtilChecker(Tk, WindowMixin):
 
         self.widgets: Dict[str, ttk.Widget] = {}
 
-        self.size: Tuple[int] = 400, 400
+        self.size: Tuple[int, int] = (400, 400)
         self.resizable(False, False)
 
         self.all_checked = False
