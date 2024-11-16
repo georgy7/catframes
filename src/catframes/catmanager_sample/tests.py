@@ -43,7 +43,7 @@ class _TestWindowPosition(TestCase):
         self.assertTrue((x, y) == (110, 279))
         x, y = WindowMixin._calculate_coords((2240, 224), (550, 450), (900, 500), (2560, 1440))
         self.assertTrue((x, y) == (1630, 199))
-        x, y = WindowMixin._calculate_coords((912, 1147) ,(550, 450) ,(900, 500), (2560, 1440))
+        x, y = WindowMixin._calculate_coords((912, 1147), (550, 450), (900, 500), (2560, 1440))
         self.assertTrue((x, y) == (737, 850))
 
 

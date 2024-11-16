@@ -245,8 +245,8 @@ class UtilityLocator:
     ffmpeg_in_sys_path: bool
     catframes_in_sys_path: bool
 
-    ffmpeg_full_path: str
-    catframes_full_path: str
+    ffmpeg_full_path: Union[str, None]
+    catframes_full_path: Union[str, None]
 
     def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
         self.ffmpeg_in_sys_path = is_in_sys_path
@@ -257,13 +257,13 @@ class UtilityLocator:
         self.catframes_full_path = full_path
 
     # метод для поиска ffmpeg в системе
-    def find_ffmpeg(self) -> None:
+    def find_ffmpeg(self) -> Union[str, None]:
         self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
         self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.ffmpeg_in_sys_path)
         return self.ffmpeg_full_path
 
     # такой же, но для catframes
-    def find_catframes(self) -> None:
+    def find_catframes(self) -> Union[str, None]:
         self.catframes_in_sys_path = self.find_in_sys_path('catframes')
         self.catframes_full_path = self.find_full_path('catframes', self.catframes_in_sys_path)
         return self.catframes_full_path

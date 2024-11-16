@@ -423,8 +423,8 @@ class UtilityLocator:
     ffmpeg_in_sys_path: bool
     catframes_in_sys_path: bool
 
-    ffmpeg_full_path: str
-    catframes_full_path: str
+    ffmpeg_full_path: Union[str, None]
+    catframes_full_path: Union[str, None]
 
     def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
         self.ffmpeg_in_sys_path = is_in_sys_path
@@ -435,13 +435,13 @@ class UtilityLocator:
         self.catframes_full_path = full_path
 
     # метод для поиска ffmpeg в системе
-    def find_ffmpeg(self) -> None:
+    def find_ffmpeg(self) -> Union[str, None]:
         self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
         self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.ffmpeg_in_sys_path)
         return self.ffmpeg_full_path
 
     # такой же, но для catframes
-    def find_catframes(self) -> None:
+    def find_catframes(self) -> Union[str, None]:
         self.catframes_in_sys_path = self.find_in_sys_path('catframes')
         self.catframes_full_path = self.find_full_path('catframes', self.catframes_in_sys_path)
         return self.catframes_full_path
@@ -606,7 +606,7 @@ class Settings:
 Задачи создаются с помощью TaskManager, который
 выдаёт им уникальные номера, и регистрирует их статусы.
 
-При создании задачи, ей передаюётся нужная конфигурация,
+При создании задачи, ей передаётся нужная конфигурация,
 которая представляет собой объект класса TaskConfig.
 Атрибутами этого объекта являются все возможные параметры,
 которые есть у консольной версии приложения catframes.
@@ -3452,17 +3452,13 @@ class SingleCheck(ttk.Frame):
     При инициализации принимает инъекцией метод
     для поиска утилиты в системе"""
 
-    def __init__(self, master: ttk.Frame, util_name: str, search_method: Callable):
+    def __init__(self, master: ttk.Frame, util_name: str, search_method: Callable[[], Union[str, None]]):
         super().__init__(master)
         self.widgets: Dict[str, ttk.Widget] = {}
-        self.util_name = util_name
-        self.search_method = search_method
+        self.util_name: str = util_name
+        self.search_method: Callable[[], Union[str, None]] = search_method
         self._init_widgets()
         self._pack_widgets()
-
-    @abstractmethod
-    def search_method() -> str:
-        ...
 
     def _init_widgets(self):
         big_font = font.Font(size=20)
@@ -3488,21 +3484,24 @@ class SingleCheck(ttk.Frame):
         self.widgets["status_image"].pack(side=RIGHT, padx=20)
         self.widgets["bottom_label"].pack(side=LEFT, padx=20)
 
-    def check(self):
-        self.found: str = self.search_method()
+    def check(self) -> bool:
+        found: Union[str, None] = self.search_method()
 
         text = "Not found"
         status_image = self.err_image
-        if self.found:
-            try:
-                text = shrink_path(self.found, 45)
-            except:
-                text = self.found
-            status_image = self.ok_image
 
+        if found:
+            try:
+                text = shrink_path(found, 45)
+            except:
+                text = found
+
+            status_image = self.ok_image
 
         self.widgets["bottom_label"].configure(text=text)
         self.widgets["status_image"].configure(image=status_image)
+
+        return bool(found)
 
 
 class UtilChecker(Tk, WindowMixin):
@@ -3526,14 +3525,16 @@ class UtilChecker(Tk, WindowMixin):
     def _init_widgets(self):
         self.main_frame = ttk.Frame(self)
 
-        def pil_search():
+        def pil_search() -> Union[str, None]:
             if PIL_FOUND_FLAG:
                 return "Installed in the current environment."
 
         self.pil = SingleCheck(self.main_frame, "Pillow", pil_search)
+
         self.ffmpeg = SingleCheck(
             self.main_frame, "FFmpeg", Settings.util_locatior.find_ffmpeg
         )
+
         self.catframes = SingleCheck(
             self.main_frame, "Catframes", Settings.util_locatior.find_catframes
         )
@@ -3545,13 +3546,10 @@ class UtilChecker(Tk, WindowMixin):
         self.catframes.pack(expand=True)
 
     def start_check(self):
-        self.pil.check()
-        self.ffmpeg.check()
-        self.catframes.check()
         self.all_checked = \
-                    self.pil.found \
-                    and self.ffmpeg.found \
-                    and self.catframes.found
+            self.pil.check() \
+            and self.ffmpeg.check() \
+            and self.catframes.check()
         if self.all_checked:
             self.save_settings()
             self.after(3000, self.destroy)
@@ -3621,7 +3619,7 @@ class _TestWindowPosition(TestCase):
         self.assertTrue((x, y) == (110, 279))
         x, y = WindowMixin._calculate_coords((2240, 224), (550, 450), (900, 500), (2560, 1440))
         self.assertTrue((x, y) == (1630, 199))
-        x, y = WindowMixin._calculate_coords((912, 1147) ,(550, 450) ,(900, 500), (2560, 1440))
+        x, y = WindowMixin._calculate_coords((912, 1147), (550, 450), (900, 500), (2560, 1440))
         self.assertTrue((x, y) == (737, 850))
 
 
