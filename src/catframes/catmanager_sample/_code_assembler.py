@@ -23,7 +23,7 @@ DIRECTORY = "src/catframes/catmanager_sample"  # путь к сборочным 
 OUTPUT_FILE = "src/catframes/catmanager.py" # путь к выходному файлу 
 
 FILE_NAMES = [  # порядок файлов для сборки
-    'templog.py',
+    "templog.py",
     'sets_utils.py',
     'task_flows.py',
     'windows_base.py',

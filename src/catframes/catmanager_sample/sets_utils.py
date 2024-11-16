@@ -29,7 +29,7 @@ class Lang:
 
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         'english': {
-            'root.title': 'CatFrames',
+            "root.title": "Catmanager",
             'root.openSets': 'Settings',
             'root.newTask': 'Create',
 
@@ -94,7 +94,7 @@ class Lang:
             'emptyFolder.theFollowingFolders': 'The following folders do not contain images.\nTherefore, they were not added.',
         },
         'русский': {
-            'root.title': 'CatFrames',
+            "root.title": "Catmanager",
             'root.openSets': 'Настройки',
             'root.newTask': 'Создать',
 
