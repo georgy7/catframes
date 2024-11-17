@@ -418,32 +418,31 @@ class Theme:
 class UtilityLocator:
     """Ищет утилиты в системе по имени"""
 
-    use_system_path: bool
+    def __init__(self):
+        self.use_ffmpeg_from_system_path: bool = False
+        self.use_catframes_from_system_path: bool = False
 
-    ffmpeg_in_sys_path: bool
-    catframes_in_sys_path: bool
-
-    ffmpeg_full_path: Union[str, None]
-    catframes_full_path: Union[str, None]
+        self.ffmpeg_full_path: Union[str, None] = None
+        self.catframes_full_path: Union[str, None] = None
 
     def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
-        self.ffmpeg_in_sys_path = is_in_sys_path
+        self.use_ffmpeg_from_system_path = is_in_sys_path
         self.ffmpeg_full_path = full_path
 
     def set_catframes(self, is_in_sys_path: bool, full_path: str):
-        self.catframes_in_sys_path = is_in_sys_path
+        self.use_catframes_from_system_path = is_in_sys_path
         self.catframes_full_path = full_path
 
     # метод для поиска ffmpeg в системе
     def find_ffmpeg(self) -> Union[str, None]:
-        self.ffmpeg_in_sys_path = self.find_in_sys_path('ffmpeg')
-        self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.ffmpeg_in_sys_path)
+        self.use_ffmpeg_from_system_path = self.find_in_sys_path('ffmpeg')
+        self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.use_ffmpeg_from_system_path)
         return self.ffmpeg_full_path
 
     # такой же, но для catframes
     def find_catframes(self) -> Union[str, None]:
-        self.catframes_in_sys_path = self.find_in_sys_path('catframes')
-        self.catframes_full_path = self.find_full_path('catframes', self.catframes_in_sys_path)
+        self.use_catframes_from_system_path = self.find_in_sys_path('catframes')
+        self.catframes_full_path = self.find_full_path('catframes', self.use_catframes_from_system_path)
         return self.catframes_full_path
 
     # ищет полный путь для утилиты
@@ -3559,13 +3558,15 @@ class UtilChecker(Tk, WindowMixin):
                 "AbsolutePath", "FFmpeg", Settings.util_locatior.ffmpeg_full_path
             )
             Settings.conf.update(
-                "SystemPath", "FFmpeg", "yes" if Settings.util_locatior.ffmpeg_in_sys_path else "no"
+                "SystemPath", "FFmpeg",
+                "yes" if Settings.util_locatior.use_ffmpeg_from_system_path else "no"
             )
             Settings.conf.update(
                 "AbsolutePath", "Catframes", Settings.util_locatior.catframes_full_path
             )
             Settings.conf.update(
-                "SystemPath", "Catframes", "yes" if Settings.util_locatior.catframes_in_sys_path else "no"
+                "SystemPath", "Catframes",
+                "yes" if Settings.util_locatior.use_catframes_from_system_path else "no"
             )
             Settings.save()
 

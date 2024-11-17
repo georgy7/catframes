@@ -118,13 +118,15 @@ class UtilChecker(Tk, WindowMixin):
                 "AbsolutePath", "FFmpeg", Settings.util_locatior.ffmpeg_full_path
             )
             Settings.conf.update(
-                "SystemPath", "FFmpeg", "yes" if Settings.util_locatior.ffmpeg_in_sys_path else "no"
+                "SystemPath", "FFmpeg",
+                "yes" if Settings.util_locatior.use_ffmpeg_from_system_path else "no"
             )
             Settings.conf.update(
                 "AbsolutePath", "Catframes", Settings.util_locatior.catframes_full_path
             )
             Settings.conf.update(
-                "SystemPath", "Catframes", "yes" if Settings.util_locatior.catframes_in_sys_path else "no"
+                "SystemPath", "Catframes",
+                "yes" if Settings.util_locatior.use_catframes_from_system_path else "no"
             )
             Settings.save()
 
