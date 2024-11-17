@@ -746,7 +746,9 @@ class TaskConfig:
                     command.append(position)
                     command.append(text)
 
-        color = self.wrap_quots(self._color, bash)
+        color = self._color
+        if for_user:
+            color = self.wrap_quots(color, bash)
         command.append(f"--margin-color={color}")
         command.append(f"--frame-rate={self._framerate}")
         command.append(f"--quality={self._quality}")
@@ -2270,7 +2272,6 @@ class ImageCanvas(Canvas):
         # если пиксель за пределами картинки, оценивается фон холста
         except Exception:
             r, g, b = self.winfo_rgb(self.color)
-            r, g, b = r / 255, g / 255, b / 255
 
         return is_dark_color(r, g, b)
 

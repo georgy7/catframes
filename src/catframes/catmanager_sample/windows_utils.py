@@ -917,7 +917,6 @@ class ImageCanvas(Canvas):
         # если пиксель за пределами картинки, оценивается фон холста
         except Exception:
             r, g, b = self.winfo_rgb(self.color)
-            r, g, b = r / 255, g / 255, b / 255
 
         return is_dark_color(r, g, b)
 
