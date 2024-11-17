@@ -79,7 +79,7 @@ class UtilChecker(Tk, WindowMixin):
         super()._default_set_up()
 
         self.check_thread = threading.Thread(target=self.start_check, daemon=True)
-        self.after(1000, self.check_thread.start)
+        self.after(20, self.check_thread.start)
 
     def _init_widgets(self):
         self.main_frame = ttk.Frame(self)

@@ -55,7 +55,7 @@ class LocalWM:
 
     # регистрация окна
     @classmethod
-    def _reg(cls, window: Tk, name: str = None) -> None:
+    def _reg(cls, window: Tk, name: str = None) -> Tk:
         if not name:
             name = window.name
         if not cls.check(name):
@@ -121,7 +121,7 @@ class WindowMixin(metaclass=MetaWindowMixin):
     Упрощает конструкторы окон."""
 
     # стандартная настройка окна, вызывается в конце конструктора
-    def _default_set_up(self):
+    def _default_set_up(self) -> None:
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
         if platform.system() == "Linux":
@@ -161,7 +161,6 @@ class WindowMixin(metaclass=MetaWindowMixin):
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-
         screen_size: tuple = (self.winfo_screenwidth(), self.winfo_screenheight())
 
         # если это не побочное окно, то размещаем по центру экрана
@@ -213,9 +212,7 @@ class WindowMixin(metaclass=MetaWindowMixin):
             x, y = self.size_max
             self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
 
-
     def _set_size(self):
-
         x, y = self.size
         self.geometry(f"{x}x{y}")
         self.minsize(x, y)

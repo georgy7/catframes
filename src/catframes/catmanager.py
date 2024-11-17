@@ -15,8 +15,6 @@ import shutil
 import base64
 import configparser
 
-# import requests
-
 import tempfile
 import logging
 from logging.handlers import WatchedFileHandler
@@ -27,6 +25,7 @@ from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from unittest import TestCase
 from abc import ABC, ABCMeta, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
+
 try:
     from PIL import Image, ImageTk
     PIL_FOUND_FLAG = True
@@ -450,31 +449,12 @@ class UtilityLocator:
     @staticmethod
     def find_full_path(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
         if is_in_sys_path:
-            return UtilityLocator.find_by_console(utility_name)
+            return shutil.which(utility_name)
 
         paths_to_check = UtilityLocator._get_paths(utility_name)
         for path in paths_to_check:
             if os.path.isfile(path):
                 return path
-
-    # ниходит полный путь утилиты при помощи консоли,
-    # если она есть в системном path
-    @staticmethod
-    def find_by_console(utility_name) -> list:
-        command = "where" if platform.system()== "Windows" else "which"
-        result = subprocess.run(
-            [command, utility_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        paths = result.stdout.decode()
-        paths = map(lambda x: x.strip('\r '), paths.split('\n'))
-
-        if platform.system() == "Windows":
-            paths = filter(lambda x: x.endswith('.exe'), paths)
-
-        paths = list(paths)
-        return paths[0] if paths else None
 
     # возвращает пути, по которым может быть утилита, исходя из системы
     @staticmethod
@@ -650,7 +630,7 @@ class TaskConfig:
         self._filepath: str = ""
         self._rewrite: bool = False
 
-    def set_dirs(self, dirs: List[str]) -> list:
+    def set_dirs(self, dirs: List[str]) -> None:
         self._dirs = dirs
 
     def set_overlays(self, overlays_texts: List[str]):
@@ -1160,7 +1140,7 @@ class LocalWM:
 
     # регистрация окна
     @classmethod
-    def _reg(cls, window: Tk, name: str = None) -> None:
+    def _reg(cls, window: Tk, name: str = None) -> Tk:
         if not name:
             name = window.name
         if not cls.check(name):
@@ -1226,7 +1206,7 @@ class WindowMixin(metaclass=MetaWindowMixin):
     Упрощает конструкторы окон."""
 
     # стандартная настройка окна, вызывается в конце конструктора
-    def _default_set_up(self):
+    def _default_set_up(self) -> None:
         self.protocol("WM_DELETE_WINDOW", self.close)  # что выполнять при закрытии
 
         if platform.system() == "Linux":
@@ -1266,7 +1246,6 @@ class WindowMixin(metaclass=MetaWindowMixin):
 
     # размещение окна в центре экрана (или родительского окна)
     def _to_center(self) -> None:
-
         screen_size: tuple = (self.winfo_screenwidth(), self.winfo_screenheight())
 
         # если это не побочное окно, то размещаем по центру экрана
@@ -1318,9 +1297,7 @@ class WindowMixin(metaclass=MetaWindowMixin):
             x, y = self.size_max
             self.size_max = int(x*LINUX_SIZING), int(y*LINUX_SIZING)
 
-
     def _set_size(self):
-
         x, y = self.size
         self.geometry(f"{x}x{y}")
         self.minsize(x, y)
@@ -1541,7 +1518,7 @@ class TaskBar(ttk.Frame):
         self.progress: float = 0
         self.image: Image
         self.length: int = 520
-        self.error: str = None
+        self.error: Union[str, None] = None
 
         # достаёт ручку для открытия окна просмотра
         self.open_view: Callable = kwargs.get("view")
@@ -1682,7 +1659,7 @@ class TaskBar(ttk.Frame):
         self.widgets["btCancel"].pack(side=BOTTOM, expand=True, fill=X)
         self.right_frame.pack(side=LEFT)
 
-        self.pack(pady=[10, 0], fill=X, expand=True)
+        self.pack(pady=(10, 0), fill=X, expand=True)
 
     # изменение бара на "завершённое" состояние
     def finish(self):
@@ -2178,7 +2155,7 @@ class ImageCanvas(Canvas):
 
     def __init__(
         self,
-        master: Tk,
+        master: Misc,
         veiw_mode: bool,
         overlays: Optional[List[str]] = None,
         background: str = DEFAULT_CANVAS_COLOR,
@@ -3534,7 +3511,7 @@ class UtilChecker(Tk, WindowMixin):
         super()._default_set_up()
 
         self.check_thread = threading.Thread(target=self.start_check, daemon=True)
-        self.after(1000, self.check_thread.start)
+        self.after(20, self.check_thread.start)
 
     def _init_widgets(self):
         self.main_frame = ttk.Frame(self)

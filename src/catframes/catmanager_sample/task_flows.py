@@ -53,7 +53,7 @@ class TaskConfig:
         self._filepath: str = ""
         self._rewrite: bool = False
 
-    def set_dirs(self, dirs: List[str]) -> list:
+    def set_dirs(self, dirs: List[str]) -> None:
         self._dirs = dirs
 
     def set_overlays(self, overlays_texts: List[str]):

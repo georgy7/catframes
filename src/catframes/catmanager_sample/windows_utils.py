@@ -165,7 +165,7 @@ class TaskBar(ttk.Frame):
         self.progress: float = 0
         self.image: Image
         self.length: int = 520
-        self.error: str = None
+        self.error: Union[str, None] = None
 
         # достаёт ручку для открытия окна просмотра
         self.open_view: Callable = kwargs.get("view")
@@ -306,7 +306,7 @@ class TaskBar(ttk.Frame):
         self.widgets["btCancel"].pack(side=BOTTOM, expand=True, fill=X)
         self.right_frame.pack(side=LEFT)
 
-        self.pack(pady=[10, 0], fill=X, expand=True)
+        self.pack(pady=(10, 0), fill=X, expand=True)
 
     # изменение бара на "завершённое" состояние
     def finish(self):
@@ -802,7 +802,7 @@ class ImageCanvas(Canvas):
 
     def __init__(
         self,
-        master: Tk,
+        master: Misc,
         veiw_mode: bool,
         overlays: Optional[List[str]] = None,
         background: str = DEFAULT_CANVAS_COLOR,

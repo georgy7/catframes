@@ -272,31 +272,12 @@ class UtilityLocator:
     @staticmethod
     def find_full_path(utility_name: str, is_in_sys_path: bool) -> Optional[str]:
         if is_in_sys_path:
-            return UtilityLocator.find_by_console(utility_name)
+            return shutil.which(utility_name)
 
         paths_to_check = UtilityLocator._get_paths(utility_name)
         for path in paths_to_check:
             if os.path.isfile(path):
                 return path
-
-    # ниходит полный путь утилиты при помощи консоли,
-    # если она есть в системном path
-    @staticmethod
-    def find_by_console(utility_name) -> list:
-        command = "where" if platform.system()== "Windows" else "which"
-        result = subprocess.run(
-            [command, utility_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        paths = result.stdout.decode()
-        paths = map(lambda x: x.strip('\r '), paths.split('\n'))
-
-        if platform.system() == "Windows":
-            paths = filter(lambda x: x.endswith('.exe'), paths)
-
-        paths = list(paths)
-        return paths[0] if paths else None
 
     # возвращает пути, по которым может быть утилита, исходя из системы
     @staticmethod

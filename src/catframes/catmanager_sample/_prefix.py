@@ -15,8 +15,6 @@ import shutil
 import base64
 import configparser
 
-# import requests
-
 import tempfile
 import logging
 from logging.handlers import WatchedFileHandler
@@ -27,6 +25,7 @@ from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from unittest import TestCase
 from abc import ABC, ABCMeta, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
+
 try:
     from PIL import Image, ImageTk
     PIL_FOUND_FLAG = True
