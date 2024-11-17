@@ -93,17 +93,32 @@ class LocalWM:
             cls._all_windows.pop("warn")
 
 
-class WindowMixin(ABC):
+class MetaWindowMixin(ABCMeta):
+    @staticmethod
+    def check(a_field, a_type):
+        if not isinstance(a_field, a_type):
+            raise NotImplementedError("Missing attribute.")
+
+    def __call__(cls, *args, **kwargs):
+        instance = ABCMeta.__call__(cls, *args, **kwargs)
+
+        cls.check(instance.title, Callable)
+        cls.check(instance.protocol, Callable)
+        cls.check(instance.destroy, Callable)
+
+        cls.check(instance.size, tuple)
+        cls.check(instance.size[0], int)
+        cls.check(instance.size[1], int)
+
+        cls.check(instance.name, str)
+        cls.check(instance.widgets, dict)
+
+        return instance
+
+
+class WindowMixin(metaclass=MetaWindowMixin):
     """Абстрактный класс.
     Упрощает конструкторы окон."""
-
-    title: Tk.wm_title  # эти атрибуты и методы объекта
-    protocol: Tk.wm_protocol  # появятся автоматически при
-    destroy: Tk.destroy  # наследовании от Tk или Toplevel
-
-    size: Tuple[int, int]  # размеры (ширина, высота) окна
-    name: str  # имя окна для словаря всех окон
-    widgets: Dict[str, ttk.Widget]  # словарь виджетов окна
 
     # стандартная настройка окна, вызывается в конце конструктора
     def _default_set_up(self):

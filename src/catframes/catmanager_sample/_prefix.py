@@ -25,7 +25,7 @@ from pathlib import Path
 from tkinter import *
 from tkinter import ttk, font, filedialog, colorchooser, scrolledtext
 from unittest import TestCase
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from typing import Optional, Tuple, Dict, List, Callable, Union
 try:
     from PIL import Image, ImageTk
