@@ -1,4 +1,5 @@
 from _prefix import *
+from templog import has_console, compiled
 
 
 """
@@ -247,6 +248,8 @@ class UtilityLocator:
         self.ffmpeg_full_path: Union[str, None] = None
         self.catframes_full_path: Union[str, None] = None
 
+        self.catframes_command_memo: Union[List[str], None] = None
+
     def set_ffmpeg(self, is_in_sys_path: bool, full_path: str):
         self.use_ffmpeg_from_system_path = is_in_sys_path
         self.ffmpeg_full_path = full_path
@@ -255,17 +258,71 @@ class UtilityLocator:
         self.use_catframes_from_system_path = is_in_sys_path
         self.catframes_full_path = full_path
 
-    # метод для поиска ffmpeg в системе
     def find_ffmpeg(self) -> Union[str, None]:
         self.use_ffmpeg_from_system_path = self.find_in_sys_path('ffmpeg')
         self.ffmpeg_full_path = self.find_full_path('ffmpeg', self.use_ffmpeg_from_system_path)
         return self.ffmpeg_full_path
 
-    # такой же, но для catframes
+    def find_catframes_command(self) -> List[str]:
+        if self.catframes_command_memo:
+            return self.catframes_command_memo.copy()
+
+        logger = logging.getLogger('catmanager')
+        windows = (platform.system() == 'Windows')
+
+        ran_from_sources: bool = ('main.py' == Path(sys.argv[0]).name)
+
+        if ran_from_sources:
+            catframes_py: Path = Path(sys.argv[0]).resolve().parent.parent / 'catframes.py'
+        else:
+            catframes_py: Path = Path(sys.argv[0]).resolve().parent / 'catframes.py'
+
+        catframes_exe: Path = Path(sys.argv[0]).resolve().parent / 'catframes.exe'
+
+        # Здесь не используется sys.executable напрямую,
+        # поскольку там может быть pythonw.exe.
+        python_exe: Path = Path(sys.executable).resolve().parent / 'python.exe'
+
+        logger.debug(f'\n               windows: {windows}')
+        logger.debug(f'              compiled: {compiled()}')
+        logger.debug(f'      ran from sources: {ran_from_sources}')
+        logger.debug(f'          catframes_py: {catframes_py}')
+        logger.debug(f'         catframes_exe: {catframes_exe}')
+        logger.debug(f'            python_exe: {python_exe}\n')
+
+        logger.debug(f'   catframes_py exists: {catframes_py.exists()}')
+        logger.debug(f'  catframes_exe exists: {catframes_exe.exists()}')
+        logger.debug(f'     python_exe exists: {python_exe.exists()}\n')
+
+        if windows and not compiled() and catframes_py.exists():
+            logger.info('Using local catframes.py (Windows)')
+            logger.info(f'Python executable: {python_exe}')
+            command = [str(python_exe), str(catframes_py)]
+        elif windows and compiled() and catframes_exe.exists():
+            logger.info('Using local catframes.exe')
+            command = [str(catframes_exe)]
+        elif not compiled() and catframes_py.exists() and shutil.which('python'):
+            logger.info('Using local catframes.py (POSIX)')
+            logger.info(f'Python executable: python')
+            command = ['python', str(catframes_py)]
+        elif not compiled() and catframes_py.exists() and shutil.which('python3'):
+            logger.info('Using local catframes.py (POSIX)')
+            logger.info(f'Python executable: python3')
+            command = ['python3', str(catframes_py)]
+        else:
+            logger.info('Using Catframes from PATH.')
+            command = ["catframes"]
+
+        self.catframes_command_memo = command
+        return command.copy()
+
     def find_catframes(self) -> Union[str, None]:
-        self.use_catframes_from_system_path = self.find_in_sys_path('catframes')
-        self.catframes_full_path = self.find_full_path('catframes', self.use_catframes_from_system_path)
-        return self.catframes_full_path
+        command: List[str] = self.find_catframes_command()
+
+        if (["catframes"] == command) and not shutil.which(command[0]):
+            return None
+
+        return " ".join(command)
 
     # ищет полный путь для утилиты
     # если она есть в path, то ищет консолью
@@ -351,11 +408,9 @@ class IniConfig:
         }
         self.config["AbsolutePath"] = {
             "FFmpeg": "",
-            "Catframes": "",
         }
         self.config["SystemPath"] = {
             "FFmpeg": "",
-            "Catframes": "",
         }
 
     # редактирование ключа в секции конфиг файла
@@ -390,8 +445,4 @@ class Settings:
         cls.util_locatior.set_ffmpeg(
             is_in_sys_path=cls.conf.config["SystemPath"]["FFmpeg"]=='yes',
             full_path=cls.conf.config["AbsolutePath"]["FFmpeg"]
-        )
-        cls.util_locatior.set_catframes(
-            is_in_sys_path=cls.conf.config["SystemPath"]["Catframes"]=='yes',
-            full_path=cls.conf.config["AbsolutePath"]["Catframes"]
         )

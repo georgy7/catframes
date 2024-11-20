@@ -180,7 +180,7 @@ class SettingsWindow(Toplevel, WindowMixin):
                 elif my_system == 'Darwin':
                     subprocess.run(['open', '--', logs_path])
 
-        self.widgets['btOpenLogs'] = ttk.Button(self.main_frame, command=open_logs)
+        self.widgets['btOpenLogs'] = ttk.Button(self.content_frame, command=open_logs)
 
         # виджет и комбобокс тем
         self.widgets["lbTheme"] = ttk.Label(self.content_frame)
@@ -220,7 +220,9 @@ class SettingsWindow(Toplevel, WindowMixin):
         self.widgets["lbTheme"].grid(row=1, column=0, sticky="e", padx=5, pady=5)
         self.widgets["_cmbTheme"].grid(row=1, column=1, sticky="ew", padx=5, pady=5)
         self.widgets["_cmbTheme"].current(newindex=Settings.theme.current_index)
-        self.widgets['btOpenLogs'].grid(row=1, column=0, sticky='e', padx=5, pady=10)
+
+        self.widgets['btOpenLogs'].grid(row=2, column=0, sticky='e', padx=5, pady=10)
+        self.geometry("")
 
 
 class NewTaskWindow(Toplevel, WindowMixin):

@@ -111,7 +111,7 @@ class UtilChecker(Tk, WindowMixin):
             and self.catframes.check()
         if self.all_checked:
             self.save_settings()
-            self.after(3000, self.destroy)
+            self.after(100, self.destroy)
 
     def save_settings(self):
             Settings.conf.update(
@@ -120,13 +120,6 @@ class UtilChecker(Tk, WindowMixin):
             Settings.conf.update(
                 "SystemPath", "FFmpeg",
                 "yes" if Settings.util_locatior.use_ffmpeg_from_system_path else "no"
-            )
-            Settings.conf.update(
-                "AbsolutePath", "Catframes", Settings.util_locatior.catframes_full_path
-            )
-            Settings.conf.update(
-                "SystemPath", "Catframes",
-                "yes" if Settings.util_locatior.use_catframes_from_system_path else "no"
             )
             Settings.save()
 

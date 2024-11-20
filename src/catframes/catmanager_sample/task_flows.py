@@ -1,5 +1,6 @@
 from _prefix import *
 from templog import has_console, compiled
+from sets_utils import Settings
 
 
 """
@@ -110,55 +111,11 @@ class TaskConfig:
     def convert_to_command(
         self, for_user: bool = False, bash: bool = True
     ) -> List[str]:
-        logger = logging.getLogger('catmanager')
 
         if for_user:
             command = ['catframes']
         else:
-            windows = (platform.system() == 'Windows')
-
-            ran_from_sources: bool = ('main.py' == Path(sys.argv[0]).name)
-
-            if ran_from_sources:
-                catframes_py: Path = Path(sys.argv[0]).resolve().parent.parent / 'catframes.py'
-            else:
-                catframes_py: Path = Path(sys.argv[0]).resolve().parent / 'catframes.py'
-
-            catframes_exe: Path = Path(sys.argv[0]).resolve().parent / 'catframes.exe'
-
-            # Здесь не используется sys.executable напрямую,
-            # поскольку там может быть pythonw.exe.
-            python_exe: Path = Path(sys.executable).resolve().parent / 'python.exe'
-
-            logger.debug(f'\n               windows: {windows}')
-            logger.debug(f'              compiled: {compiled()}')
-            logger.debug(f'      ran from sources: {ran_from_sources}')
-            logger.debug(f'          catframes_py: {catframes_py}')
-            logger.debug(f'         catframes_exe: {catframes_exe}')
-            logger.debug(f'            python_exe: {python_exe}\n')
-
-            logger.debug(f'   catframes_py exists: {catframes_py.exists()}')
-            logger.debug(f'  catframes_exe exists: {catframes_exe.exists()}')
-            logger.debug(f'     python_exe exists: {python_exe.exists()}\n')
-
-            if windows and not compiled() and catframes_py.exists():
-                logger.info('Using local catframes.py (Windows)')
-                logger.info(f'Python executable: {python_exe}')
-                command = [str(python_exe), str(catframes_py)]
-            elif windows and compiled() and catframes_exe.exists():
-                logger.info('Using local catframes.exe')
-                command = [str(catframes_exe)]
-            elif not compiled() and catframes_py.exists() and shutil.which('python'):
-                logger.info('Using local catframes.py (POSIX)')
-                logger.info(f'Python executable: python')
-                command = ['python', str(catframes_py)]
-            elif not compiled() and catframes_py.exists() and shutil.which('python3'):
-                logger.info('Using local catframes.py (POSIX)')
-                logger.info(f'Python executable: python3')
-                command = ['python3', str(catframes_py)]
-            else:
-                logger.info('Using Catframes from PATH.')
-                command = ["catframes"]
+            command = Settings.util_locatior.find_catframes_command()
 
         for position, text in self._overlays.items():
             if text:
