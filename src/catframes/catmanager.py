@@ -13,6 +13,7 @@ import re
 import copy
 import shutil
 import base64
+import webbrowser
 import configparser
 
 import tempfile
@@ -36,6 +37,12 @@ except:
 #  Если где-то не хватает импорта, не следует добавлять его в catmanager.py,
 #  этот файл будет пересобран утилитой _code_assembler.py, и изменения удалятся.
 #  Недостающие импорты следует указывать в _prefix.py, именно они пойдут в сборку.
+
+
+# данные для окна "о программе"
+WEBSITE_URL = "https://itustinov.ru/"
+EMAIL_ADRESS = "inbox@itustinov.ru"
+RELEASE_VERSION = "2024.12.0"
 
 
 # коэффициент масштабирования окна в линуксе
@@ -67,6 +74,38 @@ iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6
 DwU7nLh1ywAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyNC0wNy0yMFQxNTowNTo1OCswMDowMNM5N1wAAAAldEVYdGRhdGU6bW9k
 aWZ5ADIwMjQtMDctMjBUMTU6MDU6NTgrMDA6MDCiZI/gAAAAVElEQVQ4T2OgFmAEEf8XMPwH87AAxgSIGkKAEZ8hMECMYRCD
 tDSgXPIAo9kNRsb/pzQIuogYwASlKQajBhEGowYRBoPPIEgxQmF+A2VaKJNSwMAAALsJEQz8R0D5AAAAAElFTkSuQmCC
+"""
+
+LETTER_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+DsAAAA7AAWrWiQkAAAD5SURBVDhPY/wPBAxUABCDpihCuWSCnPsMTCtDpaE88gHIDGYOFsaG31+YGXQUmKHCpIGVB38xbLn1
+hYFpcTM/mAESIBXADAGZwQQSIMcwZENAAGwQCJBiGLohIAA3CASIMQybISCAYhAI4DMMlyEggGEQCGAzDJ8hIIDVoEXzfzNU
+RHLDDYMZAhIDyWEDjP83yqJkEZBCY3NGBm0tFjA/tvYjmIa55Oq1PwxnT/5niEtkBfNhAMUgdENwAWyGwb1GrCEgAFIDUovs
+TbBBpBgCA+iGMSv94Gog1RAYEBNlYmBh/8+wY8tfaDGySQ4qRSbwewQ1iGLAwAAALCyj1wuNXK0AAAAASUVORK5CYII=
+"""
+
+PLANET_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+Dr0AAA69AUf7kK0AAAFNSURBVDhPrZS/agJBEMbntk2RGBANJIIEIqQ8lTxNECxi5XtobXVpgo/gQ6SIyNUqBMHGQCAmhaTz
+9JvbMeOSFQ/8wd3ODbffzp/dDZIt5PA8/aR4saZobh2WVokovDL0dJe3nj/2hCAQfYdsx5MRjz6ih31BY8dMImGlxv9ijsAR
+wdEZv7Bj9tPg0QdENK2LmCPjiCSSY0VuL1e7pztuss9IeFkief86s1YKNAy6k4XlR9taKdX7V+5wEL5dc9d8BS6f961FlCv2
+eIQYbKQmBOVBN/GlBRGZ7EPEzDEiuriCpCj12u0jH3oykG8sosUMtv0h3A5pkA1qW/8dkcHZQRq6qAA/YUU8/4np5kCDd3Z1
+eGNdae66brKA7hKEtVDyWEhrhG0uuF1ymwERqQ3A4QX8xlnRYu55EkRExPUN4L1GfCkC+N1r5EQXG9EGW5jIh+ILV3MAAAAA
+SUVORK5CYII=
+"""
+
+GEAR_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+DrwAAA68AZW8ckkAAACzSURBVDhPrZBRDsMgDENh2r0RJ+/6UIMCdYCPPamigHES5+smLcg5t3UjS59nlWBSSmmfGUYMRoh3
+D0Dpvs/aLqhs/2B78F15nY3cM/JGp9Rau1EfjQMuTvEmsAwbeHBSoI2mMgFfVY1uBdDgcKls5tYhyhHtdrRT/jcaRm13sxKv
+isB2NAxmE0U3ioKMQGuRgOyItm0kT3QOr4zAjnyXPpNZB0NHXPjLCKUbOlKo6m9S+gE1vY8LgV3MEwAAAABJRU5ErkJggg==
+"""
+
+INFO_ICON_BASE64 = """
+iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAA
+DrwAAA68AZW8ckkAAACESURBVDhPzZNBDoAgDARbP054udqENQJttwcPTtKgESZrAT1vxEFVx9NMMF1ckUlaa+Ntpvfuyo4x
+PmQSw755aTfRiiWwYqQi/IYVk20iLIKkipsIKQDrm0F7tEqipKmoKjFoIsB6VhYxPhOFdw3gFJNpXFSltP1IlVHa/uiivvlb
+s0Uu1ZBWEszB0ZoAAAAASUVORK5CYII=
 """
 
 PALETTE_ICON_BASE64 = """
@@ -260,6 +299,24 @@ class Lang:
             "noti.lbWarn": "Invalid port range!",
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
+            "about.title": "About application",
+            "about.appTab": "About App",
+            "about.storyTab": "Story",
+            "about.btMail": "Email",
+            "about.btSite": "Website",
+            "about.txtName": "Name",
+            "about.txtNameContent": f"Catmanager ({platform.machine()})",
+            "about.txtDesc": "Description",
+            "about.txtDescContent": "Graphical interface for Catframes",
+            "about.txtLicense": "License",
+            "about.txtLicenseContent": "zlib (libpng)",
+            "about.txtVersion": "Version",
+            "about.txtVersionContent": RELEASE_VERSION,
+            "about.txtAbout": (
+                "Catframes is a program for combining frames into videos. \n"
+                "It chooses the correct resolution to avoid losing the clarity of most frames, "
+                "and does not distort the proportions while zooming."
+            ),
             "checker.title": "Necessary modules check",
 
             "emptyFolder.title": "Empty folder",
@@ -323,10 +380,28 @@ class Lang:
             "noti.lbWarn": "Неверный диапазон портов!",
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
+            "about.title": "О программе",
+            "about.appTab": "Программа",
+            "about.storyTab": "История",
+            "about.btMail": "Эл-почта",
+            "about.btSite": "Веб-сайт",
+            "about.txtName": "Название",
+            "about.txtNameContent": f"Catmanager ({platform.machine()})",
+            "about.txtDesc": "Описание",
+            "about.txtDescContent": "Графический интерфейс для Catframes",
+            "about.txtLicense": "Лицензия",
+            "about.txtLicenseContent": "zlib (libpng)",
+            "about.txtVersion": "Версия",
+            "about.txtVersionContent": RELEASE_VERSION,
+            "about.txtAbout": (
+                "Catframes - это программа для объединения кадров в видеоролики. \n"
+                "Она сама выбирает разрешение, чтобы избежать потери чёткости большинства кадров, "
+                "и не искажает пропорции при масштабировании."
+            ),
             "checker.title": "Проверка необходимых модулей",
 
             "emptyFolder.title": "Пустая директория",
-            "emptyFolder.theFollowingFolders": "Следующие папки не были добавлены, т.к. не содержат изображений.",
+            "emptyFolder.theFollowingFolders": "Следующие папки не были добавлены, т.к. не содержат изображений.",
         },
     }
 
@@ -2610,6 +2685,10 @@ class RootWindow(Tk, WindowMixin):
         def open_new_task():
             LocalWM.open(NewTaskWindow, "task").focus()
 
+        # открытие окна "о программе" (и/или переключение на него)
+        def open_about():
+            LocalWM.open(AboutWindow, "about").focus()
+
         # открытие окна настроек (и/или переключение на него)
         def open_settings():
             LocalWM.open(SettingsWindow, "sets").focus()
@@ -2621,7 +2700,13 @@ class RootWindow(Tk, WindowMixin):
 
         # создание виджетов, привязывание функций
         self.widgets["newTask"] = ttk.Button(upperBar, command=open_new_task)
-        self.widgets["openSets"] = ttk.Button(upperBar, command=open_settings)
+        
+        self.gear_icon = PhotoImage(data=base64.b64decode(GEAR_ICON_BASE64))
+        self.widgets["_openSets"] = ttk.Button(upperBar, image=self.gear_icon, command=open_settings)
+
+        self.info_icon = PhotoImage(data=base64.b64decode(INFO_ICON_BASE64))
+        self.widgets["_openAbout"] = ttk.Button(upperBar, image=self.info_icon, command=open_about)
+
 
         logger.info('Root window started.')
 
@@ -2631,7 +2716,8 @@ class RootWindow(Tk, WindowMixin):
         self.task_space.pack(fill=BOTH, expand=True)
 
         self.widgets["newTask"].pack(side=LEFT, padx=10, pady=10)
-        self.widgets["openSets"].pack(side=RIGHT, padx=10, pady=10)
+        self.widgets["_openAbout"].pack(side=RIGHT, padx=10, pady=10)
+        self.widgets["_openSets"].pack(side=RIGHT, padx=0, pady=10)
 
     # добавление строки задачи
     def add_task_bar(self, task: Task, **params) -> Callable:
@@ -3439,6 +3525,156 @@ class NotifyWindow(Toplevel, WindowMixin):
         self.widgets["_btOk"].pack(anchor="w", padx=5)
         self.frame.pack(side=BOTTOM, pady=10)
 
+
+class AboutWindow(Toplevel, WindowMixin):
+    """Окно информации о программе"""
+
+    def __init__(self, root: RootWindow):
+        super().__init__(master=root)
+        self.name: str = "about"
+
+        self.widgets: Dict[str, ttk.Widget] = {}
+        self.texts: Dict[str, Text] = {}
+
+        self.size: Tuple[int, int] = 570, 300
+        self.resizable(True, True)
+
+        super()._default_set_up()
+
+    # создание и настройка виджетов
+    def _init_widgets(self):
+        smaller_font = font.Font(size=11)
+
+        self.main_frame = ttk.Frame(self)
+
+        # виджет, позволяющий создавать вкладки
+        self.notebook = ttk.Notebook(self.main_frame)
+
+        self.app_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.app_tab, text="Приложение")
+
+        self.app_bottom_field = ttk.Frame(self.app_tab)
+        self.app_top_field = ttk.Frame(self.app_tab)
+        self.app_left_table = ttk.Frame(self.app_top_field, relief=SOLID, borderwidth=1)
+
+        self.texts["_txtTableLeft"] = Text(
+            self.app_left_table,
+            font=smaller_font,
+            wrap=WORD,
+            height=7,
+            width=10,
+            border=0,
+            padx=8,
+            pady=8
+        )
+        self.texts["_txtTableRight"] = Text(
+            self.app_left_table,
+            font=smaller_font,
+            wrap=WORD,
+            height=7,
+            width=20,
+            border=0,
+            padx=5,
+            pady=8
+        )
+
+        self.app_right_field = ttk.Frame(self.app_top_field)
+
+        self.letter_image = base64_to_tk(LETTER_ICON_BASE64)
+        self.widgets["_btMail"] = ttk.Button(
+            self.app_right_field,
+            image=self.letter_image,
+            compound="left",
+            command=lambda: webbrowser.open(EMAIL_ADRESS)
+        )
+        self.planet_image = base64_to_tk(PLANET_ICON_BASE64)
+        self.widgets["_btSite"] = ttk.Button(
+            self.app_right_field,
+            image=self.planet_image,
+            compound="left",
+            command=lambda: webbrowser.open(WEBSITE_URL)
+        )
+        self.app_bottom_container = ttk.Frame(self.app_bottom_field, relief=SOLID, borderwidth=1)
+        self.texts["_txtAbout"] = Text(
+            self.app_bottom_container, 
+            font=smaller_font,
+            wrap=WORD,
+            height=200,
+            width=10,
+            border=0,
+            padx=15,
+            pady=15
+        )
+
+        self.story_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.story_tab, text="История")
+
+        self.story_container = ttk.Frame(self.story_tab, relief=SOLID, borderwidth=1)
+        self.texts["txtChangeLog"] = Text(self.story_container, wrap=WORD, height=200, width=200, border=0)
+
+
+    # расположение виджетов
+    def _pack_widgets(self):
+        self.main_frame.pack(expand=True, fill=BOTH)
+        self.notebook.pack(expand=True, fill=BOTH, padx=10, pady=10)
+        self.story_container.pack(expand=True, fill=BOTH, padx=10, pady=10)
+        self.texts["txtChangeLog"].pack(expand=True, fill=BOTH)
+        self._pack_app_tab()
+
+
+    # упаковка виджетов вкладки "Приложение"
+    def _pack_app_tab(self):
+        self.app_left_table.pack(expand=True, fill=BOTH, side=LEFT, padx=10, pady=10, anchor=W)
+        self.app_top_field.pack(expand=True, fill=BOTH, side=TOP)
+
+        self.texts["_txtTableLeft"].pack(side=LEFT, padx=(0, 1))
+        self.texts["_txtTableRight"].pack(side=RIGHT, expand=True, fill=X)
+
+        self.app_right_field.pack(side=TOP, anchor=W, pady=5, padx=(0, 7))
+        self.widgets["_btMail"].pack(side=TOP, pady=5)
+        self.widgets["_btSite"].pack(side=TOP, pady=5)
+
+        self.app_bottom_field.pack(side=LEFT, expand=True, fill=BOTH, padx=10, pady=(0, 10))
+        self.app_bottom_container.pack(expand=True, fill=BOTH)
+        self.texts["_txtAbout"].pack(expand=True, fill=BOTH)
+
+
+    def update_texts(self) -> None:
+        super().update_texts()
+
+        def name_to_text(text_name):
+            return Settings.lang.read(f"{self.name}.{text_name}")
+
+        def get_complex_text(text_names: Tuple) -> str:
+            texts = map(name_to_text, text_names)
+            return "\n".join(texts)
+
+        def set_text_and_lock(widget: Widget, text: str):
+            widget.config(state=NORMAL)
+            widget.delete("1.0", END)
+            widget.insert("1.0", text)
+            widget.config(state=DISABLED)
+
+        # обёртывает текст в пробелы,
+        # чтобы он занимал одинаковое расстояние на кнопке.  
+        def wrap_spaces(name: str) -> str:
+            text = name_to_text(name)
+            spaces = " " * (8 - len(text))
+            return spaces + text + spaces
+
+        self.widgets["_btMail"].configure(text=wrap_spaces("btMail"))
+        self.widgets["_btSite"].configure(text=wrap_spaces("btSite"))
+
+        self.notebook.add(self.app_tab, text=name_to_text("appTab"))
+        self.notebook.add(self.story_tab, text=name_to_text("storyTab"))
+
+        left_text = get_complex_text(("txtName", "txtDesc", "txtVersion", "txtLicense"))
+        set_text_and_lock(self.texts["_txtTableLeft"], left_text)
+
+        right_text = get_complex_text(("txtNameContent", "txtDescContent", "txtVersionContent", "txtLicenseContent"))
+        set_text_and_lock(self.texts["_txtTableRight"], right_text)
+
+        set_text_and_lock(self.texts["_txtAbout"], name_to_text("txtAbout"))
 
 
 

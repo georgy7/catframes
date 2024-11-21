@@ -84,6 +84,24 @@ class Lang:
             "noti.lbWarn": "Invalid port range!",
             "noti.lbText": "The acceptable range is from 10240 to 65025",
             "noti.lbText2": "The number of ports is at least 100",
+            "about.title": "About application",
+            "about.appTab": "About App",
+            "about.storyTab": "Story",
+            "about.btMail": "Email",
+            "about.btSite": "Website",
+            "about.txtName": "Name",
+            "about.txtNameContent": f"Catmanager ({platform.machine()})",
+            "about.txtDesc": "Description",
+            "about.txtDescContent": "Graphical interface for Catframes",
+            "about.txtLicense": "License",
+            "about.txtLicenseContent": "zlib (libpng)",
+            "about.txtVersion": "Version",
+            "about.txtVersionContent": RELEASE_VERSION,
+            "about.txtAbout": (
+                "Catframes is a program for combining frames into videos. \n"
+                "It chooses the correct resolution to avoid losing the clarity of most frames, "
+                "and does not distort the proportions while zooming."
+            ),
             "checker.title": "Necessary modules check",
 
             "emptyFolder.title": "Empty folder",
@@ -147,10 +165,28 @@ class Lang:
             "noti.lbWarn": "Неверный диапазон портов!",
             "noti.lbText": "Допустимы значения от 10240 до 65025",
             "noti.lbText2": "Количество портов не менее 100",
+            "about.title": "О программе",
+            "about.appTab": "Программа",
+            "about.storyTab": "История",
+            "about.btMail": "Эл-почта",
+            "about.btSite": "Веб-сайт",
+            "about.txtName": "Название",
+            "about.txtNameContent": f"Catmanager ({platform.machine()})",
+            "about.txtDesc": "Описание",
+            "about.txtDescContent": "Графический интерфейс для Catframes",
+            "about.txtLicense": "Лицензия",
+            "about.txtLicenseContent": "zlib (libpng)",
+            "about.txtVersion": "Версия",
+            "about.txtVersionContent": RELEASE_VERSION,
+            "about.txtAbout": (
+                "Catframes - это программа для объединения кадров в видеоролики. \n"
+                "Она сама выбирает разрешение, чтобы избежать потери чёткости большинства кадров, "
+                "и не искажает пропорции при масштабировании."
+            ),
             "checker.title": "Проверка необходимых модулей",
 
             "emptyFolder.title": "Пустая директория",
-            "emptyFolder.theFollowingFolders": "Следующие папки не были добавлены, т.к. не содержат изображений.",
+            "emptyFolder.theFollowingFolders": "Следующие папки не были добавлены, т.к. не содержат изображений.",
         },
     }
 
