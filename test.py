@@ -7,6 +7,7 @@ from subprocess import run, CompletedProcess
 from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Union, List
+import shutil
 
 
 @dataclass
@@ -40,6 +41,15 @@ def is_command_ok(args: List[str]) -> bool:
     return 0 == r.returncode
 
 
+def is_types_ok(folder: str) -> bool:
+    if not shutil.which('mypy'):
+        print('mypy not found\n')
+        return False
+    return is_command_ok([
+        'mypy', '--config-file', os.path.join(folder, 'pyproject.toml'), folder
+    ])
+
+
 def has_console() -> bool:
     return (sys.stdin is not None) and sys.stdin.isatty()
 
@@ -64,6 +74,11 @@ def main() -> None:
             name='Catmanager unit tests',
             optional=False,
             code=partial(is_command_ok, test_args + ['catmanager.py']),
+        ),
+        QualityGate(
+            name='Type checking',
+            optional=(not shutil.which('mypy')),
+            code=partial(is_types_ok, here),
         )
     ]
 
