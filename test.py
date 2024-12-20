@@ -54,9 +54,33 @@ def has_console() -> bool:
     return (sys.stdin is not None) and sys.stdin.isatty()
 
 
+def check_pil():
+    try:
+        from PIL import Image
+    except:
+        print('Warning: Pillow not found!')
+
+
+def check_tkinter():
+    try:
+        from tkinter import ttk
+    except:
+        print('Warning: Tkinter not found!')
+
+
 def main() -> None:
     if not has_console():
         sys.exit(1)
+
+    version = sys.version_info
+    if (version[0] < 3) or ((3 == version[0]) and (version[1] < 7)):
+        print('Python 3.7 or later required.')
+        print('It does not make any sense to test it on earlier versions.')
+        sys.exit(400)
+
+    print()
+    check_pil()
+    check_tkinter()
 
     python: str = sys.executable
     here: str = os.path.dirname(os.path.realpath(sys.argv[0]))
