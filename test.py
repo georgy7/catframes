@@ -58,7 +58,8 @@ def check_pil():
     try:
         from PIL import Image
     except:
-        print('Warning: Pillow not found!')
+        print('Error: Pillow not found!')
+        sys.exit(400)
 
 
 def check_tkinter():
@@ -70,7 +71,7 @@ def check_tkinter():
 
 def main() -> None:
     if not has_console():
-        sys.exit(1)
+        sys.exit(400)
 
     version = sys.version_info
     if (version[0] < 3) or ((3 == version[0]) and (version[1] < 7)):
@@ -87,8 +88,9 @@ def main() -> None:
     modules: str = os.path.join(here, 'src', 'catframes')
 
     test_args: List[str] = [python, '-m', 'unittest', 'discover', modules, '-p']
+    cat_args: List[str] = [python, os.path.join(modules, 'catframes.py')]
 
-    quality_gates: List[QualityGate] = [
+    part_a: List[QualityGate] = [
         QualityGate(
             name='Catframes unit tests',
             optional=False,
@@ -103,11 +105,43 @@ def main() -> None:
             name='Type checking',
             optional=(not shutil.which('mypy')),
             code=partial(is_types_ok, here),
-        )
+        ),
+        QualityGate(
+            name='Smoke test',
+            optional=False,
+            code=partial(is_command_ok, cat_args + ['--help']),
+        ),
     ]
 
-    for cg in quality_gates:
+    part_b: List[QualityGate] = [
+    ]
+
+    for cg in part_a:
         run_gate(cg)
+
+    # TODO: create test data
+
+    for cg in part_b:
+        run_gate(cg)
+
+    quality_gates: List[QualityGate] = part_a + part_b
+
+    print()
+    print('-' * 40)
+    print('Summary')
+    print('-' * 40)
+
+    for cg in quality_gates:
+        status = 'OK' if cg.ok else 'FAILED' + (' (optional)' if cg.optional else '')
+        print('{0: <23}'.format(cg.name + ': ') + status)
+
+    print('-' * 40)
+
+    everything_ok: bool = all(cg.ok for cg in quality_gates if not cg.optional)
+    print('Result' + ': ' + ('OK' if everything_ok else 'FAILED'))
+
+    if not everything_ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
