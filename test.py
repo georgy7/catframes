@@ -39,6 +39,10 @@ def run_gates(cgs: List[QualityGate]):
         run_gate(cg)
 
 
+def have_been_successful(quality_gates: List[QualityGate]):
+    return all(cg.ok for cg in quality_gates if not cg.optional)
+
+
 def is_command_ok(args: List[str]) -> bool:
     r: CompletedProcess = run(args, capture_output=True, text=True)
     print(r.stdout)
@@ -86,7 +90,7 @@ def print_summary(quality_gates: List[QualityGate]) -> bool:
 
     print('-' * 40)
 
-    everything_ok: bool = all(cg.ok for cg in quality_gates if not cg.optional)
+    everything_ok: bool = have_been_successful(quality_gates)
     print('Result' + ': ' + ('OK\n' if everything_ok else 'FAILED\n'))
     return everything_ok
 
@@ -144,10 +148,15 @@ def main() -> None:
     run_gates(basic_ui)
     run_gates(basic_common)
 
-    if not all(cg.ok for cg in basic_common if not cg.optional):
+    if not have_been_successful(basic_common):
         print('\nBasic CLI tests failed. Further testing is pointless.')
         print_summary(basic_ui + basic_common)
         sys.exit(1)
+
+    if not shutil.which('ffmpeg'):
+        print_summary(basic_ui + basic_common)
+        print('Could not continue: FFmpeg not found.\n')
+        sys.exit(450)
 
     # TODO: create test data
 
