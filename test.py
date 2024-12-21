@@ -22,7 +22,7 @@ class QualityGate:
 
 
 def run_gate(cg: QualityGate):
-    assert None == cg.ok
+    assert cg.ok is None
     print()
     print('=' * 27)
     print('== Starting...')
@@ -32,6 +32,11 @@ def run_gate(cg: QualityGate):
     cg.ok = cg.code()
     print(cg.name + ': ' + ('OK' if cg.ok else 'FAILED'))
     print('\n')
+
+
+def run_gates(cgs: List[QualityGate]):
+    for cg in cgs:
+        run_gate(cg)
 
 
 def is_command_ok(args: List[str]) -> bool:
@@ -57,7 +62,7 @@ def has_console() -> bool:
 def check_pil():
     try:
         from PIL import Image
-    except:
+    except ImportError:
         print('Error: Pillow not found!')
         sys.exit(400)
 
@@ -65,8 +70,25 @@ def check_pil():
 def check_tkinter():
     try:
         from tkinter import ttk
-    except:
+    except ImportError:
         print('Warning: Tkinter not found!')
+
+
+def print_summary(quality_gates: List[QualityGate]) -> bool:
+    print()
+    print('-' * 40)
+    print('Summary')
+    print('-' * 40)
+
+    for cg in quality_gates:
+        status = 'OK' if cg.ok else 'FAILED' + (' (optional)' if cg.optional else '')
+        print('{0: <23}'.format(cg.name + ': ') + status)
+
+    print('-' * 40)
+
+    everything_ok: bool = all(cg.ok for cg in quality_gates if not cg.optional)
+    print('Result' + ': ' + ('OK\n' if everything_ok else 'FAILED\n'))
+    return everything_ok
 
 
 def main() -> None:
@@ -90,16 +112,11 @@ def main() -> None:
     test_args: List[str] = [python, '-m', 'unittest', 'discover', modules, '-p']
     cat_args: List[str] = [python, os.path.join(modules, 'catframes.py')]
 
-    part_a: List[QualityGate] = [
+    basic_common: List[QualityGate] = [
         QualityGate(
             name='Catframes unit tests',
             optional=False,
             code=partial(is_command_ok, test_args + ['catframes.py']),
-        ),
-        QualityGate(
-            name='Catmanager unit tests',
-            optional=False,
-            code=partial(is_command_ok, test_args + ['catmanager.py']),
         ),
         QualityGate(
             name='Type checking',
@@ -110,37 +127,34 @@ def main() -> None:
             name='Smoke test',
             optional=False,
             code=partial(is_command_ok, cat_args + ['--help']),
-        ),
+        )
     ]
 
-    part_b: List[QualityGate] = [
+    basic_ui: List[QualityGate] = [
+        QualityGate(
+            name='Catmanager unit tests',
+            optional=False,
+            code=partial(is_command_ok, test_args + ['catmanager.py']),
+        )
     ]
 
-    for cg in part_a:
-        run_gate(cg)
+    further_cli: List[QualityGate] = [
+    ]
+
+    run_gates(basic_ui)
+    run_gates(basic_common)
+
+    if not all(cg.ok for cg in basic_common if not cg.optional):
+        print('\nBasic CLI tests failed. Further testing is pointless.')
+        print_summary(basic_ui + basic_common)
+        sys.exit(1)
 
     # TODO: create test data
 
-    for cg in part_b:
-        run_gate(cg)
+    run_gates(further_cli)
 
-    quality_gates: List[QualityGate] = part_a + part_b
-
-    print()
-    print('-' * 40)
-    print('Summary')
-    print('-' * 40)
-
-    for cg in quality_gates:
-        status = 'OK' if cg.ok else 'FAILED' + (' (optional)' if cg.optional else '')
-        print('{0: <23}'.format(cg.name + ': ') + status)
-
-    print('-' * 40)
-
-    everything_ok: bool = all(cg.ok for cg in quality_gates if not cg.optional)
-    print('Result' + ': ' + ('OK' if everything_ok else 'FAILED'))
-
-    if not everything_ok:
+    ok: bool = print_summary(basic_ui + basic_common + further_cli)
+    if not ok:
         sys.exit(1)
 
 
