@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Author: Георгий Устинов
+License: zlib/libpng
+"""
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from pathlib import Path
@@ -17,8 +21,6 @@ DESCRIPTION = """
 
   This script is a part of Catframes repository.
   https://github.com/georgy7/catframes
-
-  It is distributed under the zlib/libpng license.
 """
 
 
@@ -48,16 +50,20 @@ class ConsoleInterface:
             parser.error('Something wrong with the destination path.')
 
 
+VertexShader = Callable[[List[Tuple[int, int]]], List[Tuple[int, int]]]
+
+
 @dataclass(frozen=True)
 class Style:
     fill: Union[str, None]
     outline: Union[str, None]
     width: int
+    shader: Union[VertexShader, None] = None
 
     def __post_init__(self):
         assert bool(self.fill) or (bool(self.outline) and (self.width > 0))
-        assert not (self.fill is '')
-        assert not (self.outline is '')
+        assert self.fill != ''
+        assert self.outline != ''
         assert self.width >= 0
 
 
@@ -87,9 +93,24 @@ def draw_one_two_right_triangle(draw: ImageDraw.ImageDraw,
         corner[1] - round(math.sin(perpendicular)*0.5*length)
     )
 
-    draw.polygon([corner, far, near],
+    points: List[Tuple[int, int]] = [corner, far, near]
+
+    if style.shader:
+        points = style.shader(points)
+
+    draw.polygon(points,
         fill=style.fill, outline=style.outline,
         width=style.width)
+
+
+def make_scale_shader(scale: float) -> VertexShader:
+    def scale_shader(vertices: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        cx: float = sum(x[0] for x in vertices) / len(vertices)
+        cy: float = sum(x[1] for x in vertices) / len(vertices)
+        x: List[int] = [round(((v[0]-cx)*scale)+cx) for v in vertices]
+        y: List[int] = [round(((v[1]-cy)*scale)+cy) for v in vertices]
+        return list(zip(x, y))
+    return scale_shader
 
 
 def main() -> None:
@@ -98,7 +119,7 @@ def main() -> None:
 
     render_factor: int = 3
 
-    style: Style = Style(fill=None, outline='#00f', width=1*render_factor)
+    style: Style = Style(fill='#888', outline=None, width=1, shader=make_scale_shader(0.85))
 
     target_image_size: Tuple[int, int] = (640, 480)
     render_size: Tuple[int, int] = (target_image_size[0]*render_factor, target_image_size[1]*render_factor)
@@ -111,8 +132,8 @@ def main() -> None:
         image: Image.Image = Image.new("RGB", render_size, '#fff')
         draw: ImageDraw.ImageDraw = ImageDraw.Draw(image)
 
-        flip: bool = i < 10
-        draw_one_two_right_triangle(draw, render_center, radius, i*step_angle, style, flip)
+        draw_one_two_right_triangle(draw, render_center, radius, i*step_angle, style, True)
+        draw_one_two_right_triangle(draw, render_center, radius, i*step_angle, style, False)
 
         image.resize(target_image_size, Image.Resampling.BILINEAR).save(cli.destination / f'{i}.png')
 
