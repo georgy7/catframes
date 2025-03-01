@@ -3538,7 +3538,7 @@ class AboutWindow(Toplevel, WindowMixin):
         self.widgets: Dict[str, ttk.Widget] = {}
         self.texts: Dict[str, Text] = {}
 
-        self.size: Tuple[int, int] = 570, 300
+        self.size: Tuple[int, int] = (570, 300)
         self.resizable(True, True)
 
         super()._default_set_up()
