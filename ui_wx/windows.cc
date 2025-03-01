@@ -1,3 +1,4 @@
+/*
 from _prefix import *
 from sets_utils import Settings
 from windows_utils import *
@@ -1070,3 +1071,4 @@ class AboutWindow(Toplevel, WindowMixin):
         set_text_and_lock(self.texts["_txtTableRight"], right_text)
 
         set_text_and_lock(self.texts["_txtAbout"], name_to_text("txtAbout"))
+*/

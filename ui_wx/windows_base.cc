@@ -1,3 +1,4 @@
+/*
 from _prefix import *
 from sets_utils import Settings
 from task_flows import TaskManager
@@ -265,3 +266,4 @@ class TextDialog(Toplevel, WindowMixin):
     def _on_focus_out(self, event):
         if not self.focus_get():
             return self.close()
+*/

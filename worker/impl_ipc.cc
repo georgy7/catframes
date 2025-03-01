@@ -1,3 +1,4 @@
+/*
 from _prefix import *
 from templog import has_console, compiled
 from sets_utils import Settings
@@ -463,3 +464,4 @@ class TaskManager:
     @classmethod
     def check(cls, task_id: int) -> bool:
         return task_id in cls._all_tasks
+*/

@@ -1,3 +1,4 @@
+/*
 from _prefix import *
 from sets_utils import Settings
 from task_flows import Task
@@ -1177,3 +1178,4 @@ class ToolTip:
             self.tip_window.destroy()
             self.tip_window = None
 
+*/
