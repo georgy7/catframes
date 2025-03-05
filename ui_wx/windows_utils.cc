@@ -1,25 +1,12 @@
 /*
-from _prefix import *
-from sets_utils import Settings
-from task_flows import Task
-from windows_base import LocalWM, TextDialog
-
 
 """
-Прокручиваемый фрейм это сложная структура, основанная на
-объекте "холста", к которому крепятся полоса прокрутки и фрейм.
-Далее следует большое количество взаимных подвязок, на разные случаи.
-
-- если фрейм переполнен:
-    ^ любые прокрутки невозможны
-
-- полоса может прокручивать объект холста,
-- при наведении мыши на холст, привязка возможностей:
-    ^ колесо мыши может прокручивать холст и полосу прокрутки
-
 Объект бара задачи это фрейм, в котором разные виджеты, относящиеся 
 к описанию параметров задачи (картинка, лейблы для пути и параметров),
 бар прогресса выполнения задачи, и кнопку отмены/удаления.
+
+Название TaskBar сбивает с толку. Надо будет переименовать.
+Необходимость в ScrollableFrame пропала ввиду наличия wxScrolledWindow.
 """
 
 
@@ -71,87 +58,6 @@ def shrink_path(path: str, limit: int) -> str:
 
 class GlobalStates:
     last_dir = "~"
-
-
-class ScrollableFrame(ttk.Frame):
-    """Прокручиваемый (умный) фрейм"""
-
-    def __init__(self, root_window: Tk, *args, **kwargs):
-        super().__init__(root_window, *args, **kwargs, style="Main.TFrame")
-
-        self.root: Tk = root_window
-        self.canvas = Canvas(self, highlightthickness=0)
-
-        # если это не macos, добавить холсту цвет
-        if not platform.system() == "Darwin":
-            self.canvas.config(bg=MAIN_TASKLIST_COLOR)
-
-        # привязываем обработку изменений холста
-        self.canvas.bind("<Configure>", self._on_resize_window)
-
-        self.scrollbar = ttk.Scrollbar(
-            self,
-            orient="vertical",
-            command=self.canvas.yview,
-        )
-        self.scrollable_frame = ttk.Frame(  # фрейм для контента (внутренних виджетов)
-            self.canvas, padding=[15, 0], style="Main.TaskList.TFrame"
-        )
-
-        # привязка обработки изменений фрейма
-        self.scrollable_frame.bind("<Configure>", self._on_frame_update)
-
-        # привязка холста к верхнему левому углу, получение id фрейма
-        self.frame_id = self.canvas.create_window(
-            (0, 0), window=self.scrollable_frame, anchor="nw"
-        )
-        # передача управления полосы прокрутки, когда холст движется от колёсика
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
-
-        # упаковка виджетов
-        self.canvas.pack(side=LEFT, fill=BOTH, expand=True)
-        self.scrollbar.pack(side=RIGHT, fill=Y)
-
-        # привязка и отвязка событий, когда курсор заходит на холст
-        self.canvas.bind("<Enter>", self._bind_mousewheel)
-        self.canvas.bind("<Leave>", self._unbind_mousewheel)
-
-        # первичное обновление полосы, чтобы сразу её не было видно
-        self._update_scrollbar_visibility()
-
-    # отрабатываывает при добавлении/удалении таскбаров в фрейм
-    def _on_frame_update(self, event):
-        self._update_scrollbar(event)
-
-    # изменение размеров фрейма внутри холста
-    def _on_resize_window(self, event):
-        if event.width > 500:  # фильтруем нужные события
-            self.canvas.itemconfig(self.frame_id, width=event.width)
-
-    # обработка изменений полосы прокрутки
-    def _update_scrollbar(self, event):
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        self._update_scrollbar_visibility()
-
-    # проверяет, нужна ли полоса прокрутки, и показывает/скрывает её
-    def _update_scrollbar_visibility(self):
-        if self.scrollable_frame.winfo_height() > self.canvas.winfo_height():
-            self.scrollbar.pack(side="right", fill="y")
-        else:
-            self.scrollbar.pack_forget()
-
-    # попытка активировать прокрутку колёсиком (если пройдёт валидацию)
-    def _bind_mousewheel(self, event):
-        self.canvas.bind_all("<MouseWheel>", self._validate_mousewheel)
-
-    # отвазать события прокрутки
-    def _unbind_mousewheel(self, event):
-        self.canvas.unbind_all("<MouseWheel>")
-
-    # возможность прокрутки только если полоса активна, и фрейм переполнен
-    def _validate_mousewheel(self, event):
-        if self.scrollable_frame.winfo_height() > self.canvas.winfo_height():
-            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
 
 class TaskBar(ttk.Frame):

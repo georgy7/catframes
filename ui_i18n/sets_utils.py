@@ -2,29 +2,7 @@ from _prefix import *
 from templog import has_console, compiled
 
 
-"""
-Класс языковых настроек содержит большой словарь, 
-в котором для каждого языка есть соответсвия названия
-виджета, и текста, который в этом виджете расположен.
-
-Добавление нового ключа в этот словарь должно быть с
-добавлением всех внутренних ключей по аналогии с другими.
-
-Если в процессе будет допущена ошибка, или gui запросит
-текст для виджета, который не прописан, в качестве текста
-вернётся строка из прочерков "-----" для быстрого обнаружения. 
-"""
-
-
 class Lang:
-    """Класс языковых настроек.
-    Позволяет хранить текущий язык,
-    И извлекать его текстовики.
-
-    При добавлении новых языков в словарь data,
-    их названия будут сами подтягиваться в поле настроек.
-    """
-
     data = {  # языковые теги (ключи) имеют вид: "область.виджет"
         "english": {
             "root.title": "Catmanager",
@@ -192,88 +170,6 @@ class Lang:
         },
     }
 
-    def __init__(self):
-        self.current_name = "english"
-        self.current_index = 0
-
-    # получение всех доступных языков
-    def get_all(self) -> tuple:
-        return tuple(self.data.keys())
-
-    # установка языка по имени или индексу
-    def set(self, name: str = None, index: int = None) -> None:
-
-        if name and name in self.data:
-            self.current_index = self.get_all().index(name)
-            self.current_name = name
-
-        elif isinstance(index, int) and 0 <= index < len(self.data):
-            self.current_name = self.get_all()[index]
-            self.current_index = index
-
-    # получение текста по тегу
-    def read(self, tag: str) -> Union[str, tuple]:
-        try:
-            return self.data[self.current_name][tag]
-        except KeyError:  # если тег не найден
-            return "-----"
-
-
-class Theme:
-    """Класс настроек ttk темы"""
-
-    master: Tk
-    style: ttk.Style
-    data: tuple
-    current_name: str
-    current_index: int
-
-    # вызывается после создания главного окна
-    def lazy_init(self, master: Tk):
-        self.master = master
-        self.style = ttk.Style()
-        self.data = self.style.theme_names()
-        self.set()
-
-    def set_name(self, name: str):
-        self.current_name = name
-
-    def get_all(self):
-        return self.data
-
-    def set(self, index: Optional[int] = None):
-        if not hasattr(self, "master"):
-            return
-
-        if index == None:
-            self.current_index = self.data.index(self.current_name)
-        else:
-            self.current_name = self.data[index]
-            self.current_index = index
-
-        self.style.theme_use(self.current_name)
-        self.set_styles()
-
-        _font = font.Font(size=12)
-        self.style.configure(style=".", font=_font)  # шрифт текста в кнопке
-        self.master.option_add("*Font", _font)  # шрифты остальных виджетов
-
-    def set_styles(self):
-        self.style.configure("Main.TaskList.TFrame", background=MAIN_TASKLIST_COLOR)
-        self.style.configure("Main.ToolBar.TFrame", background=MAIN_TOOLBAR_COLOR)
-
-        # создание стилей фона таскбара для разных состояний
-        for status, color in MAIN_TASKBAR_COLORS.items():
-            self.style.configure(f"{status}.Task.TFrame", background=color)
-            self.style.configure(f"{status}.Task.TLabel", background=color)
-            self.style.configure(
-                f"{status}.Task.Horizontal.TProgressbar", background=color
-            )
-
-        self.style.map(
-            "Create.Task.TButton",
-            background=[("active", "blue"), ("!disabled", "blue")],
-        )
 
 
 class UtilityLocator:
