@@ -9,7 +9,6 @@ namespace cat {
 namespace ui {
 namespace wx {
 
-constexpr int kCarouselTimerId = 181708047;
 enum class CarouselState { kEmpty, kLoading, kActive, kStopped };
 
 class Carousel : public wxGLCanvas {

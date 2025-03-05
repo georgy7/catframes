@@ -27,10 +27,10 @@ class MySlider : public wxSlider {
  private:
   const RGBChannel channel_;
   RGBData* const color_;
-  cat::ui::wx::Carousel* const carousel_;
+  Carousel* const carousel_;
 
  public:
-  MySlider(wxWindow* parent, RGBChannel channel, RGBData* rgb, cat::ui::wx::Carousel* carousel)
+  MySlider(wxWindow* parent, RGBChannel channel, RGBData* rgb, Carousel* carousel)
       : wxSlider(parent, wxID_ANY, 0, 0, 255),
         channel_{channel},
         color_{rgb},
@@ -59,7 +59,7 @@ END_EVENT_TABLE()
 
 struct NewTaskFrame::impl {
   NewTaskFrame* frame_;
-  cat::ui::wx::Carousel* carousel_;
+  Carousel* carousel_;
   RGBData rgb_;
 
   impl(NewTaskFrame* frame) {
@@ -76,7 +76,7 @@ struct NewTaskFrame::impl {
 
     wxPanel* canvas_panel = new wxPanel(splitter, wxID_ANY);
     int args[] = {WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 16, 0};
-    carousel_ = new cat::ui::wx::Carousel(canvas_panel, args);
+    carousel_ = new Carousel(canvas_panel, args);
     wxBoxSizer* canvas_panel_sizer = new wxBoxSizer(wxHORIZONTAL);
     canvas_panel_sizer->Add(carousel_, 1, wxEXPAND);
     canvas_panel->SetSizer(canvas_panel_sizer);

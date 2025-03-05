@@ -1,5 +1,7 @@
 #include "carousel.h"
 
+#include "util.h"
+
 // include OpenGL
 #ifdef __WXMAC__
 #include "OpenGL/gl.h"
@@ -11,6 +13,8 @@
 namespace cat {
 namespace ui {
 namespace wx {
+
+constexpr int kCarouselTimerId = 181708047;
 
 BEGIN_EVENT_TABLE(Carousel, wxGLCanvas)
 EVT_PAINT(Carousel::onPaint)
@@ -270,8 +274,24 @@ void Carousel::onPaint(wxPaintEvent& evt) {
 }
 
 void Carousel::onTimer(wxTimerEvent& WXUNUSED(event)) {
-  wxClientDC dc(this);
-  p_impl_->render();
+  static bool visible = true;
+  static unsigned int counter = 1;
+  counter++;
+
+  auto top_level = GetTopLevel(this);
+
+  if (top_level.has_value()) {
+    if (!top_level.value()->IsIconized()) {
+      if (visible) {
+        wxClientDC dc(this);
+        p_impl_->render();
+      }
+
+      if (counter % 60 == 0) {
+        visible = IsVisible(top_level.value());
+      }
+    }
+  }
 }
 
 }  // namespace wx
