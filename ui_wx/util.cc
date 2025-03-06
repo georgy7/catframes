@@ -11,8 +11,14 @@ std::optional<wxTopLevelWindow*> GetTopLevel(wxWindow* widget) {
     return std::nullopt;
   }
 
+  // IsTopLevel() returns true for all descendants of the wxTopLevelWindow class,
+  // even if they have a non-null pointer to a parent.
+
+  // In general, if IsTopLevel() returns false, the parent should be there,
+  // but it's better to be safe than to have spontaneous program crashes.
+
   wxWindow* top = widget;
-  while (top->GetParent() != nullptr) {
+  while (!(top->IsTopLevel()) && (top->GetParent() != nullptr)) {
     top = top->GetParent();
   }
 

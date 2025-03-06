@@ -2,7 +2,6 @@
 
 #include "util.h"
 
-// include OpenGL
 #ifdef __WXMAC__
 #include "OpenGL/gl.h"
 #else
@@ -33,6 +32,10 @@ struct Carousel::impl {
   std::unique_ptr<wxTimer> timer_;
   std::unique_ptr<wxGLContext> m_context_;
   GLclampf r_ = 0.0f, g_ = 0.0f, b_ = 0.0f;
+
+  std::chrono::time_point<std::chrono::steady_clock> start_time_ = std::chrono::steady_clock::now();
+  unsigned int timer_counter_ = 1;
+  bool visible_ = true;
 
   impl(Carousel* carousel) {
     carousel_ = carousel;
@@ -76,8 +79,6 @@ struct Carousel::impl {
   }
 
   void render() {
-    static const auto start_time = std::chrono::steady_clock::now();
-
     carousel_->SetCurrent(*m_context_);
 
     glClearColor(r_, g_, b_, 1.0f);
@@ -109,12 +110,11 @@ struct Carousel::impl {
       glScalef(2.0f, 2.0f, 2.0f);
 
       const int images_len = (int)textures_.size();
-      assert(images_len > 0);
 
       const auto now_time = std::chrono::steady_clock::now();
-      const std::chrono::duration<double> seconds_since_start = now_time - start_time;
+      const std::chrono::duration<double> seconds_since_start = now_time - start_time_;
 
-      const double t = fmod(seconds_since_start.count(), 2 * images_len);
+      const double t = (images_len > 0) ? fmod(seconds_since_start.count(), 2 * images_len) : 0.0;
 
       for (int i = 0; i < images_len; i++) {
         if ((2 * i <= t) && (t < 2 * i + 1)) {
@@ -155,8 +155,7 @@ void Carousel::setBackground(unsigned char r, unsigned char g, unsigned char b) 
   p_impl_->b_ = (GLclampf)b / 255.0f;
 }
 
-// Returns true if there were errors.
-// Pass non-empty prefix to log them.
+// Pass non-empty prefix to log errors.
 bool clear_gl_errors(const wxString& log_message_prefix) {
   bool had_errors = false;
   for (GLenum error = glGetError(); GL_NO_ERROR != error; error = glGetError()) {
@@ -274,21 +273,19 @@ void Carousel::onPaint(wxPaintEvent& evt) {
 }
 
 void Carousel::onTimer(wxTimerEvent& WXUNUSED(event)) {
-  static bool visible = true;
-  static unsigned int counter = 1;
-  counter++;
+  const unsigned int counter = ++(p_impl_->timer_counter_);
 
   auto top_level = GetTopLevel(this);
 
   if (top_level.has_value()) {
     if (!top_level.value()->IsIconized()) {
-      if (visible) {
+      if (p_impl_->visible_) {
         wxClientDC dc(this);
         p_impl_->render();
       }
 
       if (counter % 60 == 0) {
-        visible = IsVisible(top_level.value());
+        p_impl_->visible_ = IsVisible(top_level.value());
       }
     }
   }

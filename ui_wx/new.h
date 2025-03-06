@@ -14,7 +14,7 @@ class NewTaskFrame : public wxFrame {
   std::unique_ptr<impl> p_impl_;
 
  public:
-  NewTaskFrame();
+  NewTaskFrame(wxWindow* parent);
   ~NewTaskFrame();
 
   void onClose(wxCloseEvent& evt);

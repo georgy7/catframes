@@ -125,8 +125,8 @@ struct NewTaskFrame::impl {
   }
 };
 
-NewTaskFrame::NewTaskFrame()
-    : wxFrame(NULL, wxID_ANY, "New task", wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE),
+NewTaskFrame::NewTaskFrame(wxWindow* parent)
+    : wxFrame(parent, wxID_ANY, "New task", wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE),
       p_impl_{std::make_unique<impl>(this)} {}
 
 NewTaskFrame::~NewTaskFrame() {}
