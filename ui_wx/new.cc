@@ -139,7 +139,7 @@ void NewTaskFrame::OnPathChanged(wxFileDirPickerEvent& evt) {
   wxImage image;
   image.LoadFile(evt.GetPath());
 
-  if (image.Ok()) {
+  if (image.IsOk()) {
     p_impl_->carousel_->setState(CarouselState::kLoading);
     p_impl_->carousel_->add(image);
     p_impl_->carousel_->setState(CarouselState::kActive);

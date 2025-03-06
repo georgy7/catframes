@@ -1,5 +1,6 @@
 #include "carousel.h"
 
+#include <wx/rawbmp.h>
 #include "util.h"
 
 #ifdef __WXMAC__
@@ -167,13 +168,76 @@ bool clear_gl_errors(const wxString& log_message_prefix) {
   return had_errors;
 }
 
+void copy_rgb1(wxImage& source, const int destination_width, GLubyte* const destination) {
+  assert(!source.HasAlpha());
+
+  const int source_width = source.GetWidth();
+  const int source_height = source.GetHeight();
+
+  assert(source_width <= destination_width);
+  assert(source_height <= destination_width);
+
+  GLubyte* const rgb_data = source.GetData();
+
+  const std::size_t src_line = 3 * source_width;
+  const std::size_t dst_line = 4 * destination_width;
+
+  std::size_t src_index = 0;
+
+  for (int y = 0; y < source_height; y++) {
+    std::size_t dst_index = dst_line * y;
+
+    const std::size_t next_line = src_index + src_line;
+    for (; src_index < next_line; src_index += 3, dst_index += 4) {
+      destination[dst_index + 0] = rgb_data[src_index + 0];
+      destination[dst_index + 1] = rgb_data[src_index + 1];
+      destination[dst_index + 2] = rgb_data[src_index + 2];
+      destination[dst_index + 3] = 255;
+    }
+  }
+}
+
+void copy_rgba(wxImage& source, const int destination_width, GLubyte* const destination) {
+  assert(source.HasAlpha());
+
+  const int source_width = source.GetWidth();
+  const int source_height = source.GetHeight();
+
+  assert(source_width <= destination_width);
+  assert(source_height <= destination_width);
+
+  GLubyte* const rgb_data = source.GetData();
+  GLubyte* const alpha = source.GetAlpha();
+
+  const std::size_t dst_line = 4 * destination_width;
+
+  std::size_t src_pixel = 0;
+
+  for (int y = 0; y < source_height; y++) {
+    std::size_t dst_index = dst_line * y;
+
+    const std::size_t next_line = src_pixel + source_width;
+    for (; src_pixel < next_line; src_pixel++, dst_index += 4) {
+      std::size_t src_rgb_index = 3 * src_pixel;
+      destination[dst_index + 0] = rgb_data[src_rgb_index + 0];
+      destination[dst_index + 1] = rgb_data[src_rgb_index + 1];
+      destination[dst_index + 2] = rgb_data[src_rgb_index + 2];
+      destination[dst_index + 3] = alpha[src_pixel];
+    }
+  }
+}
+
 uint32_t Carousel::add(wxImage& image) {
-  assert(image.Ok());
+  assert(image.IsOk());
+
+  std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
 
   wxClientDC dc(this);
   wxGLCanvas::SetCurrent(*(p_impl_->m_context_));
 
   Texture result;
+
+  constexpr GLint large_size = 2048;
 
   GLint max_size;
   clear_gl_errors("");
@@ -181,6 +245,8 @@ uint32_t Carousel::add(wxImage& image) {
   if (clear_gl_errors("Could not get GL_MAX_TEXTURE_SIZE")) {
     max_size = 256;
   }
+
+  max_size = std::min(large_size, max_size);
 
   const int goal_size =
       std::min(max_size, 1 << (int)lround(ceil(log2(fmax(image.GetWidth(), image.GetHeight())))));
@@ -196,43 +262,16 @@ uint32_t Carousel::add(wxImage& image) {
                   wxIMAGE_QUALITY_HIGH);
   }
 
-  const int width = image.GetWidth();
-  const int height = image.GetHeight();
+  result.width = (GLfloat)image.GetWidth() / (GLfloat)goal_size;
+  result.height = (GLfloat)image.GetHeight() / (GLfloat)goal_size;
 
-  result.width = (GLfloat)width / (GLfloat)goal_size;
-  result.height = (GLfloat)height / (GLfloat)goal_size;
+  constexpr int bytesPerPixel = 4;
+  GLubyte* const pixels = new GLubyte[bytesPerPixel * goal_size * goal_size];
 
-  const int bytesPerPixel = 4;
-
-  wxImage square(goal_size, goal_size, true);
-
-  if (!image.HasAlpha()) {
-    // Если этого не сделать, у картинок без альфа-канала
-    // GetAlpha() вернёт ноль (полная прозрачность).
-    // Чтобы не делать ветвление в цикле и не делать два цикла.
-    image.InitAlpha();
-  }
-
-  // А это чтобы рамки не было.
-  square.InitAlpha();
-  for (int y = 0; y < goal_size; y++) {
-    for (int x = 0; x < goal_size; x++) {
-      square.SetAlpha(x, y, 0);
-    }
-  }
-
-  square.Paste(image, 0, 0);
-
-  GLubyte* pixels = new GLubyte[bytesPerPixel * goal_size * goal_size];
-
-  for (int y = 0; y < goal_size; y++) {
-    for (int x = 0; x < goal_size; x++) {
-      int pixel_start = (goal_size * y + x) * bytesPerPixel;
-      pixels[pixel_start + 0] = square.GetRed(x, y);
-      pixels[pixel_start + 1] = square.GetGreen(x, y);
-      pixels[pixel_start + 2] = square.GetBlue(x, y);
-      pixels[pixel_start + 3] = square.GetAlpha(x, y);
-    }
+  if (image.HasAlpha()) {
+    copy_rgba(image, goal_size, pixels);
+  } else {
+    copy_rgb1(image, goal_size, pixels);
   }
 
   glGenTextures(1, &result.id);
@@ -258,6 +297,11 @@ uint32_t Carousel::add(wxImage& image) {
   delete[] pixels;
 
   p_impl_->textures_.push_back(result);
+
+  std::chrono::time_point<std::chrono::steady_clock> end = std::chrono::steady_clock::now();
+  const std::chrono::duration<double> execution_time = end - start;
+  wxLogMessage("Duration: %f", execution_time.count());
+
   return result.id;
 }
 
