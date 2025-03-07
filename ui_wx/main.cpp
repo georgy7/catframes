@@ -1,5 +1,6 @@
 #include <wx/wx.h>
 #include "new.h"
+#include "root.h"
 
 class wxMiniApp : public wxApp {
  public:
@@ -12,7 +13,7 @@ constexpr int kTestButtonId = 66345234;
 
 class TestWindow : public wxFrame {
  public:
-  TestWindow();
+  TestWindow(wxWindow* parent);
   ~TestWindow();
 
   void onCommandEvent(wxCommandEvent& evt);
@@ -24,8 +25,8 @@ BEGIN_EVENT_TABLE(TestWindow, wxFrame)
 EVT_BUTTON(kTestButtonId, TestWindow::onCommandEvent)
 END_EVENT_TABLE()
 
-TestWindow::TestWindow()
-    : wxFrame(NULL, wxID_ANY, "Test", wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE) {
+TestWindow::TestWindow(wxWindow* parent)
+    : wxFrame(parent, wxID_ANY, "Test", wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE) {
   wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
   sizer->Add(new wxButton(this, kTestButtonId, "Make a window"), 1, wxEXPAND);
   this->SetSizer(sizer);
@@ -43,9 +44,12 @@ bool wxMiniApp::OnInit() {
   wxImage::AddHandler(new wxPNGHandler);
   wxImage::AddHandler(new wxJPEGHandler);
 
-  TestWindow* frame = new TestWindow();
+  auto frame = new cat::ui::wx::RootFrame();
   SetTopWindow(frame);
   frame->Show();
+
+  TestWindow* test = new TestWindow(frame);
+  test->Show();
 
   return true;
 }
