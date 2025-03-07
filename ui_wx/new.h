@@ -18,7 +18,8 @@ class NewTaskFrame : public wxFrame {
   ~NewTaskFrame();
 
   void onClose(wxCloseEvent& evt);
-  void OnPathChanged(wxFileDirPickerEvent& evt);
+  void onPathChanged(wxFileDirPickerEvent& evt);
+  void onDeleteButton(wxCommandEvent& evt);
 
   DECLARE_EVENT_TABLE()
 };

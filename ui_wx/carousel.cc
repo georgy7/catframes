@@ -1,6 +1,5 @@
 #include "carousel.h"
 
-#include <wx/rawbmp.h>
 #include "util.h"
 
 #ifdef __WXMAC__
@@ -168,38 +167,7 @@ bool clear_gl_errors(const wxString& log_message_prefix) {
   return had_errors;
 }
 
-void copy_rgb1(wxImage& source, const int destination_width, GLubyte* const destination) {
-  assert(!source.HasAlpha());
-
-  const int source_width = source.GetWidth();
-  const int source_height = source.GetHeight();
-
-  assert(source_width <= destination_width);
-  assert(source_height <= destination_width);
-
-  GLubyte* const rgb_data = source.GetData();
-
-  const std::size_t src_line = 3 * source_width;
-  const std::size_t dst_line = 4 * destination_width;
-
-  std::size_t src_index = 0;
-
-  for (int y = 0; y < source_height; y++) {
-    std::size_t dst_index = dst_line * y;
-
-    const std::size_t next_line = src_index + src_line;
-    for (; src_index < next_line; src_index += 3, dst_index += 4) {
-      destination[dst_index + 0] = rgb_data[src_index + 0];
-      destination[dst_index + 1] = rgb_data[src_index + 1];
-      destination[dst_index + 2] = rgb_data[src_index + 2];
-      destination[dst_index + 3] = 255;
-    }
-  }
-}
-
 void copy_rgba(wxImage& source, const int destination_width, GLubyte* const destination) {
-  assert(source.HasAlpha());
-
   const int source_width = source.GetWidth();
   const int source_height = source.GetHeight();
 
@@ -207,7 +175,7 @@ void copy_rgba(wxImage& source, const int destination_width, GLubyte* const dest
   assert(source_height <= destination_width);
 
   GLubyte* const rgb_data = source.GetData();
-  GLubyte* const alpha = source.GetAlpha();
+  GLubyte* const alpha = source.HasAlpha() ? source.GetAlpha() : nullptr;
 
   const std::size_t dst_line = 4 * destination_width;
 
@@ -222,15 +190,13 @@ void copy_rgba(wxImage& source, const int destination_width, GLubyte* const dest
       destination[dst_index + 0] = rgb_data[src_rgb_index + 0];
       destination[dst_index + 1] = rgb_data[src_rgb_index + 1];
       destination[dst_index + 2] = rgb_data[src_rgb_index + 2];
-      destination[dst_index + 3] = alpha[src_pixel];
+      destination[dst_index + 3] = (nullptr == alpha) ? 255 : alpha[src_pixel];
     }
   }
 }
 
 uint32_t Carousel::add(wxImage& image) {
   assert(image.IsOk());
-
-  std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
 
   wxClientDC dc(this);
   wxGLCanvas::SetCurrent(*(p_impl_->m_context_));
@@ -268,11 +234,7 @@ uint32_t Carousel::add(wxImage& image) {
   constexpr int bytesPerPixel = 4;
   GLubyte* const pixels = new GLubyte[bytesPerPixel * goal_size * goal_size];
 
-  if (image.HasAlpha()) {
-    copy_rgba(image, goal_size, pixels);
-  } else {
-    copy_rgb1(image, goal_size, pixels);
-  }
+  copy_rgba(image, goal_size, pixels);
 
   glGenTextures(1, &result.id);
   glBindTexture(GL_TEXTURE_2D, result.id);
@@ -283,6 +245,10 @@ uint32_t Carousel::add(wxImage& image) {
   const GLint border = 0;
   const GLint internal_format = GL_COMPRESSED_RGBA;
   const GLint pixel_data_format = GL_RGBA;
+
+  // glTexImage2D is the most expensive operation here.
+  // If you need to change images frequently, consider
+  // updating them through glTexSubImage2D.
 
   clear_gl_errors("");
   glTexImage2D(GL_TEXTURE_2D, 0, internal_format, goal_size, goal_size, border, pixel_data_format,
@@ -298,14 +264,22 @@ uint32_t Carousel::add(wxImage& image) {
 
   p_impl_->textures_.push_back(result);
 
-  std::chrono::time_point<std::chrono::steady_clock> end = std::chrono::steady_clock::now();
-  const std::chrono::duration<double> execution_time = end - start;
-  wxLogMessage("Duration: %f", execution_time.count());
-
   return result.id;
 }
 
-void Carousel::remove(uint32_t id) {}
+void Carousel::remove(const uint32_t id) {
+  auto textures = &p_impl_->textures_;
+
+  for (auto it = textures->begin(); it != textures->end(); it++) {
+    if (id == it->id) {
+      wxClientDC dc(this);
+      wxGLCanvas::SetCurrent(*(p_impl_->m_context_));
+      glDeleteTextures(1, &(it->id));
+      textures->erase(it);
+      break;
+    }
+  }
+}
 
 unsigned int Carousel::count() {
   return (unsigned int)p_impl_->textures_.size();

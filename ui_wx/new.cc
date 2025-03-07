@@ -3,15 +3,20 @@
 #include <wx/splitter.h>
 #include "carousel.h"
 
+// All the code in this file is temporary!
+// Basically, it's just a demonstration of rendering.
+
 namespace cat {
 namespace ui {
 namespace wx {
 
 constexpr int kFilePickerId = 76223984;
+constexpr int kDeleteButtonId = 98454042;
 
 BEGIN_EVENT_TABLE(NewTaskFrame, wxFrame)
 EVT_CLOSE(NewTaskFrame::onClose)
-EVT_FILEPICKER_CHANGED(kFilePickerId, NewTaskFrame::OnPathChanged)
+EVT_FILEPICKER_CHANGED(kFilePickerId, NewTaskFrame::onPathChanged)
+EVT_BUTTON(kDeleteButtonId, NewTaskFrame::onDeleteButton)
 END_EVENT_TABLE()
 
 constexpr int kMinSettingsWidth = 250;
@@ -61,6 +66,7 @@ struct NewTaskFrame::impl {
   NewTaskFrame* frame_;
   Carousel* carousel_;
   RGBData rgb_;
+  wxListBox* file_list_box_;
 
   impl(NewTaskFrame* frame) {
     frame_ = frame;
@@ -85,6 +91,9 @@ struct NewTaskFrame::impl {
     wxBoxSizer* settings_sizer = new wxBoxSizer(wxVERTICAL);
     wxFlexGridSizer* color_grid = new wxFlexGridSizer(0, 2, 0, 0);
 
+    file_list_box_ = new wxListBox(settings_panel, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0,
+                                   NULL, wxLB_SINGLE);
+
     wxFilePickerCtrl* file_picker_ctrl =
         new wxFilePickerCtrl(settings_panel, kFilePickerId, wxEmptyString,
                              wxASCII_STR(wxFileSelectorPromptStr), "PNG, JPG|*.png;*.jpg;*.jpeg",
@@ -96,7 +105,12 @@ struct NewTaskFrame::impl {
     settings_sizer->Add(0, 20, 0, wxALL);
     settings_sizer->Add(new wxStaticText(settings_panel, wxID_ANY, "Color"), 0, wxALL);
     settings_sizer->Add(0, 10, 0, wxALL);
-    settings_sizer->Add(color_grid, 1, wxALL | wxEXPAND);
+    settings_sizer->Add(color_grid, 0, wxALL | wxEXPAND);
+    settings_sizer->Add(0, 20, 0, wxALL);
+    settings_sizer->Add(file_list_box_, 1, wxALL | wxEXPAND, 5);
+    settings_sizer->Add(new wxButton(settings_panel, kDeleteButtonId, "Delete"), 0,
+                        wxALL | wxEXPAND, 5);
+    settings_sizer->Add(0, 10, 0, wxALL);
 
     color_grid->SetFlexibleDirection(wxBOTH);
     color_grid->SetNonFlexibleGrowMode(wxFLEX_GROWMODE_SPECIFIED);
@@ -126,7 +140,12 @@ struct NewTaskFrame::impl {
 };
 
 NewTaskFrame::NewTaskFrame(wxWindow* parent)
-    : wxFrame(parent, wxID_ANY, "New task", wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE),
+    : wxFrame(parent,
+              wxID_ANY,
+              "New task",
+              wxDefaultPosition,
+              wxDefaultSize,
+              wxDEFAULT_FRAME_STYLE),
       p_impl_{std::make_unique<impl>(this)} {}
 
 NewTaskFrame::~NewTaskFrame() {}
@@ -135,16 +154,32 @@ void NewTaskFrame::onClose(wxCloseEvent& evt) {
   evt.Skip();
 }
 
-void NewTaskFrame::OnPathChanged(wxFileDirPickerEvent& evt) {
+void NewTaskFrame::onPathChanged(wxFileDirPickerEvent& evt) {
   wxImage image;
   image.LoadFile(evt.GetPath());
 
   if (image.IsOk()) {
     p_impl_->carousel_->setState(CarouselState::kLoading);
-    p_impl_->carousel_->add(image);
+    auto id = p_impl_->carousel_->add(image);
+    p_impl_->file_list_box_->Append(wxString::Format("%d", id));
     p_impl_->carousel_->setState(CarouselState::kActive);
   } else {
     wxLogError(wxString::Format("Could not load: %s", evt.GetPath()));
+  }
+}
+
+void NewTaskFrame::onDeleteButton(wxCommandEvent& evt) {
+  const int selection = p_impl_->file_list_box_->GetSelection();
+  if (selection != wxNOT_FOUND) {
+    auto label = p_impl_->file_list_box_->GetString(selection);
+
+    unsigned int parsed_label = 0;
+    if (label.ToUInt(&parsed_label)) {
+      p_impl_->carousel_->setState(CarouselState::kLoading);
+      p_impl_->carousel_->remove(parsed_label);
+      p_impl_->file_list_box_->Delete(selection);
+      p_impl_->carousel_->setState(CarouselState::kActive);
+    }
   }
 }
 
