@@ -24,6 +24,8 @@ DESCRIPTION = """
   https://github.com/georgy7/catframes
 """
 
+PINWHEEL_OBTUSE_ANGLE = math.atan(2/1)
+
 
 class ConsoleInterface:
     __slots__ = ('destination',)
@@ -164,6 +166,72 @@ def draw_one_two_right_triangle(ctx: Context,
         ctx.reset_clip()
 
 
+def draw_pinwheel_tiling_step(ctx: Context,
+                              corner: FPoint,
+                              length: int,
+                              angle: float,
+                              flip: bool):
+    # new_small_side = (length / 2) / Math.sqrt(5)
+    # new_small_side = length * 0.5 / Math.sqrt(5)
+    new_small_side = length * 0.22360679774997896
+
+    c2_angle: float = angle - PINWHEEL_OBTUSE_ANGLE if flip \
+        else angle + PINWHEEL_OBTUSE_ANGLE
+
+    c2: FPoint = construct_angle(corner, c2_angle, new_small_side)
+    c1: FPoint = construct_angle(corner, c2_angle, 2 * new_small_side)
+    c3: FPoint = construct_angle(c2, angle, 0.5 * length)
+
+    c2_long_side_angle = c2_angle + math.tau/4 if flip \
+        else c2_angle - math.tau/4
+
+    style: Style = Style(fill=to_srgb('#888'), outline=None, width=1, shader=make_scale_shader(0.85))
+
+    draw_one_two_right_triangle(ctx, c2, 2*new_small_side, c2_long_side_angle, style, flip)
+    draw_one_two_right_triangle(ctx, c2, 2*new_small_side, c2_long_side_angle, style, not flip)
+
+    draw_one_two_right_triangle(ctx, c1, 2*new_small_side, c2_angle+math.pi, style, not flip)
+
+    draw_one_two_right_triangle(ctx, c3, 2*new_small_side, c2_long_side_angle, style, not flip)
+    draw_one_two_right_triangle(ctx, c3, 2*new_small_side, c2_long_side_angle+math.pi, style, flip)
+
+
+def draw_pinwheel_tiling(ctx: Context,
+                         radius: float,
+                         position_angle: float):
+    """In order not to get stuck with the peculiarities of the relative arrangement
+    of triangles, I decided to go from larger to smaller. I recursively split a huge
+    triangle, discarding parts that do not fall within the visible area.
+    To get a smooth, continuous movement, we will circle inside this giant triangle
+    along a reduced inscribed circle.
+    To simplify this, let the long side of the triangle be strictly vertical,
+    with the right angle at the bottom and the short side on the left.
+    """
+    assert ctx.get_target().get_width() < radius
+    center: FPoint = (
+        ctx.get_target().get_width() - radius,
+        ctx.get_target().get_height() / 2
+    )
+    top_level_corner: FPoint = construct_angle(
+        center,
+        -(position_angle + math.tau/8),
+        math.sqrt(2) * radius
+    )
+
+    # short_side = radius + radius / math.tan(math.atan(2/1) / 2)
+    # short_side = radius + radius / 0.6180339887498948
+    # short_side = radius + radius * (1 / 0.6180339887498948)
+    # short_side = radius + radius * 1.618033988749895
+    # short_side = 2.618033988749895 * radius
+    # long_side = 2 * short_side
+
+    long_side = 2 * 2.618033988749895 * radius
+
+    style: Style = Style(fill=to_srgb('#8f8'), outline=None, width=1)
+    draw_one_two_right_triangle(ctx, top_level_corner, long_side, math.tau/4 - position_angle, style, False)
+    draw_pinwheel_tiling_step(ctx, top_level_corner, long_side, math.tau/4 - position_angle, False)
+
+
 def make_scale_shader(scale: float) -> VertexShader:
     def scale_shader(vertices: List[FPoint]) -> List[FPoint]:
         cx, cy = get_center(vertices)
@@ -183,12 +251,10 @@ def main() -> None:
     cli = ConsoleInterface()
     cli.destination.mkdir(exist_ok=True)
 
-    style: Style = Style(fill=to_srgb('#888'), outline=None, width=1, shader=make_scale_shader(0.85))
-
-    target_image_size: Tuple[int, int] = (640, 480)
+    target_image_size: Tuple[int, int] = (426, 240)
     render_size: Tuple[int, int] = target_image_size
 
-    step_angle: float = math.tau / 10
+    step_angle: float = math.tau / 20
     render_center: FPoint = (round(render_size[0]/2), round(render_size[1]/2))
     radius: int = round(render_size[0] * 0.078125)
 
@@ -199,8 +265,7 @@ def main() -> None:
         clear(ctx, to_srgb('#fff'))
         print(f'{i}.png')
 
-        draw_one_two_right_triangle(ctx, render_center, radius, i*step_angle, style, True)
-        draw_one_two_right_triangle(ctx, render_center, radius, i*step_angle, style, False)
+        draw_pinwheel_tiling(ctx, 427, i*step_angle)
 
         surface.write_to_png(str(cli.destination / f'{i}.png'))
 
