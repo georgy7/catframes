@@ -1,4 +1,3 @@
-/*
 
 class RootWindow(Tk, WindowMixin):
     """Основное окно"""
@@ -700,5 +699,3 @@ class NewTaskWindow(Toplevel, WindowMixin):
     @staticmethod
     def open_view(task_config: TaskConfig):
         LocalWM.open(NewTaskWindow, "task", task_config=task_config)
-
-*/
