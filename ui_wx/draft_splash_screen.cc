@@ -1,8 +1,4 @@
-from _prefix import *
-from windows_base import *
-from sets_utils import *
-from windows_utils import *
-
+/*
 
 class SingleCheck(ttk.Frame):
     """Проверка для конкретной утилиты.
@@ -128,3 +124,5 @@ class UtilChecker(Tk, WindowMixin):
             self.destroy()
         else:
             exit()
+
+*/
