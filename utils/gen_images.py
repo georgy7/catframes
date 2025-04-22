@@ -57,6 +57,7 @@ Context = cairo.Context
 FPoint = Tuple[float, float]
 VertexShader = Callable[[List[FPoint]], List[FPoint]]
 RGB = Tuple[float, float, float]
+Segment = Tuple[FPoint, FPoint]
 
 
 def to_srgb(x: Union[str, RGB]) -> RGB:
@@ -124,9 +125,61 @@ def construct_perpendicular(corner: FPoint, angle: float, distance: float, flip:
     return construct_angle(corner, angle90, distance)
 
 
+def approx_intersects(a: Segment, b: Segment) -> bool:
+
+    a_left = min(a[0][0], a[1][0])
+    b_left = min(b[0][0], b[1][0])
+
+    a_right = max(a[0][0], a[1][0])
+    b_right = max(b[0][0], b[1][0])
+
+    if not ((a_right >= b_left) and (a_left <= b_right)):
+        return False
+
+    a_top = min(a[0][1], a[1][1])
+    b_top = min(b[0][1], b[1][1])
+
+    a_bottom = max(a[0][1], a[1][1])
+    b_bottom = max(b[0][1], b[1][1])
+
+    if not ((a_bottom >= b_top) and (a_top <= b_bottom)):
+        return False
+
+    return True
+
+
+def approx_have_intersections(a: List[Segment], b: List[Segment]) -> bool:
+    for x in a:
+        for y in b:
+            if approx_intersects(x, y):
+                return True
+    return False
+
+
+def is_on_screen(ctx, p: FPoint):
+    return (0 <= p[0] < ctx.get_target().get_width()) and (0 <= p[1] < ctx.get_target().get_height())
+
+
+def get_triangle_area(p: List[FPoint]) -> float:
+    return abs((
+        p[0][0]*(p[1][1]-p[2][1]) +
+        p[1][0]*(p[2][1]-p[0][1]) +
+        p[2][0]*(p[0][1]-p[1][1])
+    )/2)
+
+
+def is_in_the_triangle(p: FPoint, vertices: List[FPoint]):
+    assert len(vertices) == 3
+    triangle_area: float = get_triangle_area(vertices)
+    a: float = get_triangle_area([vertices[0], vertices[1], p])
+    b: float = get_triangle_area([vertices[1], vertices[2], p])
+    c: float = get_triangle_area([vertices[2], vertices[0], p])
+    return ((a+b+c) - triangle_area) / triangle_area < 0.001
+
+
 def draw_one_two_right_triangle(ctx: Context,
                                 corner: FPoint,
-                                length: int,
+                                length: float,
                                 angle: float,
                                 style: Style,
                                 flip: bool = False):
@@ -168,12 +221,40 @@ def draw_one_two_right_triangle(ctx: Context,
 
 def draw_pinwheel_tiling_step(ctx: Context,
                               corner: FPoint,
-                              length: int,
+                              length: float,
                               angle: float,
-                              flip: bool):
+                              flip: bool,
+                              depth: int):
+
+    # Checking if the triangle is on the screen...
+    far: FPoint = construct_angle(corner, angle, length)
+    near: FPoint = construct_perpendicular(corner, angle, 0.5*length, flip)
+
+    screen_corners: List[FPoint] = [
+        (0, 0),
+        (0, ctx.get_target().get_height()-1),
+        (ctx.get_target().get_width()-1, ctx.get_target().get_height()-1),
+        (ctx.get_target().get_width()-1, 0)
+    ]
+
+    screen_borders: List[Segment] = [
+        (screen_corners[0], screen_corners[1]),
+        (screen_corners[1], screen_corners[2]),
+        (screen_corners[2], screen_corners[3]),
+        (screen_corners[3], screen_corners[0]),
+    ]
+
+    screen_center: FPoint = (ctx.get_target().get_width()/2, ctx.get_target().get_height()/2)
+
+    if not is_on_screen(ctx, corner) and not is_on_screen(ctx, far) and not is_on_screen(ctx, near) \
+            and not is_in_the_triangle(screen_center, [corner, far, near]) \
+            and not approx_have_intersections([(corner, near), (corner, far), (near, far)], screen_borders):
+        return
+
     # new_small_side = (length / 2) / Math.sqrt(5)
     # new_small_side = length * 0.5 / Math.sqrt(5)
-    new_small_side = length * 0.22360679774997896
+    new_small_side: float = length * 0.22360679774997896
+    new_long_side: float = 2 * new_small_side
 
     c2_angle: float = angle - PINWHEEL_OBTUSE_ANGLE if flip \
         else angle + PINWHEEL_OBTUSE_ANGLE
@@ -185,15 +266,25 @@ def draw_pinwheel_tiling_step(ctx: Context,
     c2_long_side_angle = c2_angle + math.tau/4 if flip \
         else c2_angle - math.tau/4
 
-    style: Style = Style(fill=to_srgb('#888'), outline=None, width=1, shader=make_scale_shader(0.85))
+    if depth > 8:
+        style: Style = Style(fill=to_srgb('#888'), outline=None, width=1, shader=make_scale_shader(0.85))
 
-    draw_one_two_right_triangle(ctx, c2, 2*new_small_side, c2_long_side_angle, style, flip)
-    draw_one_two_right_triangle(ctx, c2, 2*new_small_side, c2_long_side_angle, style, not flip)
+        draw_one_two_right_triangle(ctx, c2, new_long_side, c2_long_side_angle, style, flip)
+        draw_one_two_right_triangle(ctx, c2, new_long_side, c2_long_side_angle, style, not flip)
 
-    draw_one_two_right_triangle(ctx, c1, 2*new_small_side, c2_angle+math.pi, style, not flip)
+        draw_one_two_right_triangle(ctx, c1, new_long_side, c2_angle+math.pi, style, not flip)
 
-    draw_one_two_right_triangle(ctx, c3, 2*new_small_side, c2_long_side_angle, style, not flip)
-    draw_one_two_right_triangle(ctx, c3, 2*new_small_side, c2_long_side_angle+math.pi, style, flip)
+        draw_one_two_right_triangle(ctx, c3, new_long_side, c2_long_side_angle, style, not flip)
+        draw_one_two_right_triangle(ctx, c3, new_long_side, c2_long_side_angle+math.pi, style, flip)
+
+    elif depth > 0:
+        draw_pinwheel_tiling_step(ctx, c2, new_long_side, c2_long_side_angle, flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, c2, new_long_side, c2_long_side_angle, not flip, depth+1)
+
+        draw_pinwheel_tiling_step(ctx, c1, new_long_side, c2_angle+math.pi, not flip, depth+1)
+
+        draw_pinwheel_tiling_step(ctx, c3, new_long_side, c2_long_side_angle, not flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, c3, new_long_side, c2_long_side_angle+math.pi, flip, depth+1)
 
 
 def draw_pinwheel_tiling(ctx: Context,
@@ -227,9 +318,7 @@ def draw_pinwheel_tiling(ctx: Context,
 
     long_side = 2 * 2.618033988749895 * radius
 
-    style: Style = Style(fill=to_srgb('#8f8'), outline=None, width=1)
-    draw_one_two_right_triangle(ctx, top_level_corner, long_side, math.tau/4 - position_angle, style, False)
-    draw_pinwheel_tiling_step(ctx, top_level_corner, long_side, math.tau/4 - position_angle, False)
+    draw_pinwheel_tiling_step(ctx, top_level_corner, long_side, math.tau/4 - position_angle, False, 1)
 
 
 def make_scale_shader(scale: float) -> VertexShader:
@@ -254,9 +343,7 @@ def main() -> None:
     target_image_size: Tuple[int, int] = (426, 240)
     render_size: Tuple[int, int] = target_image_size
 
-    step_angle: float = math.tau / 20
-    render_center: FPoint = (round(render_size[0]/2), round(render_size[1]/2))
-    radius: int = round(render_size[0] * 0.078125)
+    step_angle: float = math.tau / 2000
 
     surface = cairo.ImageSurface(cairo.FORMAT_RGB24, *render_size)
     ctx = cairo.Context(surface)
@@ -265,7 +352,7 @@ def main() -> None:
         clear(ctx, to_srgb('#fff'))
         print(f'{i}.png')
 
-        draw_pinwheel_tiling(ctx, 427, i*step_angle)
+        draw_pinwheel_tiling(ctx, 42600, i*step_angle)
 
         surface.write_to_png(str(cli.destination / f'{i}.png'))
 
