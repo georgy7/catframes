@@ -94,13 +94,21 @@ class Style:
         assert self.width >= 0
 
 
+def construct_angle_diff(center: FPoint, angle: float, distance: float) -> FPoint:
+    return (
+        math.cos(angle)*distance,
+        -math.sin(angle)*distance
+    )
+
+
 def construct_angle(center: FPoint, angle: float, distance: float) -> FPoint:
     """Returns the coordinates of a point obtained by rotating
     a horizontal segment counterclockwise in radians.
     """
+    diff: FPoint = construct_angle_diff(center, angle, distance)
     return (
-        center[0] + math.cos(angle)*distance,
-        center[1] - math.sin(angle)*distance
+        center[0] + diff[0],
+        center[1] + diff[1]
     )
 
 
@@ -109,6 +117,12 @@ def get_distance(a: FPoint, b: FPoint) -> float:
         math.pow(a[0]-b[0], 2) +
         math.pow(a[1]-b[1], 2)
     )
+
+
+def get_angle(center: FPoint, rotating: FPoint) -> float:
+    xdelta: float = rotating[0] - center[0]
+    angle: float = math.acos(xdelta / get_distance(center, rotating))
+    return angle if rotating[1] <= center[1] else math.tau-angle
 
 
 def get_center(vertices: List[FPoint]) -> FPoint:
@@ -266,16 +280,23 @@ def draw_pinwheel_tiling_step(ctx: Context,
     c2_long_side_angle = c2_angle + math.tau/4 if flip \
         else c2_angle - math.tau/4
 
-    if depth > 8:
-        style: Style = Style(fill=to_srgb('#888'), outline=None, width=1, shader=make_scale_shader(0.85))
+    if depth > 9:
+        scale = 0.85        # 85%
+        gap = 1.0           # 100%
 
-        draw_one_two_right_triangle(ctx, c2, new_long_side, c2_long_side_angle, style, flip)
-        draw_one_two_right_triangle(ctx, c2, new_long_side, c2_long_side_angle, style, not flip)
+        scaled_long_size = scale * new_long_side
 
-        draw_one_two_right_triangle(ctx, c1, new_long_side, c2_angle+math.pi, style, not flip)
+        shift = (new_long_side - scaled_long_size) / 2 * max(1 - 0.5 * gap, 0)
 
-        draw_one_two_right_triangle(ctx, c3, new_long_side, c2_long_side_angle, style, not flip)
-        draw_one_two_right_triangle(ctx, c3, new_long_side, c2_long_side_angle+math.pi, style, flip)
+        style: Style = Style(fill=to_srgb('#888'), outline=None, width=1, shader=shift_to_center_shader(shift))
+
+        draw_one_two_right_triangle(ctx, c2, scaled_long_size, c2_long_side_angle, style, flip)
+        draw_one_two_right_triangle(ctx, c2, scaled_long_size, c2_long_side_angle, style, not flip)
+
+        draw_one_two_right_triangle(ctx, c1, scaled_long_size, c2_angle+math.pi, style, not flip)
+
+        draw_one_two_right_triangle(ctx, c3, scaled_long_size, c2_long_side_angle, style, not flip)
+        draw_one_two_right_triangle(ctx, c3, scaled_long_size, c2_long_side_angle+math.pi, style, flip)
 
     elif depth > 0:
         draw_pinwheel_tiling_step(ctx, c2, new_long_side, c2_long_side_angle, flip, depth+1)
@@ -321,11 +342,14 @@ def draw_pinwheel_tiling(ctx: Context,
     draw_pinwheel_tiling_step(ctx, top_level_corner, long_side, math.tau/4 - position_angle, False, 1)
 
 
-def make_scale_shader(scale: float) -> VertexShader:
+def shift_to_center_shader(shift: float) -> VertexShader:
     def scale_shader(vertices: List[FPoint]) -> List[FPoint]:
-        cx, cy = get_center(vertices)
-        x: List[float] = [((v[0]-cx)*scale)+cx for v in vertices]
-        y: List[float] = [((v[1]-cy)*scale)+cy for v in vertices]
+        corner = vertices[0]
+        angle = get_angle(corner, get_center(vertices))
+        diff = construct_angle_diff(corner, angle, shift)
+
+        x: List[float] = [(v[0] + diff[0]) for v in vertices]
+        y: List[float] = [(v[1] + diff[1]) for v in vertices]
         return list(zip(x, y))
     return scale_shader
 
@@ -340,19 +364,24 @@ def main() -> None:
     cli = ConsoleInterface()
     cli.destination.mkdir(exist_ok=True)
 
-    target_image_size: Tuple[int, int] = (426, 240)
+    target_image_size: Tuple[int, int] = (640, 360)
     render_size: Tuple[int, int] = target_image_size
 
-    step_angle: float = math.tau / 2000
+    # Here we are spinning a huge circle in fact.
+    # And this angle determines the rotation speed.
+    step_angle: float = math.tau / 30000
+    disc_radius_px = 50000
 
     surface = cairo.ImageSurface(cairo.FORMAT_RGB24, *render_size)
     ctx = cairo.Context(surface)
 
-    for i in range(20):
+    # TODO colors
+
+    for i in range(60):
         clear(ctx, to_srgb('#fff'))
         print(f'{i}.png')
 
-        draw_pinwheel_tiling(ctx, 42600, i*step_angle)
+        draw_pinwheel_tiling(ctx, disc_radius_px, i*step_angle)
 
         surface.write_to_png(str(cli.destination / f'{i}.png'))
 
