@@ -10,5 +10,7 @@ src/catframes.egg-info/
 
 /DATA/
 .directory
+*.mp4
+*.webm
 *.kate-swp
 *~

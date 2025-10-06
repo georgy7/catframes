@@ -13,6 +13,8 @@ import math
 import re
 from time import monotonic
 import cairo
+import gzip
+import io
 
 
 TITLE = "gen_images.py"
@@ -61,6 +63,7 @@ FPoint = Tuple[float, float]
 VertexShader = Callable[[List[FPoint]], List[FPoint]]
 RGB = Tuple[float, float, float]
 Segment = Tuple[FPoint, FPoint]
+ImageSize = Tuple[int, int]
 
 
 def plus(a: FPoint, b: FPoint) -> FPoint:
@@ -178,8 +181,8 @@ def approx_have_intersections(a: List[Segment], b: List[Segment]) -> bool:
     return False
 
 
-def is_on_screen(ctx, p: FPoint):
-    return (0 <= p[0] < ctx.get_target().get_width()) and (0 <= p[1] < ctx.get_target().get_height())
+def is_on_screen(image_size: ImageSize, p: FPoint):
+    return (0 <= p[0] < image_size[0]) and (0 <= p[1] < image_size[1])
 
 
 def get_triangle_area(p: List[FPoint]) -> float:
@@ -242,6 +245,7 @@ def draw_one_two_right_triangle(ctx: Context,
 
 
 def draw_pinwheel_tiling_step(ctx: Context,
+                              image_size: ImageSize,
                               corner: FPoint,
                               length: float,
                               angle: float,
@@ -254,9 +258,9 @@ def draw_pinwheel_tiling_step(ctx: Context,
 
     screen_corners: List[FPoint] = [
         (0, 0),
-        (0, ctx.get_target().get_height()-1),
-        (ctx.get_target().get_width()-1, ctx.get_target().get_height()-1),
-        (ctx.get_target().get_width()-1, 0)
+        (0, image_size[1]-1),
+        (image_size[0]-1, image_size[1]-1),
+        (image_size[0]-1, 0)
     ]
 
     screen_borders: List[Segment] = [
@@ -266,9 +270,9 @@ def draw_pinwheel_tiling_step(ctx: Context,
         (screen_corners[3], screen_corners[0]),
     ]
 
-    screen_center: FPoint = (ctx.get_target().get_width()/2, ctx.get_target().get_height()/2)
+    screen_center: FPoint = (image_size[0]/2, image_size[1]/2)
 
-    if not is_on_screen(ctx, corner) and not is_on_screen(ctx, far) and not is_on_screen(ctx, near) \
+    if not is_on_screen(image_size, corner) and not is_on_screen(image_size, far) and not is_on_screen(image_size, near) \
             and not is_in_the_triangle(screen_center, [corner, far, near]) \
             and not approx_have_intersections([(corner, near), (corner, far), (near, far)], screen_borders):
         return
@@ -346,16 +350,17 @@ def draw_pinwheel_tiling_step(ctx: Context,
         draw_shortcut(c3, scaled_long_size, c2_long_side_angle+math.pi, flip)
 
     elif depth > 0:
-        draw_pinwheel_tiling_step(ctx, c2, new_long_side, c2_long_side_angle, flip, depth+1)
-        draw_pinwheel_tiling_step(ctx, c2, new_long_side, c2_long_side_angle, not flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, image_size, c2, new_long_side, c2_long_side_angle, flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, image_size, c2, new_long_side, c2_long_side_angle, not flip, depth+1)
 
-        draw_pinwheel_tiling_step(ctx, c1, new_long_side, c2_angle+math.pi, not flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, image_size, c1, new_long_side, c2_angle+math.pi, not flip, depth+1)
 
-        draw_pinwheel_tiling_step(ctx, c3, new_long_side, c2_long_side_angle, not flip, depth+1)
-        draw_pinwheel_tiling_step(ctx, c3, new_long_side, c2_long_side_angle+math.pi, flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, image_size, c3, new_long_side, c2_long_side_angle, not flip, depth+1)
+        draw_pinwheel_tiling_step(ctx, image_size, c3, new_long_side, c2_long_side_angle+math.pi, flip, depth+1)
 
 
 def draw_pinwheel_tiling(ctx: Context,
+                         image_size: ImageSize,
                          radius: float,
                          position_angle: float):
     """In order not to get stuck with the peculiarities of the relative arrangement
@@ -366,10 +371,10 @@ def draw_pinwheel_tiling(ctx: Context,
     To simplify this, let the long side of the triangle be strictly vertical,
     with the right angle at the bottom and the short side on the left.
     """
-    assert ctx.get_target().get_width() < radius
+    assert image_size[0] < radius
     center: FPoint = (
-        ctx.get_target().get_width() - radius,
-        ctx.get_target().get_height() / 2
+        image_size[0] - radius,
+        image_size[1] / 2
     )
     top_level_corner: FPoint = construct_angle(
         center,
@@ -386,7 +391,7 @@ def draw_pinwheel_tiling(ctx: Context,
 
     long_side = 2 * 2.618033988749895 * radius
 
-    draw_pinwheel_tiling_step(ctx, top_level_corner, long_side, math.tau/4 - position_angle, False, 1)
+    draw_pinwheel_tiling_step(ctx, image_size, top_level_corner, long_side, math.tau/4 - position_angle, False, 1)
 
 
 def make_shift_shader(shift: FPoint) -> VertexShader:
@@ -397,36 +402,49 @@ def make_shift_shader(shift: FPoint) -> VertexShader:
     return shift_shader
 
 
-def clear(ctx: Context, color: RGB) -> None:
-    ctx.rectangle(0, 0, ctx.get_target().get_width(), ctx.get_target().get_height())
+def clear(ctx: Context, color: RGB, render_size: ImageSize) -> None:
+    ctx.rectangle(0, 0, render_size[0], render_size[1])
     ctx.set_source_rgb(*color)
     ctx.fill()
+
+
+def thousands() -> None:
+    """The subtask with hundreds of thousands of frames (memory usage test).
+    """
+    pass
 
 
 def main() -> None:
     cli = ConsoleInterface()
     cli.destination.mkdir(exist_ok=True)
 
-    target_image_size: Tuple[int, int] = (640, 360)
-    render_size: Tuple[int, int] = target_image_size
+    render_size: ImageSize = (1920, 1080)
 
     # Here we are spinning a huge circle in fact.
     # And this angle determines the rotation speed.
     step_angle: float = math.tau / 300000
-    disc_radius_px = 50000
-
-    surface = cairo.ImageSurface(cairo.FORMAT_RGB24, *render_size)
-    ctx = cairo.Context(surface)
+    disc_radius_px = 50000 / 360 * render_size[1]
 
     # TODO colors
 
-    for i in range(600):
-        clear(ctx, to_srgb('#fff'))
+    for i in range(1000):
+        buffer = io.BytesIO()
+
+        sfc = cairo.SVGSurface(buffer, render_size[0], render_size[1])
+        ctx = cairo.Context(sfc)
+
+        clear(ctx, to_srgb('#fff'), render_size)
         print(f'{i}.png')
 
-        draw_pinwheel_tiling(ctx, disc_radius_px, i*step_angle)
+        draw_pinwheel_tiling(ctx, render_size, disc_radius_px, i*step_angle)
 
-        surface.write_to_png(str(cli.destination / f'{i}.png'))
+        sfc.finish()
+        sfc.flush()
+
+        dest_file: Path = cli.destination / f'{i}.svgz'
+
+        with gzip.open(dest_file, "wb") as f:
+            f.write(buffer.getvalue())
 
     print('TODO generate images')
 
