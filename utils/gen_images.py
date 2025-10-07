@@ -408,16 +408,12 @@ def clear(ctx: Context, color: RGB, render_size: ImageSize) -> None:
     ctx.fill()
 
 
-def thousands() -> None:
-    """The subtask with hundreds of thousands of frames (memory usage test).
+def a_lot_of_frames(folder: Path) -> None:
+    """Makes hundreds of thousands of compressed SVG frames for memory usage test.
+    If Catframes accumulates file metadata in RAM, and not in the smartest way, it will
+    eat up a gigabyte before it reaches the fifty thousandth frame. If the memory limits
+    are exceeded, the test will fail.
     """
-    pass
-
-
-def main() -> None:
-    cli = ConsoleInterface()
-    cli.destination.mkdir(exist_ok=True)
-
     render_size: ImageSize = (1920, 1080)
 
     # Here we are spinning a huge circle in fact.
@@ -434,19 +430,62 @@ def main() -> None:
         ctx = cairo.Context(sfc)
 
         clear(ctx, to_srgb('#fff'), render_size)
-        print(f'{i}.png')
 
         draw_pinwheel_tiling(ctx, render_size, disc_radius_px, i*step_angle)
 
         sfc.finish()
         sfc.flush()
 
-        dest_file: Path = cli.destination / f'{i}.svgz'
+        if i % 100 == 0:
+            print(f'{i}.svgz')
+        dest_file: Path = folder / f'{i}.svgz'
 
         with gzip.open(dest_file, "wb") as f:
             f.write(buffer.getvalue())
 
-    print('TODO generate images')
+
+def showreel(folder: Path) -> None:
+    """Makes a short bright video to check compression artifacts.
+    """
+    render_size: ImageSize = (3840, 2160)
+
+    step_angle: float = math.tau / 300000
+    disc_radius_px = 50000 / 360 * render_size[1]
+
+    surface = cairo.ImageSurface(cairo.FORMAT_RGB24, *render_size)
+    ctx = cairo.Context(surface)
+
+    for i in range(100):
+        clear(ctx, to_srgb('#fff'), render_size)
+
+        draw_pinwheel_tiling(ctx, render_size, disc_radius_px, i*step_angle)
+
+        if i % 30 == 0:
+            print(f'{i}.png')
+
+        surface.write_to_png(str(folder / f'{i}.png'))
+
+
+SubTask = Callable[[Path], None]
+
+
+def run(folder: Path, subtask: SubTask):
+    if folder.is_dir():
+        print(f'The folder "{folder.name}" already exists.')
+    else:
+        if folder.exists():
+            print(f'The path "{folder.name}" is not a folder. Deleting it...')
+            folder.unlink(missing_ok=True)
+        folder.mkdir()
+        subtask(folder)
+
+
+def main() -> None:
+    cli = ConsoleInterface()
+    cli.destination.mkdir(exist_ok=True)
+    run(cli.destination / 'a_lot_of_frames', a_lot_of_frames)
+    run(cli.destination / 'showreel', showreel)
+    print("Finished")
 
 
 if __name__ == "__main__":
