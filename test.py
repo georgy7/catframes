@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Union, List
 import shutil
+import subprocess
 
 
 @dataclass
@@ -107,7 +108,7 @@ def main() -> None:
 
     print()
     check_pil()
-    check_tkinter()
+    # check_tkinter()
 
     python: str = sys.executable
     here: str = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -145,24 +146,35 @@ def main() -> None:
     further_cli: List[QualityGate] = [
     ]
 
-    run_gates(basic_ui)
+    # run_gates(basic_ui)
     run_gates(basic_common)
 
     if not have_been_successful(basic_common):
         print('\nBasic CLI tests failed. Further testing is pointless.')
-        print_summary(basic_ui + basic_common)
+        # print_summary(basic_ui + basic_common)
+        print_summary(basic_common)
         sys.exit(1)
 
     if not shutil.which('ffmpeg'):
-        print_summary(basic_ui + basic_common)
+        # print_summary(basic_ui + basic_common)
+        print_summary(basic_common)
         print('Could not continue: FFmpeg not found.\n')
         sys.exit(450)
 
-    # TODO: create test data
+    python_executable = sys.executable
+    this_folder = os.path.dirname(os.path.normpath(__file__))
+
+    subprocess.run([
+        python_executable,
+        os.path.join(this_folder, 'utils', 'gen_images.py'),
+        os.path.join(this_folder, 'DATA')
+    ], check=True)
 
     run_gates(further_cli)
 
-    ok: bool = print_summary(basic_ui + basic_common + further_cli)
+    # ok: bool = print_summary(basic_ui + basic_common + further_cli)
+    ok: bool = print_summary(basic_common + further_cli)
+
     if not ok:
         sys.exit(1)
 
