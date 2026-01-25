@@ -60,3 +60,23 @@ class Style:
         assert self.outline != ''
         assert self.width >= 0
 
+
+def draw_scanlines(ctx: cairo.Context, size: ImageSize, alpha: float = 0.05, line_height = 1) -> None:
+    _, h = size
+    ctx.save()
+    ctx.set_source_rgba(0, 0, 0, alpha)
+    for y in range(0, h, 2):
+        ctx.move_to(0, y)
+        ctx.line_to(size[0], y)
+    ctx.set_line_width(line_height)
+    ctx.stroke()
+    ctx.restore()
+
+
+def draw_curved_line(ctx: cairo.Context, x1, y1, x2, y2, curve: float):
+    """Рисует линию с изгибом (для human-like feel)"""
+    midx = (x1 + x2) / 2
+    midy = (y1 + y2) / 2
+    ctx.move_to(x1, y1)
+    ctx.curve_to(midx - curve, midy, midx + curve, midy, x2, y2)
+
