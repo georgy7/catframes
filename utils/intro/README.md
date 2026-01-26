@@ -1,6 +1,6 @@
 # Signal Memory - intro
 
-100% AI-generated
+90% AI-generated
 
 Can you guess which one?
 

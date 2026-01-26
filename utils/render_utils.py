@@ -47,6 +47,13 @@ def to_srgb(x: Union[str, RGB]) -> RGB:
     return (channels[0]/255, channels[1]/255, channels[2]/255)
 
 
+def mix_srgb(a: RGB, b: RGB, parity: float) -> RGB:
+    def mix_it(x: float, y: float):
+        return math.sqrt(parity * math.pow(x, 2) + (1 - parity) * math.pow(y, 2))
+    assert 0 <= parity <= 1
+    return (mix_it(a[0], b[0]), mix_it(a[1], b[1]), mix_it(a[2], b[2]))
+
+
 @dataclass(frozen=True)
 class Style:
     fill: Union[RGB, None]

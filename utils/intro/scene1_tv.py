@@ -1,10 +1,10 @@
 from pathlib import Path
 import cairo
 import math
-from random import uniform
-from typing import Tuple
+from random import Random
+from typing import List, Tuple
 
-from render_utils import clear, to_srgb, draw_scanlines
+from render_utils import clear, to_srgb, mix_srgb, draw_scanlines
 from geometry_utils import FPoint
 
 # Цвета
@@ -25,18 +25,23 @@ TV_BASE_WIDTH = 2400
 TV_BASE_HEIGHT = TV_BASE_WIDTH / TV_ASPECT
 TV_X_CENTER = RENDER_WIDTH / 2
 TV_Y_CENTER = RENDER_HEIGHT / 2
+TV_LINES = 360
 
 SCREEN_MARGIN = 180
 SCREEN_BASE_W = TV_BASE_WIDTH - 2 * SCREEN_MARGIN
 SCREEN_BASE_H = TV_BASE_HEIGHT - 2 * SCREEN_MARGIN
 
 TOTAL_FRAMES = 1175
-WARMUP_FRAMES = 240
+CRT_DEFORM_FRAMES = 30
 CHANNEL_FRAME_DURATION = 60  # 1 секунда
 NOISE_START = 300
+PATTERN_START = 400
 SIGNAL_START = 500
 ZOOM_START = 600
 TITLE_FRAME = 900
+END_OF_POWER_ON_FLASH_PROGRESS = 0.025
+
+NOISE_SOURCE = Random(1)
 
 
 def ease_in(t: float) -> float:
@@ -55,11 +60,17 @@ def noise(x: float, y: float, t: float, freq: float = 1.0) -> float:
         math.sin(x * 0.0005 * freq + y * 0.0005 * freq + t * 0.08) * 0.2
     )
 
-def hsv_noise(t: float, x: float, y: float) -> Tuple[float, float, float]:
-    """HSV-шум: хаотичные, но плавные оттенки"""
+def hsv_pattern(t: float, x: float, y: float) -> Tuple[float, float, float]:
+    """Что-то вроде лава-лампы"""
     h = (0.6 + 0.05 * math.sin(t * 0.3 + x * 0.001) + 0.03 * math.sin(t * 0.2 + y * 0.001)) % 1.0
     s = 0.05 + 0.05 * noise(x, y, t, 1.0)
-    v = 0.1 + 0.3 * noise(x, y, t * 0.5, 2.0)
+    v = max(0, min(1, 0.1 + 0.3 * noise(x, y, t * 0.5, 2.0)))
+    return h, s, v
+
+def hsv_noise() -> Tuple[float, float, float]:
+    h = NOISE_SOURCE.random()
+    s = 0.4 * NOISE_SOURCE.random()
+    v = 0.04 + 0.9 * NOISE_SOURCE.random()
     return h, s, v
 
 def hsv_to_rgb(h: float, s: float, v: float) -> Tuple[float, float, float]:
@@ -77,7 +88,11 @@ def hsv_to_rgb(h: float, s: float, v: float) -> Tuple[float, float, float]:
     elif i == 4: r, g, b = t, p, v
     else: r, g, b = v, p, q
 
-    return to_srgb((int(r*255), int(g*255), int(b*255)))
+    assert 0 <= r <= 1
+    assert 0 <= g <= 1
+    assert 0 <= b <= 1
+
+    return to_srgb((r, g, b))
 
 
 def draw_tv_body(ctx: cairo.Context, scale: float):
@@ -127,49 +142,101 @@ def draw_screen_frame(ctx: cairo.Context, scale: float):
     ctx.fill()
 
 
+def crt_deformation(frame_in_scene: int):
+    """У CRT-экранов картинка никогда не доходит до краёв - всегда есть чёрный зазор.
+    Эта функция возвращает её масштаб по горизонтали и вертикали относительно экрана.
+    """
+    start_frame = math.floor(TOTAL_FRAMES * END_OF_POWER_ON_FLASH_PROGRESS)
+    end_frame = start_frame + CRT_DEFORM_FRAMES
+
+    w_factor = 1.0
+    h_factor = 1.0
+
+    if start_frame <= frame_in_scene <= end_frame:
+        easing = ease_in((end_frame - frame_in_scene) / (end_frame - start_frame))
+        w_factor = 1.0 - 0.02 * easing
+        h_factor = 1.0 + 0.21 * easing
+
+    return (0.96 * w_factor, 0.945 * h_factor)
+
+
 def draw_power_on_flash(ctx: cairo.Context, t: float, progress: float, scale: float):
-    if progress >= 0.025:
+    if progress >= END_OF_POWER_ON_FLASH_PROGRESS:
         return
 
-    w = TV_BASE_WIDTH * scale
-    h = TV_BASE_HEIGHT * scale
-    x = TV_X_CENTER - w / 2
-    y = TV_Y_CENTER - h / 2
-    cx = x + w / 2
-    cy = y + h / 2
+    cx = TV_X_CENTER
+    cy = TV_Y_CENTER
 
     if progress < 0.01:
         radius = 0
-    elif progress < 0.025:
+    elif progress < END_OF_POWER_ON_FLASH_PROGRESS - 0.00265:
         t_local = (progress - 0.01) / 0.015
         radius = 5 + 600 * ease_in(t_local)
-        alpha = 0.7 + 0.3 * noise(cx, cy, t, 1.0)
-        ctx.set_source_rgba(*SIGNAL_BLUE, alpha)
+        alpha = 0.3 + 0.7 * ease_in(t_local)
+
+        r1 = cairo.RadialGradient(cx, cy, radius / 2, cx, cy, radius)
+        r1.add_color_stop_rgba(0, 0.8, 0.8, 0.8, alpha)
+        r1.add_color_stop_rgba(1, 0.8, 0.8, 0.8, 0)
+
+        ctx.set_source(r1)
         ctx.arc(cx, cy, radius, 0, 2 * math.pi)
+        ctx.fill()
+    elif progress < END_OF_POWER_ON_FLASH_PROGRESS:
+        end_frame = math.floor(TOTAL_FRAMES * END_OF_POWER_ON_FLASH_PROGRESS) + 1
+        image_def_end = crt_deformation(end_frame)
+
+        t_local = 1 - (END_OF_POWER_ON_FLASH_PROGRESS - progress) / 0.00265
+        image_w = SCREEN_BASE_W * scale * image_def_end[0]
+        image_h = SCREEN_BASE_H * scale * image_def_end[1] * 0.85 * (0.33 + 0.67 * t_local)
+
+        image_x = TV_X_CENTER - image_w / 2
+        image_y = TV_Y_CENTER - image_h / 2
+
+        ctx.set_source_rgba(0.7, 0.7, 0.7, 0.9 - 0.6 * t_local)
+        ctx.rectangle(image_x, image_y, image_w, image_h)
         ctx.fill()
 
 
 def draw_channel_number(ctx: cairo.Context, frame_in_scene: int, scale: float):
-    if frame_in_scene < 60 or frame_in_scene >= 60 + CHANNEL_FRAME_DURATION:
+    start_frame = math.floor(TOTAL_FRAMES * END_OF_POWER_ON_FLASH_PROGRESS) + 1
+    end_frame = start_frame + CHANNEL_FRAME_DURATION
+
+    if frame_in_scene < start_frame or frame_in_scene >= end_frame:
         return
+
+    image_def = crt_deformation(frame_in_scene)
+    image_def_end = crt_deformation(end_frame)
 
     w = TV_BASE_WIDTH * scale
     h = TV_BASE_HEIGHT * scale
     x = TV_X_CENTER - w / 2
     y = TV_Y_CENTER - h / 2
-    screen_w = SCREEN_BASE_W * scale
-    screen_h = SCREEN_BASE_H * scale
-    x_margin = (SCREEN_MARGIN + 146) * scale
-    y_margin = (SCREEN_MARGIN + 125) * scale
+
+    image_w = SCREEN_BASE_W * scale * image_def[0]
+    image_h = SCREEN_BASE_H * scale * image_def[1]
+    image_x = x + (w - image_w) / 2
+    image_y = y + (h - image_h) / 2
+
+    screen_w = SCREEN_BASE_W * scale * image_def_end[0]
+    screen_h = SCREEN_BASE_H * scale * image_def_end[1]
+    screen_x = x + (w - screen_w) / 2
+    screen_y = y + (h - screen_h) / 2
+
+    x_margin = 95 * scale
+    y_margin = 85 * scale
 
     channel_number_string = "0"
 
     ctx.save()
+    ctx.rectangle(screen_x, screen_y, screen_w, screen_h)
+    ctx.clip()
+
     ctx.select_font_face("DejaVu Sans Mono", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
     ctx.set_font_size(96 * scale)
     te = ctx.text_extents(channel_number_string)
-    tx = x + w - x_margin - te.width
-    ty = y + y_margin + te.height
+
+    tx = image_x + image_w - x_margin - te.width
+    ty = image_y + y_margin + te.height
 
     ctx.set_source_rgb(*CHANNEL_GREEN)
     ctx.move_to(tx, ty)
@@ -177,47 +244,123 @@ def draw_channel_number(ctx: cairo.Context, frame_in_scene: int, scale: float):
     ctx.restore()
 
 
-def draw_analog_noise(ctx: cairo.Context, t: float, frame_in_scene: int, scale: float):
-    if frame_in_scene < NOISE_START:
+def draw_analog_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale: float):
+    if frame_in_scene < PATTERN_START:
         return
+
+    image_def = crt_deformation(frame_in_scene)
 
     w = TV_BASE_WIDTH * scale
     h = TV_BASE_HEIGHT * scale
     x = TV_X_CENTER - w / 2
     y = TV_Y_CENTER - h / 2
-    screen_w = SCREEN_BASE_W * scale
-    screen_h = SCREEN_BASE_H * scale
-    screen_x = x + SCREEN_MARGIN * scale
-    screen_y = y + SCREEN_MARGIN * scale
+    screen_w = SCREEN_BASE_W * scale * image_def[0]
+    screen_h = SCREEN_BASE_H * scale * image_def[1]
+    screen_x = x + (w - screen_w) / 2
+    screen_y = y + (h - screen_h) / 2
 
     ctx.save()
-    ctx.rectangle(screen_x, screen_y, screen_w, screen_h)
+    ctx.rectangle(screen_x, screen_y, screen_w + 1, screen_h + 1)
     ctx.clip()
 
     pixel_size = 4
-    for px in range(0, int(screen_w), pixel_size):
-        for py in range(0, int(screen_h), pixel_size):
+    for px in range(0, math.ceil(screen_w), pixel_size):
+        for py in range(0, math.ceil(screen_h), pixel_size):
             nx = screen_x + px
             ny = screen_y + py
-            h, s, v = hsv_noise(t, nx, ny)
-            r, g, b = hsv_to_rgb(h, s, v)
-            ctx.set_source_rgb(r, g, b)
+            r, g, b = hsv_to_rgb(*hsv_pattern(t, nx, ny))
+            alpha = 0.93 * (frame_in_scene - PATTERN_START) / (SIGNAL_START - PATTERN_START)
+            ctx.set_source_rgba(r, g, b, alpha)
             ctx.rectangle(nx, ny, pixel_size, pixel_size)
             ctx.fill()
 
     ctx.restore()
 
 
-def draw_moire_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale: float):
-    if frame_in_scene < SIGNAL_START:
+def draw_analog_noise(ctx: cairo.Context, t: float, frame_in_scene: int, scale: float):
+    after_flash = math.floor(TOTAL_FRAMES * END_OF_POWER_ON_FLASH_PROGRESS) + 1
+    if (frame_in_scene < NOISE_START) \
+            and not (after_flash + CRT_DEFORM_FRAMES + 20 <= frame_in_scene <= after_flash + CRT_DEFORM_FRAMES + 160):
         return
+
+    image_def = crt_deformation(frame_in_scene)
 
     w = TV_BASE_WIDTH * scale
     h = TV_BASE_HEIGHT * scale
     x = TV_X_CENTER - w / 2
     y = TV_Y_CENTER - h / 2
-    screen_w = SCREEN_BASE_W * scale
-    screen_h = SCREEN_BASE_H * scale
+    screen_w = SCREEN_BASE_W * scale * image_def[0]
+    screen_h = SCREEN_BASE_H * scale * image_def[1]
+    screen_x = x + (w - screen_w) / 2
+    screen_y = y + (h - screen_h) / 2
+
+    ctx.save()
+    if frame_in_scene >= after_flash + CRT_DEFORM_FRAMES:
+        ctx.rectangle(screen_x, screen_y, screen_w, screen_h)
+        ctx.clip()
+    else:
+        image_def_end = crt_deformation(after_flash + CRT_DEFORM_FRAMES)
+        screen_h_end = SCREEN_BASE_H * scale * image_def_end[1]
+        screen_y_end = y + (h - screen_h_end) / 2
+        ctx.rectangle(screen_x, screen_y_end, screen_w, screen_h_end)
+        ctx.clip()
+
+    pixel_height = math.floor(screen_h / TV_LINES)
+    pixel_width = 7
+
+    prev_line_colors: List[Tuple[RGB, RGB]] = [None] * math.ceil(int(screen_w) / pixel_width)
+    prev_rgb = hsv_to_rgb(*hsv_noise())
+
+    for py in range(0, int(screen_h), pixel_height):
+        for px in range(0, int(screen_w), pixel_width):
+            nx = screen_x + px
+            ny = screen_y + py
+            rgb = hsv_to_rgb(*hsv_noise())
+
+            # У CRT-телевизоров нет пикселей по горизонтали.
+            # По вертикали граница между строками тоже размыта.
+
+            gradient = cairo.LinearGradient(nx, ny, nx + pixel_width, ny)
+            gradient.add_color_stop_rgb(0.0, *prev_rgb)
+            gradient.add_color_stop_rgb(1.0, *rgb)
+
+            ctx.set_source(gradient)
+            ctx.rectangle(nx, ny, pixel_width, pixel_height * 2)
+            ctx.fill()
+
+            if py > 0:
+                blur_height = 0.2 * pixel_height
+                blur_y = ny - blur_height
+                alpha = 0.5
+
+                top_colors = prev_line_colors[px // pixel_width]
+
+                mixed_gradient = cairo.LinearGradient(nx, blur_y, nx + pixel_width, blur_y)
+                mixed_gradient.add_color_stop_rgb(0.0, *mix_srgb(prev_rgb, top_colors[0], alpha))
+                mixed_gradient.add_color_stop_rgb(1.0, *mix_srgb(rgb, top_colors[1], alpha))
+
+                ctx.set_source(mixed_gradient)
+                ctx.rectangle(nx, blur_y, pixel_width, blur_height)
+                ctx.fill()
+
+            prev_line_colors[px // pixel_width] = (prev_rgb, rgb)
+            prev_rgb = rgb
+
+    ctx.restore()
+
+
+def draw_moire_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale: float):
+    if frame_in_scene < PATTERN_START:
+        return
+
+    image_def = crt_deformation(frame_in_scene)
+
+    w = TV_BASE_WIDTH * scale
+    h = TV_BASE_HEIGHT * scale
+    x = TV_X_CENTER - w / 2
+    y = TV_Y_CENTER - h / 2
+    screen_w = SCREEN_BASE_W * scale * image_def[0]
+    screen_h = SCREEN_BASE_H * scale * image_def[1]
     cx = x + w / 2
     cy = y + h / 2
     rx = screen_w / 2
@@ -226,12 +369,14 @@ def draw_moire_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale:
     ctx.save()
     ctx.translate(cx, cy)
 
+    alpha_factor = (frame_in_scene - PATTERN_START) / (SIGNAL_START - PATTERN_START)
+
     # Муар: пересечение двух сеток
     ctx.set_line_width(1.2)
     for i in range(-20, 21):
         offset = i * 12 + t * 8
         alpha = 0.3 + 0.2 * math.sin(t * 0.5 + i * 0.3)
-        ctx.set_source_rgba(*SIGNAL_BLUE, alpha)
+        ctx.set_source_rgba(*SIGNAL_BLUE, alpha * alpha_factor)
         ctx.move_to(-rx, offset)
         ctx.line_to(rx, offset)
         ctx.stroke()
@@ -248,7 +393,7 @@ def draw_moire_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale:
             y1 = (r + 40 * math.cos(angle * 3)) * math.sin(angle)
             x2 = (r + 40 * math.cos(angle * 3 + 0.1)) * math.cos(angle + 0.1)
             y2 = (r + 40 * math.cos(angle * 3 + 0.1)) * math.sin(angle + 0.1)
-            ctx.set_source_rgba(*SIGNAL_BLUE, 0.5)
+            ctx.set_source_rgba(*SIGNAL_BLUE, 0.5 * alpha_factor)
             ctx.move_to(x1, y1)
             ctx.line_to(x2, y2)
             ctx.stroke()
@@ -260,13 +405,15 @@ def draw_title_signal(ctx: cairo.Context, t: float, frame_in_scene: int, scale: 
     if frame_in_scene < TITLE_FRAME:
         return
 
+    image_def = crt_deformation(frame_in_scene)
+
     ctx.save()
     w = TV_BASE_WIDTH * scale
     h = TV_BASE_HEIGHT * scale
     x = TV_X_CENTER - w / 2
     y = TV_Y_CENTER - h / 2
-    screen_w = SCREEN_BASE_W * scale
-    screen_h = SCREEN_BASE_H * scale
+    screen_w = SCREEN_BASE_W * scale * image_def[0]
+    screen_h = SCREEN_BASE_H * scale * image_def[1]
 
     title = "SIGNAL MEMORY"
     font_size = int(48 * scale)
@@ -313,9 +460,11 @@ def render_scene1(total_frame: int, duration: int, frame_in_scene: int, render_s
     draw_tv_body(ctx, zoom_factor)
     draw_screen_frame(ctx, zoom_factor)
     draw_power_on_flash(ctx, t, progress, zoom_factor)
-    draw_channel_number(ctx, frame_in_scene, zoom_factor)
     draw_analog_noise(ctx, t, frame_in_scene, zoom_factor)
+    draw_analog_pattern(ctx, t, frame_in_scene, zoom_factor)
     draw_moire_pattern(ctx, t, frame_in_scene, zoom_factor)
+
+    draw_channel_number(ctx, frame_in_scene, zoom_factor)
     draw_title_signal(ctx, t, frame_in_scene, zoom_factor)
 
     scan_alpha = 0.18 + noise(0, t * 8, t) * 0.05
