@@ -40,6 +40,7 @@ SIGNAL_START = 500
 ZOOM_START = 600
 TITLE_FRAME = 900
 END_OF_POWER_ON_FLASH_PROGRESS = 0.025
+ANALOG_PATTERN_FADEOUT = 120
 
 NOISE_SOURCE = Random(1)
 
@@ -67,10 +68,10 @@ def hsv_pattern(t: float, x: float, y: float) -> Tuple[float, float, float]:
     v = max(0, min(1, 0.1 + 0.3 * noise(x, y, t * 0.5, 2.0)))
     return h, s, v
 
-def hsv_noise() -> Tuple[float, float, float]:
+def hsv_noise(brightness: float = 1.0) -> Tuple[float, float, float]:
     h = NOISE_SOURCE.random()
     s = 0.4 * NOISE_SOURCE.random()
-    v = 0.04 + 0.9 * NOISE_SOURCE.random()
+    v = (0.04 + 0.9 * NOISE_SOURCE.random()) * min(1.0, brightness)
     return h, s, v
 
 def hsv_to_rgb(h: float, s: float, v: float) -> Tuple[float, float, float]:
@@ -259,6 +260,16 @@ def draw_analog_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale
     screen_x = x + (w - screen_w) / 2
     screen_y = y + (h - screen_h) / 2
 
+    alpha = 0.93 * (frame_in_scene - PATTERN_START) / (SIGNAL_START - PATTERN_START)
+
+    fade_out_start = SIGNAL_START
+    fade_out_end = fade_out_start + ANALOG_PATTERN_FADEOUT
+
+    if frame_in_scene > fade_out_end:
+        return
+    elif frame_in_scene >= fade_out_start:
+        alpha *= ease_out(max(0, (fade_out_end - frame_in_scene) / (fade_out_end - fade_out_start)))
+
     ctx.save()
     ctx.rectangle(screen_x, screen_y, screen_w + 1, screen_h + 1)
     ctx.clip()
@@ -269,7 +280,6 @@ def draw_analog_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale
             nx = screen_x + px
             ny = screen_y + py
             r, g, b = hsv_to_rgb(*hsv_pattern(t, nx, ny))
-            alpha = 0.93 * (frame_in_scene - PATTERN_START) / (SIGNAL_START - PATTERN_START)
             ctx.set_source_rgba(r, g, b, alpha)
             ctx.rectangle(nx, ny, pixel_size, pixel_size)
             ctx.fill()
@@ -279,8 +289,11 @@ def draw_analog_pattern(ctx: cairo.Context, t: float, frame_in_scene: int, scale
 
 def draw_analog_noise(ctx: cairo.Context, t: float, frame_in_scene: int, scale: float):
     after_flash = math.floor(TOTAL_FRAMES * END_OF_POWER_ON_FLASH_PROGRESS) + 1
-    if (frame_in_scene < NOISE_START) \
-            and not (after_flash + CRT_DEFORM_FRAMES + 20 <= frame_in_scene <= after_flash + CRT_DEFORM_FRAMES + 160):
+
+    early_noise_active: bool = after_flash + CRT_DEFORM_FRAMES + 20 <= frame_in_scene <= after_flash + CRT_DEFORM_FRAMES + 160
+    main_noise_active: bool = frame_in_scene >= NOISE_START
+
+    if not (early_noise_active or main_noise_active):
         return
 
     image_def = crt_deformation(frame_in_scene)
@@ -294,6 +307,13 @@ def draw_analog_noise(ctx: cairo.Context, t: float, frame_in_scene: int, scale: 
     screen_x = x + (w - screen_w) / 2
     screen_y = y + (h - screen_h) / 2
 
+    fade_out_start = SIGNAL_START
+    fade_out_end = fade_out_start + ANALOG_PATTERN_FADEOUT
+
+    brightness = 1.0
+    if frame_in_scene >= fade_out_start:
+        brightness = 0.1 + 0.9 * max(0, (fade_out_end - frame_in_scene) / (fade_out_end - fade_out_start))
+
     ctx.save()
     if frame_in_scene >= after_flash + CRT_DEFORM_FRAMES:
         ctx.rectangle(screen_x, screen_y, screen_w, screen_h)
@@ -306,16 +326,16 @@ def draw_analog_noise(ctx: cairo.Context, t: float, frame_in_scene: int, scale: 
         ctx.clip()
 
     pixel_height = math.floor(screen_h / TV_LINES)
-    pixel_width = 7
+    pixel_width = 6 + int(NOISE_SOURCE.random() * 3)
 
     prev_line_colors: List[Tuple[RGB, RGB]] = [None] * math.ceil(int(screen_w) / pixel_width)
-    prev_rgb = hsv_to_rgb(*hsv_noise())
+    prev_rgb = hsv_to_rgb(*hsv_noise(brightness))
 
     for py in range(0, int(screen_h), pixel_height):
         for px in range(0, int(screen_w), pixel_width):
             nx = screen_x + px
             ny = screen_y + py
-            rgb = hsv_to_rgb(*hsv_noise())
+            rgb = hsv_to_rgb(*hsv_noise(brightness))
 
             # У CRT-телевизоров нет пикселей по горизонтали.
             # По вертикали граница между строками тоже размыта.
